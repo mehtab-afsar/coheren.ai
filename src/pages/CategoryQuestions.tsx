@@ -1,6 +1,7 @@
 import { ArrowRight, ChevronLeft } from 'lucide-react';
 import { useState } from 'react';
 import { useStore } from '../store/useStore';
+import { tokens, layout, text, button, input, progress, hoverHandlers, focusHandlers, card, checkbox } from '../design-system';
 
 // Category-specific question configurations
 const categoryQuestions = {
@@ -192,12 +193,11 @@ export default function CategoryQuestions() {
 
   const handleNext = () => {
     if (isLast) {
-      // Save category-specific answers to store
       const categoryData = {
         [`${category.toLowerCase()}Data`]: answers
       };
       updateCurrentGoal(categoryData);
-      setStep(5); // Move to roadmap generation
+      setStep(5);
     } else {
       setCurrentQ(currentQ + 1);
     }
@@ -207,7 +207,7 @@ export default function CategoryQuestions() {
     if (currentQ > 0) {
       setCurrentQ(currentQ - 1);
     } else {
-      setStep(3); // Back to universal questions
+      setStep(3);
     }
   };
 
@@ -227,53 +227,31 @@ export default function CategoryQuestions() {
     setAnswers({ ...answers, [question.id]: newValue });
   };
 
+  const progressPercentage = ((currentQ + 1) / questions.length) * 100;
+
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: 'white',
-      padding: '48px 24px'
-    }}>
-      <div style={{ maxWidth: '500px', width: '100%' }}>
+    <div style={layout.fullPageCentered}>
+      <div style={layout.contentContainer('500px')}>
         {/* Progress */}
-        <div style={{ marginBottom: '48px' }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            marginBottom: '8px'
-          }}>
-            <span style={{ fontSize: '12px', fontWeight: 300, color: '#999' }}>
+        <div style={{ marginBottom: tokens.spacing['3xl'] }}>
+          <div style={progress.textContainer}>
+            <span style={text.caption}>
               Question {currentQ + 1} of {questions.length}
             </span>
-            <span style={{ fontSize: '12px', fontWeight: 300, color: '#999' }}>
-              {Math.round(((currentQ + 1) / questions.length) * 100)}%
+            <span style={text.caption}>
+              {Math.round(progressPercentage)}%
             </span>
           </div>
-          <div style={{
-            height: '2px',
-            backgroundColor: '#f5f5f5',
-            borderRadius: '1px',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              height: '100%',
-              width: `${((currentQ + 1) / questions.length) * 100}%`,
-              backgroundColor: 'black',
-              transition: 'width 0.3s'
-            }} />
+          <div style={progress.container}>
+            <div style={progress.fill(progressPercentage)} />
           </div>
         </div>
 
         {/* Question */}
-        <div style={{ marginBottom: '32px' }}>
+        <div style={{ marginBottom: tokens.spacing['2xl'] }}>
           <h2 style={{
-            fontSize: '28px',
-            fontWeight: 300,
-            color: 'black',
-            marginBottom: '32px',
-            lineHeight: 1.3
+            ...text.h2,
+            marginBottom: tokens.spacing['2xl'],
           }}>
             {question.question}
           </h2>
@@ -289,18 +267,8 @@ export default function CategoryQuestions() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && isAnswered()) handleNext();
               }}
-              style={{
-                width: '100%',
-                padding: '16px',
-                fontSize: '16px',
-                fontWeight: 300,
-                border: '1px solid #e5e5e5',
-                borderRadius: '12px',
-                outline: 'none',
-                transition: 'border-color 0.2s'
-              }}
-              onFocus={(e) => e.currentTarget.style.borderColor = 'black'}
-              onBlur={(e) => e.currentTarget.style.borderColor = '#e5e5e5'}
+              style={input.base}
+              {...focusHandlers.input}
             />
           )}
 
@@ -311,24 +279,14 @@ export default function CategoryQuestions() {
               value={answers[question.id] || ''}
               onChange={(e) => setAnswers({ ...answers, [question.id]: e.target.value })}
               autoFocus
-              style={{
-                width: '100%',
-                padding: '16px',
-                fontSize: '16px',
-                fontWeight: 300,
-                border: '1px solid #e5e5e5',
-                borderRadius: '12px',
-                outline: 'none',
-                transition: 'border-color 0.2s'
-              }}
-              onFocus={(e) => e.currentTarget.style.borderColor = 'black'}
-              onBlur={(e) => e.currentTarget.style.borderColor = '#e5e5e5'}
+              style={input.base}
+              {...focusHandlers.input}
             />
           )}
 
           {/* Choice buttons */}
           {question.type === 'choice' && (
-            <div style={{ display: 'grid', gap: '12px' }}>
+            <div style={{ display: 'grid', gap: tokens.spacing.md }}>
               {question.options?.map((option) => (
                 <button
                   key={option.value}
@@ -336,34 +294,17 @@ export default function CategoryQuestions() {
                     setAnswers({ ...answers, [question.id]: option.value });
                     setTimeout(handleNext, 200);
                   }}
-                  style={{
-                    padding: '16px',
-                    backgroundColor: answers[question.id] === option.value ? 'black' : 'white',
-                    color: answers[question.id] === option.value ? 'white' : 'black',
-                    border: `1px solid ${answers[question.id] === option.value ? 'black' : '#e5e5e5'}`,
-                    borderRadius: '12px',
-                    fontSize: '16px',
-                    fontWeight: 300,
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (answers[question.id] !== option.value) {
-                      e.currentTarget.style.borderColor = 'black';
-                      e.currentTarget.style.backgroundColor = '#fafafa';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (answers[question.id] !== option.value) {
-                      e.currentTarget.style.borderColor = '#e5e5e5';
-                      e.currentTarget.style.backgroundColor = 'white';
-                    }
-                  }}
+                  style={card.selection(answers[question.id] === option.value)}
                 >
-                  <div style={{ fontWeight: 400 }}>{option.label}</div>
+                  <div style={{ fontWeight: tokens.typography.weights.regular }}>{option.label}</div>
                   {option.description && (
-                    <div style={{ fontSize: '13px', color: answers[question.id] === option.value ? '#ccc' : '#999', marginTop: '4px' }}>
+                    <div style={{
+                      ...text.caption,
+                      marginTop: tokens.spacing.xs,
+                      color: answers[question.id] === option.value
+                        ? tokens.colors.text.disabled
+                        : tokens.colors.text.tertiary
+                    }}>
                       {option.description}
                     </div>
                   )}
@@ -374,7 +315,7 @@ export default function CategoryQuestions() {
 
           {/* Multi-choice checkboxes */}
           {question.type === 'multiChoice' && (
-            <div style={{ display: 'grid', gap: '12px' }}>
+            <div style={{ display: 'grid', gap: tokens.spacing.md }}>
               {question.options?.map((option) => {
                 const isSelected = (answers[question.id] || []).includes(option.value);
                 return (
@@ -382,49 +323,28 @@ export default function CategoryQuestions() {
                     key={option.value}
                     onClick={() => toggleMultiChoice(option.value)}
                     style={{
-                      padding: '16px',
-                      backgroundColor: isSelected ? 'black' : 'white',
-                      color: isSelected ? 'white' : 'black',
-                      border: `1px solid ${isSelected ? 'black' : '#e5e5e5'}`,
-                      borderRadius: '12px',
-                      fontSize: '16px',
-                      fontWeight: 300,
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      transition: 'all 0.2s',
+                      ...card.selection(isSelected),
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '12px'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isSelected) {
-                        e.currentTarget.style.borderColor = 'black';
-                        e.currentTarget.style.backgroundColor = '#fafafa';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isSelected) {
-                        e.currentTarget.style.borderColor = '#e5e5e5';
-                        e.currentTarget.style.backgroundColor = 'white';
-                      }
+                      gap: tokens.spacing.md
                     }}
                   >
                     <div style={{
-                      width: '20px',
-                      height: '20px',
-                      border: `2px solid ${isSelected ? 'white' : '#e5e5e5'}`,
-                      borderRadius: '4px',
-                      backgroundColor: isSelected ? 'white' : 'transparent',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
+                      ...checkbox.square,
+                      borderColor: isSelected ? tokens.colors.text.inverse : tokens.colors.gray[300],
+                      backgroundColor: isSelected ? tokens.colors.text.inverse : 'transparent',
                       flexShrink: 0
                     }}>
                       {isSelected && (
-                        <div style={{ width: '10px', height: '10px', backgroundColor: 'black', borderRadius: '2px' }} />
+                        <div style={{
+                          width: '10px',
+                          height: '10px',
+                          backgroundColor: tokens.colors.primary,
+                          borderRadius: tokens.borderRadius.sm
+                        }} />
                       )}
                     </div>
-                    <div>{option.label}</div>
+                    <div style={{ flex: 1, textAlign: 'left' }}>{option.label}</div>
                   </button>
                 );
               })}
@@ -434,25 +354,21 @@ export default function CategoryQuestions() {
 
         {/* Navigation */}
         {question.type !== 'choice' && (
-          <div style={{ display: 'flex', gap: '12px', marginTop: '32px' }}>
+          <div style={{
+            display: 'flex',
+            gap: tokens.spacing.md,
+            marginTop: tokens.spacing['2xl']
+          }}>
             <button
               onClick={handleBack}
               style={{
+                ...button.secondary,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
-                padding: '12px 20px',
-                backgroundColor: 'white',
-                color: 'black',
-                border: '1px solid #e5e5e5',
-                borderRadius: '12px',
-                fontSize: '14px',
-                fontWeight: 300,
-                cursor: 'pointer',
-                transition: 'background-color 0.2s'
+                gap: tokens.spacing.sm,
+                padding: `${tokens.spacing.md} ${tokens.spacing.xl}`
               }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fafafa'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+              {...hoverHandlers.lightBg}
             >
               <ChevronLeft size={16} />
               Back
@@ -462,27 +378,14 @@ export default function CategoryQuestions() {
               onClick={handleNext}
               disabled={!isAnswered()}
               style={{
+                ...(isAnswered() ? button.primary : button.disabled),
                 flex: 1,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '8px',
-                padding: '12px 20px',
-                backgroundColor: isAnswered() ? 'black' : '#e5e5e5',
-                color: isAnswered() ? 'white' : '#999',
-                border: 'none',
-                borderRadius: '12px',
-                fontSize: '14px',
-                fontWeight: 300,
-                cursor: isAnswered() ? 'pointer' : 'not-allowed',
-                transition: 'background-color 0.2s'
+                gap: tokens.spacing.sm
               }}
-              onMouseEnter={(e) => {
-                if (isAnswered()) e.currentTarget.style.backgroundColor = '#333';
-              }}
-              onMouseLeave={(e) => {
-                if (isAnswered()) e.currentTarget.style.backgroundColor = 'black';
-              }}
+              {...(isAnswered() ? hoverHandlers.darkBg : {})}
             >
               {isLast ? 'Generate Roadmap' : 'Next'}
               <ArrowRight size={16} />

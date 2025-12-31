@@ -1,6 +1,7 @@
 import { ArrowRight, Sparkles, Calendar, Clock, Target } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
+import { tokens, layout, text, button, card, progress as progressStyles, hoverHandlers } from '../design-system';
 
 // Simple roadmap generator based on category and user data
 const generateRoadmap = (goal: any, universalProfile: any) => {
@@ -74,7 +75,7 @@ const generateRoadmap = (goal: any, universalProfile: any) => {
   const template = roadmapTemplates[category];
 
   // Calculate schedule based on universal profile
-  const { wakeTime, workHours, energyPattern } = universalProfile;
+  const { wakeTime, energyPattern } = universalProfile;
   let recommendedTime = '7:00 AM';
 
   if (energyPattern === 'morning' && wakeTime) {
@@ -142,56 +143,43 @@ export default function RoadmapGeneration() {
 
   if (loading) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'white',
-        padding: '48px 24px'
-      }}>
-        <div style={{ maxWidth: '500px', width: '100%', textAlign: 'center' }}>
+      <div style={layout.fullPageCentered}>
+        <div style={{
+          ...layout.contentContainer('500px'),
+          textAlign: 'center'
+        }}>
           <div style={{
             width: '60px',
             height: '60px',
-            margin: '0 auto 32px',
+            margin: `0 auto ${tokens.spacing['2xl']}`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
           }}>
-            <Sparkles size={40} style={{ color: 'black', animation: 'pulse 2s infinite' }} />
+            <Sparkles
+              size={40}
+              style={{ color: tokens.colors.text.primary, animation: 'pulse 2s infinite' }}
+            />
           </div>
 
           <h2 style={{
-            fontSize: '24px',
-            fontWeight: 300,
-            color: 'black',
-            marginBottom: '16px'
+            ...text.h3,
+            marginBottom: tokens.spacing.lg
           }}>
             Building your roadmap...
           </h2>
 
           <p style={{
-            fontSize: '14px',
-            fontWeight: 300,
-            color: '#999',
-            marginBottom: '32px'
+            ...text.body,
+            marginBottom: tokens.spacing['2xl']
           }}>
             This will just take a moment
           </p>
 
           {/* Progress bar */}
-          <div style={{
-            width: '100%',
-            height: '4px',
-            backgroundColor: '#f5f5f5',
-            borderRadius: '2px',
-            overflow: 'hidden'
-          }}>
+          <div style={progressStyles.container}>
             <div style={{
-              height: '100%',
-              width: `${progress}%`,
-              backgroundColor: 'black',
+              ...progressStyles.fill(progress),
               transition: 'width 0.5s ease-out'
             }} />
           </div>
@@ -208,44 +196,34 @@ export default function RoadmapGeneration() {
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: 'white',
-      padding: '48px 24px'
-    }}>
-      <div style={{ maxWidth: '600px', width: '100%' }}>
+    <div style={layout.fullPageCentered}>
+      <div style={layout.contentContainer('600px')}>
         {/* Success animation */}
         <div style={{
           width: '48px',
           height: '48px',
-          margin: '0 auto 24px',
-          backgroundColor: 'black',
+          margin: `0 auto ${tokens.spacing['2xl']}`,
+          backgroundColor: tokens.colors.text.primary,
           borderRadius: '50%',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center'
         }}>
-          <Target size={24} color="white" />
+          <Target size={24} color={tokens.colors.primary} />
         </div>
 
         {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '48px' }}>
+        <div style={{
+          textAlign: 'center',
+          marginBottom: tokens.spacing['3xl']
+        }}>
           <h1 style={{
-            fontSize: '32px',
-            fontWeight: 300,
-            color: 'black',
-            marginBottom: '8px'
+            ...text.h1,
+            marginBottom: tokens.spacing.sm
           }}>
             Your {roadmap.title} Roadmap
           </h1>
-          <p style={{
-            fontSize: '14px',
-            fontWeight: 300,
-            color: '#999'
-          }}>
+          <p style={text.body}>
             A personalized plan built just for you
           </p>
         </div>
@@ -254,50 +232,65 @@ export default function RoadmapGeneration() {
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '16px',
-          marginBottom: '32px'
+          gap: tokens.spacing.lg,
+          marginBottom: tokens.spacing['2xl']
         }}>
           <div style={{
-            padding: '20px',
-            backgroundColor: '#fafafa',
-            borderRadius: '12px',
-            textAlign: 'center'
+            ...card.standard,
+            textAlign: 'center',
+            backgroundColor: tokens.colors.gray[50]
           }}>
-            <Calendar size={20} style={{ color: '#999', margin: '0 auto 8px' }} />
-            <div style={{ fontSize: '20px', fontWeight: 400, color: 'black', marginBottom: '4px' }}>
+            <Calendar size={20} style={{
+              color: tokens.colors.text.tertiary,
+              margin: `0 auto ${tokens.spacing.sm}`
+            }} />
+            <div style={{
+              ...text.h3,
+              marginBottom: tokens.spacing.xs
+            }}>
               {roadmap.duration} {roadmap.duration === 1 ? 'month' : 'months'}
             </div>
-            <div style={{ fontSize: '12px', fontWeight: 300, color: '#999' }}>
+            <div style={text.caption}>
               Timeline
             </div>
           </div>
 
           <div style={{
-            padding: '20px',
-            backgroundColor: '#fafafa',
-            borderRadius: '12px',
-            textAlign: 'center'
+            ...card.standard,
+            textAlign: 'center',
+            backgroundColor: tokens.colors.gray[50]
           }}>
-            <Clock size={20} style={{ color: '#999', margin: '0 auto 8px' }} />
-            <div style={{ fontSize: '20px', fontWeight: 400, color: 'black', marginBottom: '4px' }}>
+            <Clock size={20} style={{
+              color: tokens.colors.text.tertiary,
+              margin: `0 auto ${tokens.spacing.sm}`
+            }} />
+            <div style={{
+              ...text.h3,
+              marginBottom: tokens.spacing.xs
+            }}>
               {roadmap.dailyTime}
             </div>
-            <div style={{ fontSize: '12px', fontWeight: 300, color: '#999' }}>
+            <div style={text.caption}>
               Daily time
             </div>
           </div>
 
           <div style={{
-            padding: '20px',
-            backgroundColor: '#fafafa',
-            borderRadius: '12px',
-            textAlign: 'center'
+            ...card.standard,
+            textAlign: 'center',
+            backgroundColor: tokens.colors.gray[50]
           }}>
-            <Target size={20} style={{ color: '#999', margin: '0 auto 8px' }} />
-            <div style={{ fontSize: '20px', fontWeight: 400, color: 'black', marginBottom: '4px' }}>
+            <Target size={20} style={{
+              color: tokens.colors.text.tertiary,
+              margin: `0 auto ${tokens.spacing.sm}`
+            }} />
+            <div style={{
+              ...text.h3,
+              marginBottom: tokens.spacing.xs
+            }}>
               {roadmap.recommendedTime}
             </div>
-            <div style={{ fontSize: '12px', fontWeight: 300, color: '#999' }}>
+            <div style={text.caption}>
               Best time
             </div>
           </div>
@@ -305,35 +298,37 @@ export default function RoadmapGeneration() {
 
         {/* Phases */}
         <div style={{
-          backgroundColor: 'white',
-          border: '1px solid #e5e5e5',
-          borderRadius: '12px',
-          padding: '24px',
-          marginBottom: '32px'
+          ...card.standard,
+          marginBottom: tokens.spacing['2xl']
         }}>
           <h3 style={{
-            fontSize: '16px',
-            fontWeight: 400,
-            color: 'black',
-            marginBottom: '20px'
+            ...text.h4,
+            marginBottom: tokens.spacing.xl
           }}>
             Your Journey
           </h3>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column' as const,
+            gap: tokens.spacing.lg
+          }}>
             {roadmap.phases.map((phase: any, index: number) => (
-              <div key={index} style={{ display: 'flex', gap: '16px' }}>
+              <div key={index} style={{
+                display: 'flex',
+                gap: tokens.spacing.lg
+              }}>
                 <div style={{
                   width: '32px',
                   height: '32px',
-                  backgroundColor: index === 0 ? 'black' : '#f5f5f5',
-                  color: index === 0 ? 'white' : '#999',
+                  backgroundColor: index === 0 ? tokens.colors.text.primary : tokens.colors.gray[100],
+                  color: index === 0 ? tokens.colors.primary : tokens.colors.text.tertiary,
                   borderRadius: '50%',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '14px',
-                  fontWeight: 400,
+                  fontSize: tokens.typography.sizes.sm,
+                  fontWeight: tokens.typography.weights.medium,
                   flexShrink: 0
                 }}>
                   {index + 1}
@@ -342,17 +337,20 @@ export default function RoadmapGeneration() {
                   <div style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'baseline',
-                    marginBottom: '4px'
+                    alignItems: 'baseline' as const,
+                    marginBottom: tokens.spacing.xs
                   }}>
-                    <div style={{ fontSize: '15px', fontWeight: 400, color: 'black' }}>
+                    <div style={text.body}>
                       {phase.title}
                     </div>
-                    <div style={{ fontSize: '12px', fontWeight: 300, color: '#999' }}>
+                    <div style={text.caption}>
                       Weeks {phase.weeks}
                     </div>
                   </div>
-                  <div style={{ fontSize: '13px', fontWeight: 300, color: '#666' }}>
+                  <div style={{
+                    ...text.bodySmall,
+                    color: tokens.colors.text.secondary
+                  }}>
                     {phase.description}
                   </div>
                 </div>
@@ -365,34 +363,23 @@ export default function RoadmapGeneration() {
         <button
           onClick={handleContinue}
           style={{
+            ...button.primary,
             width: '100%',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '8px',
-            padding: '16px',
-            backgroundColor: 'black',
-            color: 'white',
-            border: 'none',
-            borderRadius: '12px',
-            fontSize: '16px',
-            fontWeight: 400,
-            cursor: 'pointer',
-            transition: 'background-color 0.2s'
+            gap: tokens.spacing.sm
           }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#333'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'black'}
+          {...hoverHandlers.darkBg}
         >
           Start Your Journey
           <ArrowRight size={20} />
         </button>
 
         <p style={{
+          ...text.caption,
           textAlign: 'center',
-          fontSize: '12px',
-          fontWeight: 300,
-          color: '#999',
-          marginTop: '16px'
+          marginTop: tokens.spacing.lg
         }}>
           You can adjust this plan anytime
         </p>

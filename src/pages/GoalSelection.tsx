@@ -1,5 +1,6 @@
 import { Dumbbell, BookOpen, Palette, Brain, CheckSquare, Video } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { tokens, layout, text, card } from '../design-system';
 import type { GoalCategory } from '../types/index.js';
 
 const categories = [
@@ -49,29 +50,42 @@ export default function GoalSelection() {
     setStep(2);
   };
 
+  const handleCardHover = (e: React.MouseEvent<HTMLButtonElement>, isEntering: boolean) => {
+    const button = e.currentTarget;
+    const iconDiv = button.querySelector('div') as HTMLElement;
+
+    if (isEntering) {
+      button.style.borderColor = tokens.colors.primary;
+      button.style.boxShadow = tokens.shadows.lg;
+      if (iconDiv) {
+        iconDiv.style.backgroundColor = tokens.colors.primary;
+        iconDiv.style.color = tokens.colors.text.inverse;
+      }
+    } else {
+      button.style.borderColor = tokens.colors.gray[300];
+      button.style.boxShadow = 'none';
+      if (iconDiv) {
+        iconDiv.style.backgroundColor = tokens.colors.gray[100];
+        iconDiv.style.color = tokens.colors.primary;
+      }
+    }
+  };
+
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: 'white',
-      padding: '48px 24px'
-    }}>
-      <div style={{ maxWidth: '672px', width: '100%' }}>
-        <div style={{ textAlign: 'center', marginBottom: '48px' }}>
-          <h2 style={{
-            fontSize: '30px',
-            fontWeight: 300,
-            color: 'black',
-            marginBottom: '8px'
-          }}>
+    <div style={layout.fullPageCentered}>
+      <div style={{
+        ...layout.contentContainer('672px'),
+      }}>
+        <div style={{
+          textAlign: 'center',
+          marginBottom: tokens.spacing['3xl']
+        }}>
+          <h2 style={text.h1}>
             What do you want to get consistent at?
           </h2>
           <p style={{
-            fontSize: '14px',
-            fontWeight: 300,
-            color: '#999'
+            ...text.body,
+            marginTop: tokens.spacing.sm
           }}>
             Choose a category to start
           </p>
@@ -80,65 +94,43 @@ export default function GoalSelection() {
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-          gap: '16px'
+          gap: tokens.spacing.lg
         }}>
           {categories.map(({ id, icon: Icon, label, examples }) => (
             <button
               key={id}
               onClick={() => handleSelect(id)}
               style={{
-                padding: '24px',
-                backgroundColor: 'white',
-                border: '1px solid #e5e5e5',
-                borderRadius: '16px',
-                cursor: 'pointer',
-                textAlign: 'left',
-                transition: 'all 0.3s',
+                ...card.interactive,
+                padding: tokens.spacing.xl,
+                borderRadius: tokens.borderRadius.xl,
                 display: 'flex',
                 alignItems: 'start',
-                gap: '16px'
+                gap: tokens.spacing.lg,
+                textAlign: 'left'
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'black';
-                e.currentTarget.style.boxShadow = '0 10px 40px rgba(0,0,0,0.1)';
-                const iconDiv = e.currentTarget.querySelector('div') as HTMLElement;
-                if (iconDiv) {
-                  iconDiv.style.backgroundColor = 'black';
-                  iconDiv.style.color = 'white';
-                }
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = '#e5e5e5';
-                e.currentTarget.style.boxShadow = 'none';
-                const iconDiv = e.currentTarget.querySelector('div') as HTMLElement;
-                if (iconDiv) {
-                  iconDiv.style.backgroundColor = '#f5f5f5';
-                  iconDiv.style.color = 'black';
-                }
-              }}
+              onMouseEnter={(e) => handleCardHover(e, true)}
+              onMouseLeave={(e) => handleCardHover(e, false)}
             >
               <div style={{
-                padding: '12px',
-                backgroundColor: '#f5f5f5',
-                borderRadius: '12px',
-                transition: 'all 0.3s'
+                padding: tokens.spacing.md,
+                backgroundColor: tokens.colors.gray[100],
+                borderRadius: tokens.borderRadius.lg,
+                transition: tokens.transitions.all,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
               }}>
                 <Icon size={24} />
               </div>
               <div style={{ flex: 1 }}>
                 <h3 style={{
-                  fontSize: '18px',
-                  fontWeight: 300,
-                  color: 'black',
-                  marginBottom: '4px'
+                  ...text.h3,
+                  marginBottom: tokens.spacing.xs
                 }}>
                   {label}
                 </h3>
-                <p style={{
-                  fontSize: '12px',
-                  fontWeight: 300,
-                  color: '#999'
-                }}>
+                <p style={text.caption}>
                   {examples}
                 </p>
               </div>
@@ -147,11 +139,9 @@ export default function GoalSelection() {
         </div>
 
         <p style={{
-          fontSize: '12px',
-          fontWeight: 300,
-          color: '#ccc',
+          ...text.caption,
           textAlign: 'center',
-          marginTop: '32px'
+          marginTop: tokens.spacing['2xl']
         }}>
           You can add multiple goals later
         </p>

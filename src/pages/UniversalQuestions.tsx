@@ -1,6 +1,7 @@
 import { ArrowRight, ChevronLeft } from 'lucide-react';
 import { useState } from 'react';
 import { useStore } from '../store/useStore';
+import { tokens, layout, text, button, input, progress, hoverHandlers, focusHandlers, card } from '../design-system';
 
 const questions = [
   {
@@ -43,19 +44,18 @@ export default function UniversalQuestions() {
 
   const handleNext = () => {
     if (isLast) {
-      // Save all answers to store
       updateUniversalProfile({
         name: answers.name,
         dailyRoutine: {
           wakeTime: answers.wakeTime,
           sleepTime: answers.sleepTime,
           workHours: answers.workHours,
-          freeTimeSlots: [], // Will be calculated
+          freeTimeSlots: [],
         },
         energyPattern: answers.energyPattern?.toLowerCase(),
-        weekendAvailability: 'flexible', // Default
+        weekendAvailability: 'flexible',
       });
-      setStep(4); // Move to category-specific questions
+      setStep(4);
     } else {
       setCurrentQ(currentQ + 1);
     }
@@ -65,7 +65,7 @@ export default function UniversalQuestions() {
     if (currentQ > 0) {
       setCurrentQ(currentQ - 1);
     } else {
-      setStep(2); // Back to specific goal
+      setStep(2);
     }
   };
 
@@ -77,53 +77,31 @@ export default function UniversalQuestions() {
     return answer && answer.trim();
   };
 
+  const progressPercentage = ((currentQ + 1) / questions.length) * 100;
+
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: 'white',
-      padding: '48px 24px'
-    }}>
-      <div style={{ maxWidth: '500px', width: '100%' }}>
+    <div style={layout.fullPageCentered}>
+      <div style={layout.contentContainer('500px')}>
         {/* Progress */}
-        <div style={{ marginBottom: '48px' }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            marginBottom: '8px'
-          }}>
-            <span style={{ fontSize: '12px', fontWeight: 300, color: '#999' }}>
+        <div style={{ marginBottom: tokens.spacing['3xl'] }}>
+          <div style={progress.textContainer}>
+            <span style={text.caption}>
               Question {currentQ + 1} of {questions.length}
             </span>
-            <span style={{ fontSize: '12px', fontWeight: 300, color: '#999' }}>
-              {Math.round(((currentQ + 1) / questions.length) * 100)}%
+            <span style={text.caption}>
+              {Math.round(progressPercentage)}%
             </span>
           </div>
-          <div style={{
-            height: '2px',
-            backgroundColor: '#f5f5f5',
-            borderRadius: '1px',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              height: '100%',
-              width: `${((currentQ + 1) / questions.length) * 100}%`,
-              backgroundColor: 'black',
-              transition: 'width 0.3s'
-            }} />
+          <div style={progress.container}>
+            <div style={progress.fill(progressPercentage)} />
           </div>
         </div>
 
         {/* Question */}
-        <div style={{ marginBottom: '32px' }}>
+        <div style={{ marginBottom: tokens.spacing['2xl'] }}>
           <h2 style={{
-            fontSize: '28px',
-            fontWeight: 300,
-            color: 'black',
-            marginBottom: '32px',
-            lineHeight: 1.3
+            ...text.h2,
+            marginBottom: tokens.spacing['2xl'],
           }}>
             {question.question}
           </h2>
@@ -139,18 +117,8 @@ export default function UniversalQuestions() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && isAnswered()) handleNext();
               }}
-              style={{
-                width: '100%',
-                padding: '16px',
-                fontSize: '16px',
-                fontWeight: 300,
-                border: '1px solid #e5e5e5',
-                borderRadius: '12px',
-                outline: 'none',
-                transition: 'border-color 0.2s'
-              }}
-              onFocus={(e) => e.currentTarget.style.borderColor = 'black'}
-              onBlur={(e) => e.currentTarget.style.borderColor = '#e5e5e5'}
+              style={input.base}
+              {...focusHandlers.input}
             />
           )}
 
@@ -161,24 +129,18 @@ export default function UniversalQuestions() {
               value={answers[question.id] || ''}
               onChange={(e) => setAnswers({ ...answers, [question.id]: e.target.value })}
               autoFocus
-              style={{
-                width: '100%',
-                padding: '16px',
-                fontSize: '16px',
-                fontWeight: 300,
-                border: '1px solid #e5e5e5',
-                borderRadius: '12px',
-                outline: 'none',
-                transition: 'border-color 0.2s'
-              }}
-              onFocus={(e) => e.currentTarget.style.borderColor = 'black'}
-              onBlur={(e) => e.currentTarget.style.borderColor = '#e5e5e5'}
+              style={input.timeRange}
+              {...focusHandlers.input}
             />
           )}
 
           {/* Time range */}
           {question.type === 'timeRange' && (
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <div style={{
+              display: 'flex',
+              gap: tokens.spacing.md,
+              alignItems: 'center'
+            }}>
               <input
                 type="time"
                 value={answers[question.id]?.start || ''}
@@ -186,21 +148,13 @@ export default function UniversalQuestions() {
                   ...answers,
                   [question.id]: { ...answers[question.id], start: e.target.value }
                 })}
-                placeholder="Start"
                 style={{
-                  flex: 1,
-                  padding: '16px',
-                  fontSize: '16px',
-                  fontWeight: 300,
-                  border: '1px solid #e5e5e5',
-                  borderRadius: '12px',
-                  outline: 'none',
-                  transition: 'border-color 0.2s'
+                  ...input.timeRange,
+                  flex: 1
                 }}
-                onFocus={(e) => e.currentTarget.style.borderColor = 'black'}
-                onBlur={(e) => e.currentTarget.style.borderColor = '#e5e5e5'}
+                {...focusHandlers.input}
               />
-              <span style={{ color: '#999', fontWeight: 300 }}>to</span>
+              <span style={input.separator}>to</span>
               <input
                 type="time"
                 value={answers[question.id]?.end || ''}
@@ -208,26 +162,18 @@ export default function UniversalQuestions() {
                   ...answers,
                   [question.id]: { ...answers[question.id], end: e.target.value }
                 })}
-                placeholder="End"
                 style={{
-                  flex: 1,
-                  padding: '16px',
-                  fontSize: '16px',
-                  fontWeight: 300,
-                  border: '1px solid #e5e5e5',
-                  borderRadius: '12px',
-                  outline: 'none',
-                  transition: 'border-color 0.2s'
+                  ...input.timeRange,
+                  flex: 1
                 }}
-                onFocus={(e) => e.currentTarget.style.borderColor = 'black'}
-                onBlur={(e) => e.currentTarget.style.borderColor = '#e5e5e5'}
+                {...focusHandlers.input}
               />
             </div>
           )}
 
           {/* Choice buttons */}
           {question.type === 'choice' && (
-            <div style={{ display: 'grid', gap: '12px' }}>
+            <div style={{ display: 'grid', gap: tokens.spacing.md }}>
               {question.options?.map((option) => (
                 <button
                   key={option}
@@ -235,30 +181,7 @@ export default function UniversalQuestions() {
                     setAnswers({ ...answers, [question.id]: option });
                     setTimeout(handleNext, 200);
                   }}
-                  style={{
-                    padding: '16px',
-                    backgroundColor: answers[question.id] === option ? 'black' : 'white',
-                    color: answers[question.id] === option ? 'white' : 'black',
-                    border: `1px solid ${answers[question.id] === option ? 'black' : '#e5e5e5'}`,
-                    borderRadius: '12px',
-                    fontSize: '16px',
-                    fontWeight: 300,
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (answers[question.id] !== option) {
-                      e.currentTarget.style.borderColor = 'black';
-                      e.currentTarget.style.backgroundColor = '#fafafa';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (answers[question.id] !== option) {
-                      e.currentTarget.style.borderColor = '#e5e5e5';
-                      e.currentTarget.style.backgroundColor = 'white';
-                    }
-                  }}
+                  style={card.selection(answers[question.id] === option)}
                 >
                   {option}
                 </button>
@@ -269,25 +192,21 @@ export default function UniversalQuestions() {
 
         {/* Navigation */}
         {question.type !== 'choice' && (
-          <div style={{ display: 'flex', gap: '12px', marginTop: '32px' }}>
+          <div style={{
+            display: 'flex',
+            gap: tokens.spacing.md,
+            marginTop: tokens.spacing['2xl']
+          }}>
             <button
               onClick={handleBack}
               style={{
+                ...button.secondary,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
-                padding: '12px 20px',
-                backgroundColor: 'white',
-                color: 'black',
-                border: '1px solid #e5e5e5',
-                borderRadius: '12px',
-                fontSize: '14px',
-                fontWeight: 300,
-                cursor: 'pointer',
-                transition: 'background-color 0.2s'
+                gap: tokens.spacing.sm,
+                padding: `${tokens.spacing.md} ${tokens.spacing.xl}`
               }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fafafa'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+              {...hoverHandlers.lightBg}
             >
               <ChevronLeft size={16} />
               Back
@@ -297,27 +216,14 @@ export default function UniversalQuestions() {
               onClick={handleNext}
               disabled={!isAnswered()}
               style={{
+                ...(isAnswered() ? button.primary : button.disabled),
                 flex: 1,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '8px',
-                padding: '12px 20px',
-                backgroundColor: isAnswered() ? 'black' : '#e5e5e5',
-                color: isAnswered() ? 'white' : '#999',
-                border: 'none',
-                borderRadius: '12px',
-                fontSize: '14px',
-                fontWeight: 300,
-                cursor: isAnswered() ? 'pointer' : 'not-allowed',
-                transition: 'background-color 0.2s'
+                gap: tokens.spacing.sm
               }}
-              onMouseEnter={(e) => {
-                if (isAnswered()) e.currentTarget.style.backgroundColor = '#333';
-              }}
-              onMouseLeave={(e) => {
-                if (isAnswered()) e.currentTarget.style.backgroundColor = 'black';
-              }}
+              {...(isAnswered() ? hoverHandlers.darkBg : {})}
             >
               {isLast ? 'Continue' : 'Next'}
               <ArrowRight size={16} />

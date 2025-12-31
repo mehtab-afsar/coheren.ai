@@ -1,61 +1,43 @@
 import { ArrowRight } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { tokens, layout, text, button, hoverHandlers } from '../design-system';
 
 export default function Welcome() {
   const setStep = useStore((state) => state.setStep);
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: 'white',
-      padding: '24px'
-    }}>
-      <div style={{ maxWidth: '448px', width: '100%', textAlign: 'center' }}>
-        <div style={{ marginBottom: '32px' }}>
-          <h1 style={{
-            fontSize: '60px',
-            fontWeight: 300,
-            letterSpacing: '-0.02em',
-            color: 'black',
-            marginBottom: '12px'
-          }}>
+    <div style={layout.fullPageCentered}>
+      <div style={{
+        ...layout.contentContainer('448px'),
+        textAlign: 'center'
+      }}>
+        <div style={{ marginBottom: tokens.spacing['2xl'] }}>
+          <h1 style={text.display}>
             CONSIST
           </h1>
           <div style={{
             height: '1px',
             width: '96px',
-            backgroundColor: 'black',
+            backgroundColor: tokens.colors.primary,
             margin: '0 auto'
           }} />
         </div>
 
         <p style={{
-          fontSize: '20px',
-          fontWeight: 300,
-          color: '#666',
-          marginBottom: '32px'
+          ...text.h2,
+          color: tokens.colors.text.secondary,
+          marginBottom: tokens.spacing['2xl']
         }}>
           Your everyday ally for building consistency
         </p>
 
-        <div style={{ marginBottom: '32px' }}>
-          <p style={{
-            fontSize: '14px',
-            fontWeight: 300,
-            color: '#999',
-            lineHeight: 1.6
-          }}>
+        <div style={{ marginBottom: tokens.spacing['2xl'] }}>
+          <p style={text.body}>
             Stop planning. Start doing.
           </p>
           <p style={{
-            fontSize: '14px',
-            fontWeight: 300,
-            color: '#999',
-            lineHeight: 1.6,
-            marginTop: '16px'
+            ...text.body,
+            marginTop: tokens.spacing.lg
           }}>
             I'll learn who you are, build your roadmap, and hold your hand every single day until the habit is yours.
           </p>
@@ -64,34 +46,19 @@ export default function Welcome() {
         <button
           onClick={() => setStep(1)}
           style={{
-            width: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            padding: '16px 32px',
-            backgroundColor: 'black',
-            color: 'white',
-            border: 'none',
-            borderRadius: '9999px',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: 300,
+            ...button.primary,
+            borderRadius: tokens.borderRadius.full,
             letterSpacing: '0.05em',
-            transition: 'background-color 0.3s'
           }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#333'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'black'}
+          {...hoverHandlers.darkBg}
         >
           <span>Get Started</span>
           <ArrowRight size={16} />
         </button>
 
         <p style={{
-          fontSize: '12px',
-          fontWeight: 300,
-          color: '#ccc',
-          marginTop: '16px'
+          ...text.caption,
+          marginTop: tokens.spacing.lg
         }}>
           5 minutes to your personalized roadmap
         </p>

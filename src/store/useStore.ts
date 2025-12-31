@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { OnboardingState, GoalCategory } from '../types/index.js';
+import { generateTasksForDay } from '../utils/taskGenerator.js';
 
 interface Task {
   id: string;
@@ -37,6 +38,7 @@ interface AppStore extends OnboardingState {
   currentDay: number;
   streak: number;
   completionRate: number;
+  lastCheckInDate: string | null;
 
   // Actions
   setStep: (step: number) => void;
@@ -48,12 +50,15 @@ interface AppStore extends OnboardingState {
   setRoadmap: (roadmap: Roadmap) => void;
   setTasks: (tasks: Task[]) => void;
   completeTask: (taskId: string) => void;
+  canAdvanceDay: () => boolean;
+  advanceDay: () => boolean;
+  generateNextDayTasks: () => void;
   resetOnboarding: () => void;
 }
 
 export const useStore = create<AppStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       step: 0,
       universalProfile: {},
       currentGoal: {},
@@ -63,6 +68,7 @@ export const useStore = create<AppStore>()(
       currentDay: 1,
       streak: 0,
       completionRate: 0,
+      lastCheckInDate: null,
 
       setStep: (step) => set({ step }),
 
@@ -113,6 +119,60 @@ export const useStore = create<AppStore>()(
           return { tasks, completionRate, streak: newStreak };
         }),
 
+      canAdvanceDay: () => {
+        const state = get();
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+        // Check if all today's tasks are complete
+        const todaysTasks = state.tasks.filter((t) => t.day === state.currentDay);
+        const allTasksComplete = todaysTasks.length > 0 && todaysTasks.every((t) => t.completed);
+
+        // Check if user hasn't already advanced today
+        const hasNotAdvancedToday = state.lastCheckInDate !== today;
+
+        return allTasksComplete && hasNotAdvancedToday;
+      },
+
+      advanceDay: () => {
+        const canAdvance = get().canAdvanceDay();
+
+        if (!canAdvance) {
+          return false;
+        }
+
+        const today = new Date().toISOString().split('T')[0];
+
+        set((state) => ({
+          currentDay: state.currentDay + 1,
+          lastCheckInDate: today,
+          completionRate: 0 // Reset completion rate for new day
+        }));
+
+        // Generate next day's tasks
+        get().generateNextDayTasks();
+
+        return true;
+      },
+
+      generateNextDayTasks: () => {
+        const state = get();
+
+        if (!state.roadmap) {
+          console.error('Cannot generate tasks: roadmap not set');
+          return;
+        }
+
+        const nextDayTasks = generateTasksForDay(
+          state.roadmap.category,
+          state.currentDay,
+          state.checkInTime
+        );
+
+        set((state) => ({
+          tasks: [...state.tasks, ...nextDayTasks]
+        }));
+      },
+
       resetOnboarding: () => set({
         step: 0,
         universalProfile: {},
@@ -121,7 +181,8 @@ export const useStore = create<AppStore>()(
         tasks: [],
         currentDay: 1,
         streak: 0,
-        completionRate: 0
+        completionRate: 0,
+        lastCheckInDate: null
       }),
     }),
     {

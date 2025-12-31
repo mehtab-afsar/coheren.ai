@@ -1,5 +1,9 @@
-import { Flame, Calendar, TrendingUp, Settings, CheckCircle2, Circle, Clock, Play } from 'lucide-react';
+import { Flame, Calendar, TrendingUp, Settings, CheckCircle2, Circle, Clock, Play, ArrowRight, Lock, Map } from 'lucide-react';
+import { useState } from 'react';
 import { useStore } from '../store/useStore';
+import { tokens, text, card } from '../design-system';
+import RoadmapModal from '../components/RoadmapModal';
+import NotificationPrompt from '../components/NotificationPrompt';
 
 export default function Dashboard() {
   const {
@@ -10,13 +14,19 @@ export default function Dashboard() {
     streak,
     completionRate,
     completeTask,
-    setStep
+    setStep,
+    canAdvanceDay,
+    advanceDay,
+    checkInTime
   } = useStore();
+
+  const [showRoadmapModal, setShowRoadmapModal] = useState(false);
+  const [showNotificationPrompt, setShowNotificationPrompt] = useState(true);
 
   const todaysTasks = tasks.filter(t => t.day === currentDay);
   const completedTasks = todaysTasks.filter(t => t.completed);
-  const pendingTasks = todaysTasks.filter(t => !t.completed);
   const allDone = todaysTasks.length > 0 && todaysTasks.every(t => t.completed);
+  const canAdvance = canAdvanceDay();
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -43,24 +53,38 @@ export default function Dashboard() {
     }
   };
 
+  const handleAdvanceDay = () => {
+    const success = advanceDay();
+    if (success) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   return (
     <div style={{
       minHeight: '100vh',
-      backgroundColor: '#fafafa',
+      backgroundColor: tokens.colors.gray[50],
       paddingBottom: '80px'
     }}>
       {/* Header */}
       <div style={{
-        backgroundColor: 'white',
-        borderBottom: '1px solid #f0f0f0',
-        padding: '20px 24px'
+        backgroundColor: tokens.colors.primary,
+        borderBottom: `1px solid ${tokens.colors.gray[200]}`,
+        padding: `${tokens.spacing.xl} ${tokens.spacing['2xl']}`
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
           <div>
-            <h1 style={{ fontSize: '24px', fontWeight: 300, color: 'black', marginBottom: '4px' }}>
+            <h1 style={{
+              ...text.h3,
+              marginBottom: tokens.spacing.xs
+            }}>
               {getGreeting()}, {universalProfile.name || 'there'}
             </h1>
-            <p style={{ fontSize: '14px', fontWeight: 300, color: '#999' }}>
+            <p style={text.body}>
               Day {currentDay} • {roadmap?.title}
             </p>
           </div>
@@ -69,211 +93,365 @@ export default function Dashboard() {
             style={{
               width: '40px',
               height: '40px',
-              backgroundColor: '#fafafa',
+              backgroundColor: tokens.colors.gray[50],
               border: 'none',
               borderRadius: '50%',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              transition: 'background-color 0.2s'
+              transition: `background-color ${tokens.transitions.fast}`
             }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fafafa'}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = tokens.colors.gray[200]}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = tokens.colors.gray[50]}
           >
-            <Settings size={20} color="#666" />
+            <Settings size={20} color={tokens.colors.text.secondary} />
           </button>
         </div>
       </div>
 
-      <div style={{ padding: '24px' }}>
+      <div style={{ padding: tokens.spacing['2xl'] }}>
         {/* Stats cards */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '12px',
-          marginBottom: '24px'
+          gap: tokens.spacing.md,
+          marginBottom: tokens.spacing['2xl']
         }}>
           <div style={{
-            backgroundColor: 'white',
-            padding: '16px',
-            borderRadius: '12px',
-            border: '1px solid #f0f0f0'
+            ...card.standard,
+            backgroundColor: tokens.colors.primary
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <Flame size={16} color={streak > 0 ? '#ff6b35' : '#ccc'} />
-              <span style={{ fontSize: '12px', fontWeight: 300, color: '#999' }}>Streak</span>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: tokens.spacing.sm,
+              marginBottom: tokens.spacing.sm
+            }}>
+              <Flame size={16} color={streak > 0 ? '#ff6b35' : tokens.colors.gray[700]} />
+              <span style={text.caption}>Streak</span>
             </div>
-            <div style={{ fontSize: '24px', fontWeight: 300, color: 'black' }}>
+            <div style={text.h3}>
               {streak}
             </div>
-            <div style={{ fontSize: '11px', fontWeight: 300, color: '#999' }}>
+            <div style={{
+              ...text.caption,
+              fontSize: '11px'
+            }}>
               {streak === 1 ? 'day' : 'days'}
             </div>
           </div>
 
           <div style={{
-            backgroundColor: 'white',
-            padding: '16px',
-            borderRadius: '12px',
-            border: '1px solid #f0f0f0'
+            ...card.standard,
+            backgroundColor: tokens.colors.primary
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <TrendingUp size={16} color="#666" />
-              <span style={{ fontSize: '12px', fontWeight: 300, color: '#999' }}>Progress</span>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: tokens.spacing.sm,
+              marginBottom: tokens.spacing.sm
+            }}>
+              <TrendingUp size={16} color={tokens.colors.text.secondary} />
+              <span style={text.caption}>Progress</span>
             </div>
-            <div style={{ fontSize: '24px', fontWeight: 300, color: 'black' }}>
+            <div style={text.h3}>
               {Math.round(completionRate)}%
             </div>
-            <div style={{ fontSize: '11px', fontWeight: 300, color: '#999' }}>
+            <div style={{
+              ...text.caption,
+              fontSize: '11px'
+            }}>
               today
             </div>
           </div>
 
           <div style={{
-            backgroundColor: 'white',
-            padding: '16px',
-            borderRadius: '12px',
-            border: '1px solid #f0f0f0'
+            ...card.standard,
+            backgroundColor: tokens.colors.primary
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <Calendar size={16} color="#666" />
-              <span style={{ fontSize: '12px', fontWeight: 300, color: '#999' }}>Week</span>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: tokens.spacing.sm,
+              marginBottom: tokens.spacing.sm
+            }}>
+              <Calendar size={16} color={tokens.colors.text.secondary} />
+              <span style={text.caption}>Week</span>
             </div>
-            <div style={{ fontSize: '24px', fontWeight: 300, color: 'black' }}>
+            <div style={text.h3}>
               {Math.ceil(currentDay / 7)}
             </div>
-            <div style={{ fontSize: '11px', fontWeight: 300, color: '#999' }}>
+            <div style={{
+              ...text.caption,
+              fontSize: '11px'
+            }}>
               of {Math.ceil((roadmap?.duration || 6) * 4)}
             </div>
           </div>
         </div>
 
-        {/* All done message */}
-        {allDone && (
+        {/* Notification Prompt */}
+        {showNotificationPrompt && (
+          <NotificationPrompt
+            checkInTime={checkInTime}
+            onDismiss={() => setShowNotificationPrompt(false)}
+          />
+        )}
+
+        {/* Celebration & Next Day Button (when all tasks complete) */}
+        {allDone && canAdvance && (
           <div style={{
-            backgroundColor: 'black',
-            color: 'white',
-            padding: '20px',
-            borderRadius: '12px',
+            backgroundColor: tokens.colors.text.primary,
+            color: tokens.colors.primary,
+            padding: tokens.spacing.xl,
+            borderRadius: tokens.borderRadius.lg,
             textAlign: 'center',
-            marginBottom: '24px'
+            marginBottom: tokens.spacing['2xl']
           }}>
-            <div style={{ fontSize: '32px', marginBottom: '8px' }}>🎉</div>
-            <div style={{ fontSize: '18px', fontWeight: 300, marginBottom: '4px' }}>
+            <div style={{
+              fontSize: '48px',
+              marginBottom: tokens.spacing.sm
+            }}>🎉</div>
+            <div style={{
+              ...text.h4,
+              color: tokens.colors.primary,
+              marginBottom: tokens.spacing.xs
+            }}>
               All done for today!
             </div>
-            <div style={{ fontSize: '14px', fontWeight: 300, color: '#ccc' }}>
-              Great work. See you tomorrow!
+            <div style={{
+              ...text.body,
+              color: tokens.colors.text.disabled,
+              marginBottom: tokens.spacing.lg
+            }}>
+              Great work. Ready for tomorrow?
+            </div>
+            <button
+              onClick={handleAdvanceDay}
+              style={{
+                width: '100%',
+                padding: `${tokens.spacing.md} ${tokens.spacing.xl}`,
+                backgroundColor: tokens.colors.primary,
+                color: tokens.colors.text.primary,
+                border: `1px solid ${tokens.colors.text.primary}`,
+                borderRadius: tokens.borderRadius.md,
+                fontSize: tokens.typography.sizes.md,
+                fontWeight: tokens.typography.weights.medium,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: tokens.spacing.sm,
+                transition: `all ${tokens.transitions.fast}`
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = tokens.colors.text.primary;
+                e.currentTarget.style.color = tokens.colors.primary;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = tokens.colors.primary;
+                e.currentTarget.style.color = tokens.colors.text.primary;
+              }}
+            >
+              Start Day {currentDay + 1}
+              <ArrowRight size={20} />
+            </button>
+          </div>
+        )}
+
+        {/* Blocked State (already advanced today) */}
+        {allDone && !canAdvance && (
+          <div style={{
+            backgroundColor: tokens.colors.gray[50],
+            border: `1px solid ${tokens.colors.gray[200]}`,
+            padding: tokens.spacing.xl,
+            borderRadius: tokens.borderRadius.lg,
+            textAlign: 'center',
+            marginBottom: tokens.spacing['2xl']
+          }}>
+            <div style={{
+              width: '48px',
+              height: '48px',
+              margin: `0 auto ${tokens.spacing.md}`,
+              backgroundColor: tokens.colors.gray[100],
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Lock size={24} color={tokens.colors.text.tertiary} />
+            </div>
+            <div style={{
+              ...text.h4,
+              marginBottom: tokens.spacing.xs
+            }}>
+              Day {currentDay} Complete
+            </div>
+            <div style={{
+              ...text.body,
+              color: tokens.colors.text.secondary,
+              marginBottom: tokens.spacing.sm
+            }}>
+              You've already completed today's tasks.
+            </div>
+            <div style={{
+              ...text.bodySmall,
+              color: tokens.colors.text.tertiary
+            }}>
+              Next check-in: Tomorrow at {checkInTime}
+            </div>
+          </div>
+        )}
+
+        {/* Incomplete State (tasks remaining) */}
+        {!allDone && todaysTasks.length > 0 && (
+          <div style={{
+            backgroundColor: tokens.colors.gray[50],
+            border: `1px solid ${tokens.colors.gray[200]}`,
+            padding: tokens.spacing.lg,
+            borderRadius: tokens.borderRadius.lg,
+            marginBottom: tokens.spacing['2xl']
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}>
+              <div>
+                <div style={{
+                  ...text.body,
+                  marginBottom: tokens.spacing.xs
+                }}>
+                  Keep going!
+                </div>
+                <div style={{
+                  ...text.bodySmall,
+                  color: tokens.colors.text.secondary
+                }}>
+                  {todaysTasks.length - completedTasks.length} {todaysTasks.length - completedTasks.length === 1 ? 'task' : 'tasks'} remaining
+                </div>
+              </div>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                backgroundColor: tokens.colors.primary,
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: tokens.typography.sizes.lg,
+                fontWeight: tokens.typography.weights.medium,
+                color: tokens.colors.text.primary
+              }}>
+                {Math.round(completionRate)}%
+              </div>
             </div>
           </div>
         )}
 
         {/* Today's tasks */}
-        <div style={{ marginBottom: '24px' }}>
+        <div style={{ marginBottom: tokens.spacing['2xl'] }}>
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '16px'
+            marginBottom: tokens.spacing.lg
           }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 400, color: 'black' }}>
+            <h2 style={text.h4}>
               Today's Tasks
             </h2>
-            <span style={{ fontSize: '14px', fontWeight: 300, color: '#999' }}>
+            <span style={text.body}>
               {completedTasks.length} of {todaysTasks.length}
             </span>
           </div>
 
           {todaysTasks.length === 0 && (
             <div style={{
-              backgroundColor: 'white',
-              padding: '32px',
-              borderRadius: '12px',
-              border: '1px solid #f0f0f0',
+              ...card.standard,
+              padding: tokens.spacing['3xl'],
               textAlign: 'center'
             }}>
-              <p style={{ fontSize: '14px', fontWeight: 300, color: '#999' }}>
+              <p style={text.body}>
                 No tasks for today. Check back tomorrow!
               </p>
             </div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column' as const,
+            gap: tokens.spacing.md
+          }}>
             {todaysTasks.map((task) => {
               const Icon = getTaskIcon(task.type);
               return (
                 <div
                   key={task.id}
                   style={{
-                    backgroundColor: 'white',
-                    padding: '16px',
-                    borderRadius: '12px',
-                    border: '1px solid #f0f0f0',
+                    ...card.standard,
                     opacity: task.completed ? 0.6 : 1,
-                    transition: 'opacity 0.2s'
+                    transition: `opacity ${tokens.transitions.all}`
                   }}
                 >
-                  <div style={{ display: 'flex', gap: '12px' }}>
+                  <div style={{
+                    display: 'flex',
+                    gap: tokens.spacing.md
+                  }}>
                     <button
                       onClick={() => !task.completed && completeTask(task.id)}
                       disabled={task.completed}
                       style={{
                         width: '24px',
                         height: '24px',
-                        backgroundColor: task.completed ? 'black' : 'white',
-                        border: `2px solid ${task.completed ? 'black' : '#e5e5e5'}`,
+                        backgroundColor: task.completed ? tokens.colors.text.primary : tokens.colors.primary,
+                        border: `2px solid ${task.completed ? tokens.colors.text.primary : tokens.colors.gray[300]}`,
                         borderRadius: '50%',
                         cursor: task.completed ? 'default' : 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         flexShrink: 0,
-                        transition: 'all 0.2s',
+                        transition: `all ${tokens.transitions.all}`,
                         marginTop: '2px'
                       }}
                       onMouseEnter={(e) => {
-                        if (!task.completed) e.currentTarget.style.borderColor = 'black';
+                        if (!task.completed) e.currentTarget.style.borderColor = tokens.colors.text.primary;
                       }}
                       onMouseLeave={(e) => {
-                        if (!task.completed) e.currentTarget.style.borderColor = '#e5e5e5';
+                        if (!task.completed) e.currentTarget.style.borderColor = tokens.colors.gray[300];
                       }}
                     >
-                      {task.completed && <CheckCircle2 size={16} color="white" />}
+                      {task.completed && <CheckCircle2 size={16} color={tokens.colors.primary} />}
                     </button>
 
                     <div style={{ flex: 1 }}>
                       <div style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '8px',
-                        marginBottom: '4px'
+                        gap: tokens.spacing.sm,
+                        marginBottom: tokens.spacing.xs
                       }}>
-                        <Icon size={14} color="#999" />
+                        <Icon size={14} color={tokens.colors.text.tertiary} />
                         <h3 style={{
-                          fontSize: '15px',
-                          fontWeight: 400,
-                          color: 'black',
+                          ...text.body,
                           textDecoration: task.completed ? 'line-through' : 'none'
                         }}>
                           {task.title}
                         </h3>
                       </div>
                       <p style={{
-                        fontSize: '13px',
-                        fontWeight: 300,
-                        color: '#666',
-                        marginBottom: '8px'
+                        ...text.bodySmall,
+                        color: tokens.colors.text.secondary,
+                        marginBottom: tokens.spacing.sm
                       }}>
                         {task.description}
                       </p>
                       <div style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '4px',
-                        fontSize: '12px',
-                        fontWeight: 300,
-                        color: '#999'
+                        gap: tokens.spacing.xs,
+                        ...text.caption
                       }}>
                         <Clock size={12} />
                         {formatDuration(task.duration)}
@@ -288,24 +466,66 @@ export default function Dashboard() {
 
         {/* Current phase info */}
         {roadmap && (
-          <div style={{
-            backgroundColor: 'white',
-            padding: '20px',
-            borderRadius: '12px',
-            border: '1px solid #f0f0f0'
-          }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 400, color: 'black', marginBottom: '8px' }}>
-              Current Phase
-            </h3>
-            <p style={{ fontSize: '16px', fontWeight: 300, color: 'black', marginBottom: '4px' }}>
+          <button
+            onClick={() => setShowRoadmapModal(true)}
+            style={{
+              ...card.standard,
+              width: '100%',
+              border: `1px solid ${tokens.colors.gray[200]}`,
+              cursor: 'pointer',
+              transition: `all ${tokens.transitions.fast}`,
+              textAlign: 'left'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = tokens.colors.text.primary;
+              e.currentTarget.style.backgroundColor = tokens.colors.gray[50];
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = tokens.colors.gray[200];
+              e.currentTarget.style.backgroundColor = tokens.colors.primary;
+            }}
+          >
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: tokens.spacing.sm
+            }}>
+              <h3 style={text.body}>
+                Current Phase
+              </h3>
+              <Map size={16} color={tokens.colors.text.tertiary} />
+            </div>
+            <p style={{
+              ...text.h4,
+              marginBottom: tokens.spacing.xs
+            }}>
               {roadmap.phases[0]?.title}
             </p>
-            <p style={{ fontSize: '13px', fontWeight: 300, color: '#666' }}>
+            <p style={{
+              ...text.bodySmall,
+              color: tokens.colors.text.secondary,
+              marginBottom: tokens.spacing.sm
+            }}>
               {roadmap.phases[0]?.description}
             </p>
-          </div>
+            <div style={{
+              ...text.caption,
+              color: tokens.colors.text.tertiary
+            }}>
+              Click to view full roadmap →
+            </div>
+          </button>
         )}
       </div>
+
+      {/* Roadmap Modal */}
+      <RoadmapModal
+        isOpen={showRoadmapModal}
+        onClose={() => setShowRoadmapModal(false)}
+        roadmap={roadmap}
+        currentDay={currentDay}
+      />
     </div>
   );
 }

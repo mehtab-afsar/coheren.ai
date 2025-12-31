@@ -1,8 +1,22 @@
-import { ChevronLeft, User, Bell, Target, BarChart3, Trash2 } from 'lucide-react';
+import { ChevronLeft, User, Bell, Target, Trash2, Edit2, Check, X } from 'lucide-react';
+import { useState } from 'react';
 import { useStore } from '../store/useStore';
 
 export default function Settings() {
-  const { universalProfile, roadmap, checkInTime, resetOnboarding, setStep } = useStore();
+  const { universalProfile, roadmap, checkInTime, resetOnboarding, setStep, setCheckInTime } = useStore();
+
+  const [isEditingCheckIn, setIsEditingCheckIn] = useState(false);
+  const [tempCheckInTime, setTempCheckInTime] = useState(checkInTime);
+
+  const handleSaveCheckIn = () => {
+    setCheckInTime(tempCheckInTime);
+    setIsEditingCheckIn(false);
+  };
+
+  const handleCancelCheckIn = () => {
+    setTempCheckInTime(checkInTime);
+    setIsEditingCheckIn(false);
+  };
 
   const handleReset = () => {
     if (confirm('Are you sure you want to start over? This will delete all your progress.')) {
@@ -108,9 +122,94 @@ export default function Settings() {
               <Bell size={18} color="#666" />
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: '13px', fontWeight: 300, color: '#999' }}>Check-in Time</div>
-                <div style={{ fontSize: '15px', fontWeight: 300, color: 'black' }}>
-                  {checkInTime}
-                </div>
+                {isEditingCheckIn ? (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    marginTop: '4px'
+                  }}>
+                    <input
+                      type="time"
+                      value={tempCheckInTime}
+                      onChange={(e) => setTempCheckInTime(e.target.value)}
+                      autoFocus
+                      style={{
+                        fontSize: '15px',
+                        fontWeight: 300,
+                        padding: '4px 8px',
+                        border: '1px solid #e0e0e0',
+                        borderRadius: '6px',
+                        outline: 'none'
+                      }}
+                      onFocus={(e) => e.target.style.borderColor = 'black'}
+                      onBlur={(e) => e.target.style.borderColor = '#e0e0e0'}
+                    />
+                    <button
+                      onClick={handleSaveCheckIn}
+                      style={{
+                        padding: '4px 8px',
+                        backgroundColor: 'black',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        transition: 'opacity 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+                      onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                    >
+                      <Check size={16} />
+                    </button>
+                    <button
+                      onClick={handleCancelCheckIn}
+                      style={{
+                        padding: '4px 8px',
+                        backgroundColor: '#fafafa',
+                        color: 'black',
+                        border: '1px solid #e0e0e0',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fafafa'}
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <div style={{ fontSize: '15px', fontWeight: 300, color: 'black' }}>
+                      {checkInTime}
+                    </div>
+                    <button
+                      onClick={() => setIsEditingCheckIn(true)}
+                      style={{
+                        padding: '4px',
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        borderRadius: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fafafa'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <Edit2 size={14} color="#999" />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -173,7 +272,9 @@ export default function Settings() {
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: '13px', fontWeight: 300, color: '#999' }}>Work Hours</div>
                 <div style={{ fontSize: '15px', fontWeight: 300, color: 'black' }}>
-                  {universalProfile.dailyRoutine?.workHours || 'Not set'}
+                  {universalProfile.dailyRoutine?.workHours
+                    ? `${universalProfile.dailyRoutine.workHours.start} - ${universalProfile.dailyRoutine.workHours.end}`
+                    : 'Not set'}
                 </div>
               </div>
             </div>

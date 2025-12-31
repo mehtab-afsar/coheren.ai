@@ -1,6 +1,7 @@
 import { ArrowRight, ChevronLeft } from 'lucide-react';
 import { useState } from 'react';
 import { useStore } from '../store/useStore';
+import { tokens, layout, text, button, input, hoverHandlers, focusHandlers } from '../design-system';
 
 const goalsByCategory = {
   Fitness: ['Boxing', 'Running', 'Yoga', 'Weightlifting', 'Swimming', 'Cycling'],
@@ -21,7 +22,7 @@ export default function SpecificGoal() {
 
   const handleSelect = (goal: string) => {
     setSpecificGoal(goal);
-    setStep(3); // Move to universal questions
+    setStep(3);
   };
 
   const handleCustomSubmit = () => {
@@ -32,53 +33,43 @@ export default function SpecificGoal() {
   };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: 'white',
-      padding: '48px 24px'
-    }}>
-      <div style={{ maxWidth: '600px', width: '100%' }}>
+    <div style={layout.fullPageCentered}>
+      <div style={layout.contentContainer('600px')}>
         {/* Back button */}
         <button
           onClick={() => setStep(1)}
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
-            padding: '8px',
+            gap: tokens.spacing.sm,
+            padding: tokens.spacing.sm,
             backgroundColor: 'transparent',
             border: 'none',
-            color: '#999',
-            fontSize: '14px',
-            fontWeight: 300,
+            color: tokens.colors.text.tertiary,
+            fontSize: tokens.typography.sizes.md,
+            fontWeight: tokens.typography.weights.light,
             cursor: 'pointer',
-            marginBottom: '32px',
-            transition: 'color 0.2s'
+            marginBottom: tokens.spacing['2xl'],
+            transition: tokens.transitions.all
           }}
-          onMouseEnter={(e) => e.currentTarget.style.color = 'black'}
-          onMouseLeave={(e) => e.currentTarget.style.color = '#999'}
+          onMouseEnter={(e) => e.currentTarget.style.color = tokens.colors.primary}
+          onMouseLeave={(e) => e.currentTarget.style.color = tokens.colors.text.tertiary}
         >
           <ChevronLeft size={16} />
           Back
         </button>
 
         {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '48px' }}>
-          <h2 style={{
-            fontSize: '30px',
-            fontWeight: 300,
-            color: 'black',
-            marginBottom: '8px'
-          }}>
+        <div style={{
+          textAlign: 'center',
+          marginBottom: tokens.spacing['3xl']
+        }}>
+          <h2 style={text.h1}>
             What's your {category?.toLowerCase()} goal?
           </h2>
           <p style={{
-            fontSize: '14px',
-            fontWeight: 300,
-            color: '#999'
+            ...text.body,
+            marginTop: tokens.spacing.sm
           }}>
             Choose from suggestions or enter your own
           </p>
@@ -89,32 +80,18 @@ export default function SpecificGoal() {
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-            gap: '12px',
-            marginBottom: '24px'
+            gap: tokens.spacing.md,
+            marginBottom: tokens.spacing.xl
           }}>
             {suggestions.map((goal) => (
               <button
                 key={goal}
                 onClick={() => handleSelect(goal)}
                 style={{
-                  padding: '16px',
-                  backgroundColor: 'white',
-                  border: '1px solid #e5e5e5',
-                  borderRadius: '12px',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: 300,
-                  color: 'black',
-                  transition: 'all 0.2s'
+                  ...button.secondary,
+                  padding: tokens.spacing.lg
                 }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = 'black';
-                  e.currentTarget.style.backgroundColor = '#fafafa';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = '#e5e5e5';
-                  e.currentTarget.style.backgroundColor = 'white';
-                }}
+                {...hoverHandlers.lightBg}
               >
                 {goal}
               </button>
@@ -124,21 +101,21 @@ export default function SpecificGoal() {
 
         {/* Custom input toggle */}
         {!isCustom ? (
-          <div style={{ textAlign: 'center', marginTop: '32px' }}>
+          <div style={{ textAlign: 'center', marginTop: tokens.spacing['2xl'] }}>
             <button
               onClick={() => setIsCustom(true)}
               style={{
-                fontSize: '14px',
-                fontWeight: 300,
-                color: '#999',
+                fontSize: tokens.typography.sizes.md,
+                fontWeight: tokens.typography.weights.light,
+                color: tokens.colors.text.tertiary,
                 backgroundColor: 'transparent',
                 border: 'none',
                 cursor: 'pointer',
                 textDecoration: 'underline',
-                transition: 'color 0.2s'
+                transition: tokens.transitions.all
               }}
-              onMouseEnter={(e) => e.currentTarget.style.color = 'black'}
-              onMouseLeave={(e) => e.currentTarget.style.color = '#999'}
+              onMouseEnter={(e) => e.currentTarget.style.color = tokens.colors.primary}
+              onMouseLeave={(e) => e.currentTarget.style.color = tokens.colors.text.tertiary}
             >
               Or enter your own goal
             </button>
@@ -155,40 +132,26 @@ export default function SpecificGoal() {
                 if (e.key === 'Enter') handleCustomSubmit();
               }}
               style={{
-                width: '100%',
-                padding: '16px',
-                fontSize: '16px',
-                fontWeight: 300,
-                border: '1px solid #e5e5e5',
-                borderRadius: '12px',
-                outline: 'none',
-                transition: 'border-color 0.2s',
-                marginBottom: '16px'
+                ...input.base,
+                marginBottom: tokens.spacing.lg
               }}
-              onFocus={(e) => e.currentTarget.style.borderColor = 'black'}
-              onBlur={(e) => e.currentTarget.style.borderColor = '#e5e5e5'}
+              {...focusHandlers.input}
             />
 
-            <div style={{ display: 'flex', gap: '12px' }}>
+            <div style={{
+              display: 'flex',
+              gap: tokens.spacing.md
+            }}>
               <button
                 onClick={() => {
                   setIsCustom(false);
                   setCustomGoal('');
                 }}
                 style={{
-                  flex: 1,
-                  padding: '12px',
-                  backgroundColor: 'white',
-                  color: 'black',
-                  border: '1px solid #e5e5e5',
-                  borderRadius: '12px',
-                  fontSize: '14px',
-                  fontWeight: 300,
-                  cursor: 'pointer',
-                  transition: 'background-color 0.2s'
+                  ...button.secondary,
+                  flex: 1
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fafafa'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                {...hoverHandlers.lightBg}
               >
                 Back to suggestions
               </button>
@@ -197,27 +160,14 @@ export default function SpecificGoal() {
                 onClick={handleCustomSubmit}
                 disabled={!customGoal.trim()}
                 style={{
+                  ...(customGoal.trim() ? button.primary : button.disabled),
                   flex: 1,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '8px',
-                  padding: '12px',
-                  backgroundColor: customGoal.trim() ? 'black' : '#e5e5e5',
-                  color: customGoal.trim() ? 'white' : '#999',
-                  border: 'none',
-                  borderRadius: '12px',
-                  fontSize: '14px',
-                  fontWeight: 300,
-                  cursor: customGoal.trim() ? 'pointer' : 'not-allowed',
-                  transition: 'background-color 0.2s'
+                  gap: tokens.spacing.sm
                 }}
-                onMouseEnter={(e) => {
-                  if (customGoal.trim()) e.currentTarget.style.backgroundColor = '#333';
-                }}
-                onMouseLeave={(e) => {
-                  if (customGoal.trim()) e.currentTarget.style.backgroundColor = 'black';
-                }}
+                {...(customGoal.trim() ? hoverHandlers.darkBg : {})}
               >
                 Continue
                 <ArrowRight size={16} />

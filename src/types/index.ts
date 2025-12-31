@@ -5,7 +5,10 @@ export interface UniversalProfile {
   dailyRoutine: {
     wakeTime: string;
     sleepTime: string;
-    workHours: string;
+    workHours: {
+      start: string;
+      end: string;
+    };
     freeTimeSlots: Array<{
       start: string;
       end: string;

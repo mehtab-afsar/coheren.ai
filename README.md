@@ -1,73 +1,91 @@
-# React + TypeScript + Vite
+# CONSIST - AI-Powered Consistency & Habit Formation App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Your everyday ally for building consistency in anything.
 
-Currently, two official plugins are available:
+## Overview
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+CONSIST is a minimalist web app that helps users build consistency through AI-powered personalized roadmaps. Instead of forcing users to plan, CONSIST learns about them and creates adaptive micro-tasks that minimize cognitive load.
 
-## React Compiler
+## Features Implemented (MVP)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Complete Onboarding Flow
+1. **Welcome Screen** - Introduction to CONSIST
+2. **Goal Selection** - Choose from 6 categories (Fitness, Exam, Hobby, Learning, Habit, Creative)
+3. **Specific Goal Input** - Curated suggestions or custom goals
+4. **Universal Questions** - 5 essential questions asked once for all goals
+5. **Category-Specific Questions** - 3-5 targeted questions per category
+6. **Roadmap Generation** - AI-powered personalized plan with phases
+7. **Check-in Setup** - Choose daily reminder time
+8. **Dashboard** - View today's tasks, streak, and progress
+9. **Settings** - View/manage profile and roadmap details
 
-## Expanding the ESLint configuration
+## Getting Started
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Installation
+\`\`\`bash
+cd consist
+npm install
+\`\`\`
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Development
+\`\`\`bash
+npm run dev
+\`\`\`
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+Open http://localhost:5173 in your browser.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+### Build
+\`\`\`bash
+npm run build
+\`\`\`
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Tech Stack
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- React 18 + TypeScript
+- Vite
+- Zustand (state management with persist)
+- Lucide React (icons)
+- Inter font (Google Fonts)
+- Inline styles (minimalist design)
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## User Flow
+
+**Onboarding (5 minutes):**
+- Step 0: Welcome
+- Step 1: Select goal category
+- Step 2: Enter specific goal
+- Step 3: Answer 5 universal questions
+- Step 4: Answer 3-5 category questions
+- Step 5: View generated roadmap
+- Step 6: Set check-in time
+
+**Daily Use:**
+- Step 7: Dashboard (tasks, streak, progress)
+- Step 8: Settings (profile, roadmap)
+
+## Project Structure
+
+\`\`\`
+consist/
+├── src/
+│   ├── pages/           # 9 screens
+│   ├── store/           # Zustand store
+│   ├── types/           # TypeScript types
+│   └── App.tsx
+├── package.json
+└── README.md
+\`\`\`
+
+## Philosophy
+
+> "Stop planning. Start doing."
+
+- Minimal questions (8-14 total)
+- Smart defaults (infer 80% from behavior)
+- Atomic micro-tasks (one action each)
+- Personalized roadmaps
+- Zero cognitive load
+
+---
+
+**Version**: 1.0.0 (MVP)

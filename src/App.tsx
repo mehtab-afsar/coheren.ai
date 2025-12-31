@@ -5,6 +5,9 @@ import SpecificGoal from './pages/SpecificGoal';
 import UniversalQuestions from './pages/UniversalQuestions';
 import CategoryQuestions from './pages/CategoryQuestions';
 import RoadmapGeneration from './pages/RoadmapGeneration';
+import CheckInSetup from './pages/CheckInSetup';
+import Dashboard from './pages/Dashboard';
+import Settings from './pages/Settings';
 
 function App() {
   const step = useStore((state) => state.step);
@@ -17,7 +20,10 @@ function App() {
       {step === 3 && <UniversalQuestions />}
       {step === 4 && <CategoryQuestions />}
       {step === 5 && <RoadmapGeneration />}
-      {step >= 6 && (
+      {step === 6 && <CheckInSetup />}
+      {step === 7 && <Dashboard />}
+      {step === 8 && <Settings />}
+      {step >= 9 && (
         <div style={{
           minHeight: '100vh',
           display: 'flex',

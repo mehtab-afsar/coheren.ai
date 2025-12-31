@@ -133,8 +133,11 @@ export default function RoadmapGeneration() {
   }, [currentGoal, universalProfile]);
 
   const handleContinue = () => {
-    // TODO: Save roadmap to store
-    setStep(6); // Move to daily check-in setup or dashboard
+    // Save roadmap to store
+    if (roadmap) {
+      useStore.getState().setRoadmap(roadmap);
+    }
+    setStep(6); // Move to daily check-in setup
   };
 
   if (loading) {

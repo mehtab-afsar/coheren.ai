@@ -1,7 +1,7 @@
-import { ArrowRight, ChevronLeft } from 'lucide-react';
 import { useState } from 'react';
 import { useStore } from '../store/useStore';
-import { tokens, layout, text, button, input, progress, hoverHandlers, focusHandlers, card } from '../design-system';
+import { tokens, text, input, focusHandlers, card } from '../design-system';
+import { PageLayout, ProgressIndicator, NavigationFooter } from '../components/layout';
 
 const questions = [
   {
@@ -77,28 +77,17 @@ export default function UniversalQuestions() {
     return answer && answer.trim();
   };
 
-  const progressPercentage = ((currentQ + 1) / questions.length) * 100;
-
   return (
-    <div style={layout.fullPageCentered}>
-      <div style={layout.contentContainer('500px')}>
-        {/* Progress */}
-        <div style={{ marginBottom: tokens.spacing['3xl'] }}>
-          <div style={progress.textContainer}>
-            <span style={text.caption}>
-              Question {currentQ + 1} of {questions.length}
-            </span>
-            <span style={text.caption}>
-              {Math.round(progressPercentage)}%
-            </span>
-          </div>
-          <div style={progress.container}>
-            <div style={progress.fill(progressPercentage)} />
-          </div>
-        </div>
+    <PageLayout variant="onboarding" maxWidth="standard">
+      <ProgressIndicator
+        current={currentQ + 1}
+        total={questions.length}
+        showLabels
+        labelFormat="question"
+      />
 
-        {/* Question */}
-        <div style={{ marginBottom: tokens.spacing['2xl'] }}>
+      {/* Question */}
+      <div style={{ marginBottom: tokens.spacing['2xl'] }}>
           <h2 style={{
             ...text.h2,
             marginBottom: tokens.spacing['2xl'],
@@ -190,47 +179,17 @@ export default function UniversalQuestions() {
           )}
         </div>
 
-        {/* Navigation */}
-        {question.type !== 'choice' && (
-          <div style={{
-            display: 'flex',
-            gap: tokens.spacing.md,
-            marginTop: tokens.spacing['2xl']
-          }}>
-            <button
-              onClick={handleBack}
-              style={{
-                ...button.secondary,
-                display: 'flex',
-                alignItems: 'center',
-                gap: tokens.spacing.sm,
-                padding: `${tokens.spacing.md} ${tokens.spacing.xl}`
-              }}
-              {...hoverHandlers.lightBg}
-            >
-              <ChevronLeft size={16} />
-              Back
-            </button>
-
-            <button
-              onClick={handleNext}
-              disabled={!isAnswered()}
-              style={{
-                ...(isAnswered() ? button.primary : button.disabled),
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: tokens.spacing.sm
-              }}
-              {...(isAnswered() ? hoverHandlers.darkBg : {})}
-            >
-              {isLast ? 'Continue' : 'Next'}
-              <ArrowRight size={16} />
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
+      {/* Navigation */}
+      {question.type !== 'choice' && (
+        <NavigationFooter
+          onBack={handleBack}
+          onNext={handleNext}
+          nextLabel={isLast ? 'Continue' : 'Next'}
+          nextDisabled={!isAnswered()}
+          showBack
+          backLabel="Back"
+        />
+      )}
+    </PageLayout>
   );
 }

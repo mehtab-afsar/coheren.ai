@@ -4,15 +4,18 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    port: 3000,
+  },
   plugins: [
     react(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icon-192.png', 'icon-512.png'],
       manifest: {
-        name: 'CONSIST - Daily Habit Builder',
-        short_name: 'CONSIST',
-        description: 'Stop planning. Start doing. Build lasting habits with personalized daily tasks.',
+        name: 'Coheren.ai - AI Goal Coach',
+        short_name: 'Coheren',
+        description: 'Your AI-powered coach that turns any goal into a personalized action plan',
         theme_color: '#000000',
         background_color: '#ffffff',
         display: 'standalone',

@@ -1,16 +1,14 @@
 import { ArrowRight } from 'lucide-react';
 import { useStore } from '../store/useStore';
-import { tokens, layout, text, button, hoverHandlers } from '../design-system';
+import { tokens, text, button, hoverHandlers } from '../design-system';
+import { PageLayout } from '../components/layout';
 
 export default function Welcome() {
   const setStep = useStore((state) => state.setStep);
 
   return (
-    <div style={layout.fullPageCentered}>
-      <div style={{
-        ...layout.contentContainer('448px'),
-        textAlign: 'center'
-      }}>
+    <PageLayout variant="onboarding" maxWidth="narrow">
+      <div style={{ textAlign: 'center' }}>
         <div style={{ marginBottom: tokens.spacing['2xl'] }}>
           <h1 style={text.display}>
             CONSIST
@@ -63,6 +61,6 @@ export default function Welcome() {
           5 minutes to your personalized roadmap
         </p>
       </div>
-    </div>
+    </PageLayout>
   );
 }

@@ -80,11 +80,15 @@ export default function Dashboard() {
           <div>
             <h1 style={{
               ...text.h3,
+              color: tokens.colors.text.inverse,
               marginBottom: tokens.spacing.xs
             }}>
               {getGreeting()}, {universalProfile.name || 'there'}
             </h1>
-            <p style={text.body}>
+            <p style={{
+              ...text.body,
+              color: tokens.colors.text.inverse
+            }}>
               Day {currentDay} • {roadmap?.title}
             </p>
           </div>
@@ -129,14 +133,21 @@ export default function Dashboard() {
               marginBottom: tokens.spacing.sm
             }}>
               <Flame size={16} color={streak > 0 ? '#ff6b35' : tokens.colors.gray[700]} />
-              <span style={text.caption}>Streak</span>
+              <span style={{
+                ...text.caption,
+                color: tokens.colors.text.inverse
+              }}>Streak</span>
             </div>
-            <div style={text.h3}>
+            <div style={{
+              ...text.h3,
+              color: tokens.colors.text.inverse
+            }}>
               {streak}
             </div>
             <div style={{
               ...text.caption,
-              fontSize: '11px'
+              fontSize: '11px',
+              color: tokens.colors.text.inverse
             }}>
               {streak === 1 ? 'day' : 'days'}
             </div>
@@ -152,15 +163,22 @@ export default function Dashboard() {
               gap: tokens.spacing.sm,
               marginBottom: tokens.spacing.sm
             }}>
-              <TrendingUp size={16} color={tokens.colors.text.secondary} />
-              <span style={text.caption}>Progress</span>
+              <TrendingUp size={16} color={tokens.colors.gray[300]} />
+              <span style={{
+                ...text.caption,
+                color: tokens.colors.text.inverse
+              }}>Progress</span>
             </div>
-            <div style={text.h3}>
+            <div style={{
+              ...text.h3,
+              color: tokens.colors.text.inverse
+            }}>
               {Math.round(completionRate)}%
             </div>
             <div style={{
               ...text.caption,
-              fontSize: '11px'
+              fontSize: '11px',
+              color: tokens.colors.text.inverse
             }}>
               today
             </div>
@@ -176,15 +194,22 @@ export default function Dashboard() {
               gap: tokens.spacing.sm,
               marginBottom: tokens.spacing.sm
             }}>
-              <Calendar size={16} color={tokens.colors.text.secondary} />
-              <span style={text.caption}>Week</span>
+              <Calendar size={16} color={tokens.colors.gray[300]} />
+              <span style={{
+                ...text.caption,
+                color: tokens.colors.text.inverse
+              }}>Week</span>
             </div>
-            <div style={text.h3}>
+            <div style={{
+              ...text.h3,
+              color: tokens.colors.text.inverse
+            }}>
               {Math.ceil(currentDay / 7)}
             </div>
             <div style={{
               ...text.caption,
-              fontSize: '11px'
+              fontSize: '11px',
+              color: tokens.colors.text.inverse
             }}>
               of {Math.ceil((roadmap?.duration || 6) * 4)}
             </div>

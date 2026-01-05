@@ -1,6 +1,7 @@
 import { Dumbbell, BookOpen, Palette, Brain, CheckSquare, Video } from 'lucide-react';
 import { useStore } from '../store/useStore';
-import { tokens, layout, text, card } from '../design-system';
+import { tokens, text, card } from '../design-system';
+import { PageLayout } from '../components/layout';
 import type { GoalCategory } from '../types/index.js';
 
 const categories = [
@@ -72,80 +73,76 @@ export default function GoalSelection() {
   };
 
   return (
-    <div style={layout.fullPageCentered}>
+    <PageLayout variant="onboarding" maxWidth="wide">
       <div style={{
-        ...layout.contentContainer('672px'),
+        textAlign: 'center',
+        marginBottom: tokens.spacing['3xl']
       }}>
-        <div style={{
-          textAlign: 'center',
-          marginBottom: tokens.spacing['3xl']
-        }}>
-          <h2 style={text.h1}>
-            What do you want to get consistent at?
-          </h2>
-          <p style={{
-            ...text.body,
-            marginTop: tokens.spacing.sm
-          }}>
-            Choose a category to start
-          </p>
-        </div>
-
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-          gap: tokens.spacing.lg
-        }}>
-          {categories.map(({ id, icon: Icon, label, examples }) => (
-            <button
-              key={id}
-              onClick={() => handleSelect(id)}
-              style={{
-                ...card.interactive,
-                padding: tokens.spacing.xl,
-                borderRadius: tokens.borderRadius.xl,
-                display: 'flex',
-                alignItems: 'start',
-                gap: tokens.spacing.lg,
-                textAlign: 'left'
-              }}
-              onMouseEnter={(e) => handleCardHover(e, true)}
-              onMouseLeave={(e) => handleCardHover(e, false)}
-            >
-              <div style={{
-                padding: tokens.spacing.md,
-                backgroundColor: tokens.colors.gray[100],
-                borderRadius: tokens.borderRadius.lg,
-                transition: tokens.transitions.all,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <Icon size={24} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <h3 style={{
-                  ...text.h3,
-                  marginBottom: tokens.spacing.xs
-                }}>
-                  {label}
-                </h3>
-                <p style={text.caption}>
-                  {examples}
-                </p>
-              </div>
-            </button>
-          ))}
-        </div>
-
+        <h2 style={text.h1}>
+          What do you want to get consistent at?
+        </h2>
         <p style={{
-          ...text.caption,
-          textAlign: 'center',
-          marginTop: tokens.spacing['2xl']
+          ...text.body,
+          marginTop: tokens.spacing.sm
         }}>
-          You can add multiple goals later
+          Choose a category to start
         </p>
       </div>
-    </div>
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+        gap: tokens.spacing.lg
+      }}>
+        {categories.map(({ id, icon: Icon, label, examples }) => (
+          <button
+            key={id}
+            onClick={() => handleSelect(id)}
+            style={{
+              ...card.interactive,
+              padding: tokens.spacing.xl,
+              borderRadius: tokens.borderRadius.xl,
+              display: 'flex',
+              alignItems: 'start',
+              gap: tokens.spacing.lg,
+              textAlign: 'left'
+            }}
+            onMouseEnter={(e) => handleCardHover(e, true)}
+            onMouseLeave={(e) => handleCardHover(e, false)}
+          >
+            <div style={{
+              padding: tokens.spacing.md,
+              backgroundColor: tokens.colors.gray[100],
+              borderRadius: tokens.borderRadius.lg,
+              transition: tokens.transitions.all,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Icon size={24} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <h3 style={{
+                ...text.h3,
+                marginBottom: tokens.spacing.xs
+              }}>
+                {label}
+              </h3>
+              <p style={text.caption}>
+                {examples}
+              </p>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      <p style={{
+        ...text.caption,
+        textAlign: 'center',
+        marginTop: tokens.spacing['2xl']
+      }}>
+        You can add multiple goals later
+      </p>
+    </PageLayout>
   );
 }

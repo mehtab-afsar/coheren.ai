@@ -152,6 +152,36 @@ export const tokens = {
     md: '500px',   // Default forms
     lg: '600px',   // Category grids
     xl: '672px',   // Large grids
+    mobile: '768px', // Mobile breakpoint
+  },
+
+  // ============================================
+  // PAGE WIDTHS
+  // ============================================
+  pageWidths: {
+    narrow: '448px',      // Welcome screens
+    standard: '500px',    // Most onboarding forms
+    comfortable: '600px', // Content-heavy pages
+    wide: '672px',        // Grid selection pages
+    full: '100%',         // Dashboard, Settings
+  },
+
+  // ============================================
+  // SIDEBAR WIDTHS
+  // ============================================
+  sidebar: {
+    expanded: '240px',
+    collapsed: '60px',
+  },
+
+  // ============================================
+  // Z-INDEX LAYERS
+  // ============================================
+  zIndex: {
+    sidebar: 100,
+    mobileNav: 200,
+    modal: 1000,
+    modalBackdrop: 999,
   },
 };
 

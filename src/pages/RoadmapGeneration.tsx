@@ -1,7 +1,8 @@
 import { ArrowRight, Sparkles, Calendar, Clock, Target } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
-import { tokens, layout, text, button, card, progress as progressStyles, hoverHandlers } from '../design-system';
+import { tokens, text, button, card, progress as progressStyles, hoverHandlers } from '../design-system';
+import { PageLayout } from '../components/layout';
 
 // Simple roadmap generator based on category and user data
 const generateRoadmap = (goal: any, universalProfile: any) => {
@@ -143,11 +144,8 @@ export default function RoadmapGeneration() {
 
   if (loading) {
     return (
-      <div style={layout.fullPageCentered}>
-        <div style={{
-          ...layout.contentContainer('500px'),
-          textAlign: 'center'
-        }}>
+      <PageLayout variant="onboarding" maxWidth="standard">
+        <div style={{ textAlign: 'center' }}>
           <div style={{
             width: '60px',
             height: '60px',
@@ -191,199 +189,197 @@ export default function RoadmapGeneration() {
             }
           `}</style>
         </div>
-      </div>
+      </PageLayout>
     );
   }
 
   return (
-    <div style={layout.fullPageCentered}>
-      <div style={layout.contentContainer('600px')}>
-        {/* Success animation */}
-        <div style={{
-          width: '48px',
-          height: '48px',
-          margin: `0 auto ${tokens.spacing['2xl']}`,
-          backgroundColor: tokens.colors.text.primary,
-          borderRadius: '50%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
+    <PageLayout variant="onboarding" maxWidth="comfortable">
+      {/* Success animation */}
+      <div style={{
+        width: '48px',
+        height: '48px',
+        margin: `0 auto ${tokens.spacing['2xl']}`,
+        backgroundColor: tokens.colors.text.primary,
+        borderRadius: '50%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <Target size={24} color={tokens.colors.primary} />
+      </div>
+
+      {/* Header */}
+      <div style={{
+        textAlign: 'center',
+        marginBottom: tokens.spacing['3xl']
+      }}>
+        <h1 style={{
+          ...text.h1,
+          marginBottom: tokens.spacing.sm
         }}>
-          <Target size={24} color={tokens.colors.primary} />
-        </div>
-
-        {/* Header */}
-        <div style={{
-          textAlign: 'center',
-          marginBottom: tokens.spacing['3xl']
-        }}>
-          <h1 style={{
-            ...text.h1,
-            marginBottom: tokens.spacing.sm
-          }}>
-            Your {roadmap.title} Roadmap
-          </h1>
-          <p style={text.body}>
-            A personalized plan built just for you
-          </p>
-        </div>
-
-        {/* Key metrics */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: tokens.spacing.lg,
-          marginBottom: tokens.spacing['2xl']
-        }}>
-          <div style={{
-            ...card.standard,
-            textAlign: 'center',
-            backgroundColor: tokens.colors.gray[50]
-          }}>
-            <Calendar size={20} style={{
-              color: tokens.colors.text.tertiary,
-              margin: `0 auto ${tokens.spacing.sm}`
-            }} />
-            <div style={{
-              ...text.h3,
-              marginBottom: tokens.spacing.xs
-            }}>
-              {roadmap.duration} {roadmap.duration === 1 ? 'month' : 'months'}
-            </div>
-            <div style={text.caption}>
-              Timeline
-            </div>
-          </div>
-
-          <div style={{
-            ...card.standard,
-            textAlign: 'center',
-            backgroundColor: tokens.colors.gray[50]
-          }}>
-            <Clock size={20} style={{
-              color: tokens.colors.text.tertiary,
-              margin: `0 auto ${tokens.spacing.sm}`
-            }} />
-            <div style={{
-              ...text.h3,
-              marginBottom: tokens.spacing.xs
-            }}>
-              {roadmap.dailyTime}
-            </div>
-            <div style={text.caption}>
-              Daily time
-            </div>
-          </div>
-
-          <div style={{
-            ...card.standard,
-            textAlign: 'center',
-            backgroundColor: tokens.colors.gray[50]
-          }}>
-            <Target size={20} style={{
-              color: tokens.colors.text.tertiary,
-              margin: `0 auto ${tokens.spacing.sm}`
-            }} />
-            <div style={{
-              ...text.h3,
-              marginBottom: tokens.spacing.xs
-            }}>
-              {roadmap.recommendedTime}
-            </div>
-            <div style={text.caption}>
-              Best time
-            </div>
-          </div>
-        </div>
-
-        {/* Phases */}
-        <div style={{
-          ...card.standard,
-          marginBottom: tokens.spacing['2xl']
-        }}>
-          <h3 style={{
-            ...text.h4,
-            marginBottom: tokens.spacing.xl
-          }}>
-            Your Journey
-          </h3>
-
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column' as const,
-            gap: tokens.spacing.lg
-          }}>
-            {roadmap.phases.map((phase: any, index: number) => (
-              <div key={index} style={{
-                display: 'flex',
-                gap: tokens.spacing.lg
-              }}>
-                <div style={{
-                  width: '32px',
-                  height: '32px',
-                  backgroundColor: index === 0 ? tokens.colors.text.primary : tokens.colors.gray[100],
-                  color: index === 0 ? tokens.colors.primary : tokens.colors.text.tertiary,
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: tokens.typography.sizes.sm,
-                  fontWeight: tokens.typography.weights.medium,
-                  flexShrink: 0
-                }}>
-                  {index + 1}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'baseline' as const,
-                    marginBottom: tokens.spacing.xs
-                  }}>
-                    <div style={text.body}>
-                      {phase.title}
-                    </div>
-                    <div style={text.caption}>
-                      Weeks {phase.weeks}
-                    </div>
-                  </div>
-                  <div style={{
-                    ...text.bodySmall,
-                    color: tokens.colors.text.secondary
-                  }}>
-                    {phase.description}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* CTA */}
-        <button
-          onClick={handleContinue}
-          style={{
-            ...button.primary,
-            width: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: tokens.spacing.sm
-          }}
-          {...hoverHandlers.darkBg}
-        >
-          Start Your Journey
-          <ArrowRight size={20} />
-        </button>
-
-        <p style={{
-          ...text.caption,
-          textAlign: 'center',
-          marginTop: tokens.spacing.lg
-        }}>
-          You can adjust this plan anytime
+          Your {roadmap.title} Roadmap
+        </h1>
+        <p style={text.body}>
+          A personalized plan built just for you
         </p>
       </div>
-    </div>
+
+      {/* Key metrics */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gap: tokens.spacing.lg,
+        marginBottom: tokens.spacing['2xl']
+      }}>
+        <div style={{
+          ...card.standard,
+          textAlign: 'center',
+          backgroundColor: tokens.colors.gray[50]
+        }}>
+          <Calendar size={20} style={{
+            color: tokens.colors.text.tertiary,
+            margin: `0 auto ${tokens.spacing.sm}`
+          }} />
+          <div style={{
+            ...text.h3,
+            marginBottom: tokens.spacing.xs
+          }}>
+            {roadmap.duration} {roadmap.duration === 1 ? 'month' : 'months'}
+          </div>
+          <div style={text.caption}>
+            Timeline
+          </div>
+        </div>
+
+        <div style={{
+          ...card.standard,
+          textAlign: 'center',
+          backgroundColor: tokens.colors.gray[50]
+        }}>
+          <Clock size={20} style={{
+            color: tokens.colors.text.tertiary,
+            margin: `0 auto ${tokens.spacing.sm}`
+          }} />
+          <div style={{
+            ...text.h3,
+            marginBottom: tokens.spacing.xs
+          }}>
+            {roadmap.dailyTime}
+          </div>
+          <div style={text.caption}>
+            Daily time
+          </div>
+        </div>
+
+        <div style={{
+          ...card.standard,
+          textAlign: 'center',
+          backgroundColor: tokens.colors.gray[50]
+        }}>
+          <Target size={20} style={{
+            color: tokens.colors.text.tertiary,
+            margin: `0 auto ${tokens.spacing.sm}`
+          }} />
+          <div style={{
+            ...text.h3,
+            marginBottom: tokens.spacing.xs
+          }}>
+            {roadmap.recommendedTime}
+          </div>
+          <div style={text.caption}>
+            Best time
+          </div>
+        </div>
+      </div>
+
+      {/* Phases */}
+      <div style={{
+        ...card.standard,
+        marginBottom: tokens.spacing['2xl']
+      }}>
+        <h3 style={{
+          ...text.h4,
+          marginBottom: tokens.spacing.xl
+        }}>
+          Your Journey
+        </h3>
+
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column' as const,
+          gap: tokens.spacing.lg
+        }}>
+          {roadmap.phases.map((phase: any, index: number) => (
+            <div key={index} style={{
+              display: 'flex',
+              gap: tokens.spacing.lg
+            }}>
+              <div style={{
+                width: '32px',
+                height: '32px',
+                backgroundColor: index === 0 ? tokens.colors.text.primary : tokens.colors.gray[100],
+                color: index === 0 ? tokens.colors.primary : tokens.colors.text.tertiary,
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: tokens.typography.sizes.sm,
+                fontWeight: tokens.typography.weights.medium,
+                flexShrink: 0
+              }}>
+                {index + 1}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'baseline' as const,
+                  marginBottom: tokens.spacing.xs
+                }}>
+                  <div style={text.body}>
+                    {phase.title}
+                  </div>
+                  <div style={text.caption}>
+                    Weeks {phase.weeks}
+                  </div>
+                </div>
+                <div style={{
+                  ...text.bodySmall,
+                  color: tokens.colors.text.secondary
+                }}>
+                  {phase.description}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* CTA */}
+      <button
+        onClick={handleContinue}
+        style={{
+          ...button.primary,
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: tokens.spacing.sm
+        }}
+        {...hoverHandlers.darkBg}
+      >
+        Start Your Journey
+        <ArrowRight size={20} />
+      </button>
+
+      <p style={{
+        ...text.caption,
+        textAlign: 'center',
+        marginTop: tokens.spacing.lg
+      }}>
+        You can adjust this plan anytime
+      </p>
+    </PageLayout>
   );
 }

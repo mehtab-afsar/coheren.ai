@@ -2,7 +2,8 @@ import { ArrowRight, Bell, Sun, Sunset, Moon } from 'lucide-react';
 import { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { generateInitialTasks } from '../utils/taskGenerator';
-import { tokens, layout, text, button, input, card, hoverHandlers, focusHandlers } from '../design-system';
+import { tokens, text, button, input, card, hoverHandlers, focusHandlers } from '../design-system';
+import { PageLayout } from '../components/layout';
 
 const timeOptions = [
   { value: '06:00', label: '6:00 AM', icon: Sun, period: 'Early morning' },
@@ -35,219 +36,217 @@ export default function CheckInSetup() {
   };
 
   return (
-    <div style={layout.fullPageCentered}>
-      <div style={layout.contentContainer('500px')}>
-        {/* Icon */}
-        <div style={{
-          width: '48px',
-          height: '48px',
-          margin: `0 auto ${tokens.spacing['2xl']}`,
-          backgroundColor: tokens.colors.gray[50],
-          borderRadius: '50%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
+    <PageLayout variant="onboarding" maxWidth="standard">
+      {/* Icon */}
+      <div style={{
+        width: '48px',
+        height: '48px',
+        margin: `0 auto ${tokens.spacing['2xl']}`,
+        backgroundColor: tokens.colors.gray[50],
+        borderRadius: '50%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <Bell size={24} color={tokens.colors.text.primary} />
+      </div>
+
+      {/* Header */}
+      <div style={{
+        textAlign: 'center',
+        marginBottom: tokens.spacing['3xl']
+      }}>
+        <h2 style={{
+          ...text.h2,
+          marginBottom: tokens.spacing.md
         }}>
-          <Bell size={24} color={tokens.colors.text.primary} />
-        </div>
+          When should I check in?
+        </h2>
+        <p style={text.body}>
+          I'll send you a gentle reminder at this time each day with your tasks
+        </p>
+      </div>
 
-        {/* Header */}
+      {/* Recommended time callout */}
+      <div style={{
+        padding: tokens.spacing.lg,
+        backgroundColor: tokens.colors.gray[50],
+        borderRadius: tokens.borderRadius.lg,
+        marginBottom: tokens.spacing['2xl'],
+        border: `1px solid ${tokens.colors.gray[200]}`
+      }}>
         <div style={{
-          textAlign: 'center',
-          marginBottom: tokens.spacing['3xl']
+          ...text.caption,
+          marginBottom: tokens.spacing.xs
         }}>
-          <h2 style={{
-            ...text.h2,
-            marginBottom: tokens.spacing.md
-          }}>
-            When should I check in?
-          </h2>
-          <p style={text.body}>
-            I'll send you a gentle reminder at this time each day with your tasks
-          </p>
+          Recommended for you
         </div>
+        <div style={text.h4}>
+          {roadmap?.recommendedTime || '7:00 AM'}
+          <span style={{
+            ...text.body,
+            color: tokens.colors.text.tertiary,
+            marginLeft: tokens.spacing.sm
+          }}>
+            (based on your {universalProfile.energyPattern || 'morning'} energy)
+          </span>
+        </div>
+      </div>
 
-        {/* Recommended time callout */}
+      {/* Time options */}
+      {!showCustom && (
         <div style={{
-          padding: tokens.spacing.lg,
-          backgroundColor: tokens.colors.gray[50],
-          borderRadius: tokens.borderRadius.lg,
-          marginBottom: tokens.spacing['2xl'],
-          border: `1px solid ${tokens.colors.gray[200]}`
+          display: 'grid',
+          gap: tokens.spacing.md,
+          marginBottom: tokens.spacing['2xl']
         }}>
-          <div style={{
-            ...text.caption,
-            marginBottom: tokens.spacing.xs
-          }}>
-            Recommended for you
-          </div>
-          <div style={text.h4}>
-            {roadmap?.recommendedTime || '7:00 AM'}
-            <span style={{
-              ...text.body,
-              color: tokens.colors.text.tertiary,
-              marginLeft: tokens.spacing.sm
-            }}>
-              (based on your {universalProfile.energyPattern || 'morning'} energy)
-            </span>
-          </div>
-        </div>
+          {timeOptions.map((option) => {
+            const Icon = option.icon;
+            const isSelected = selectedTime === option.value;
+            const isRecommended = option.value === roadmap?.recommendedTime;
 
-        {/* Time options */}
-        {!showCustom && (
-          <div style={{
-            display: 'grid',
-            gap: tokens.spacing.md,
-            marginBottom: tokens.spacing['2xl']
-          }}>
-            {timeOptions.map((option) => {
-              const Icon = option.icon;
-              const isSelected = selectedTime === option.value;
-              const isRecommended = option.value === roadmap?.recommendedTime;
-
-              if (option.value === 'custom') {
-                return (
-                  <button
-                    key={option.value}
-                    onClick={() => setShowCustom(true)}
-                    style={{
-                      ...card.standard,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: tokens.spacing.md,
-                      cursor: 'pointer',
-                      textAlign: 'left' as const
-                    }}
-                    {...hoverHandlers.lightBg}
-                  >
-                    <Icon size={20} color={tokens.colors.text.tertiary} />
-                    <div style={{ flex: 1 }}>
-                      <div style={text.body}>
-                        {option.label}
-                      </div>
-                    </div>
-                  </button>
-                );
-              }
-
+            if (option.value === 'custom') {
               return (
                 <button
                   key={option.value}
-                  onClick={() => setSelectedTime(option.value)}
+                  onClick={() => setShowCustom(true)}
                   style={{
-                    ...card.selection(isSelected),
-                    border: `1px solid ${isSelected ? tokens.colors.text.primary : isRecommended ? tokens.colors.text.primary : tokens.colors.gray[300]}`,
+                    ...card.standard,
                     display: 'flex',
                     alignItems: 'center',
                     gap: tokens.spacing.md,
-                    position: 'relative' as const
+                    cursor: 'pointer',
+                    textAlign: 'left' as const
                   }}
-                  {...(!isSelected ? hoverHandlers.lightBg : {})}
+                  {...hoverHandlers.lightBg}
                 >
-                  <Icon
-                    size={20}
-                    color={isSelected ? tokens.colors.primary : tokens.colors.text.tertiary}
-                  />
+                  <Icon size={20} color={tokens.colors.text.tertiary} />
                   <div style={{ flex: 1 }}>
-                    <div style={{
-                      ...text.body,
-                      color: isSelected ? tokens.colors.primary : tokens.colors.text.primary
-                    }}>
+                    <div style={text.body}>
                       {option.label}
                     </div>
-                    <div style={{
-                      ...text.caption,
-                      color: isSelected ? tokens.colors.text.disabled : tokens.colors.text.tertiary
-                    }}>
-                      {option.period}
-                    </div>
                   </div>
-                  {isRecommended && !isSelected && (
-                    <div style={{
-                      fontSize: '11px',
-                      fontWeight: tokens.typography.weights.medium,
-                      color: tokens.colors.text.primary,
-                      backgroundColor: tokens.colors.gray[200],
-                      padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`,
-                      borderRadius: tokens.borderRadius.sm
-                    }}>
-                      Recommended
-                    </div>
-                  )}
                 </button>
               );
-            })}
-          </div>
-        )}
+            }
 
-        {/* Custom time input */}
-        {showCustom && (
-          <div style={{ marginBottom: tokens.spacing['2xl'] }}>
-            <label style={{
+            return (
+              <button
+                key={option.value}
+                onClick={() => setSelectedTime(option.value)}
+                style={{
+                  ...card.selection(isSelected),
+                  border: `1px solid ${isSelected ? tokens.colors.text.primary : isRecommended ? tokens.colors.text.primary : tokens.colors.gray[300]}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: tokens.spacing.md,
+                  position: 'relative' as const
+                }}
+                {...(!isSelected ? hoverHandlers.lightBg : {})}
+              >
+                <Icon
+                  size={20}
+                  color={isSelected ? tokens.colors.primary : tokens.colors.text.tertiary}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{
+                    ...text.body,
+                    color: isSelected ? tokens.colors.primary : tokens.colors.text.primary
+                  }}>
+                    {option.label}
+                  </div>
+                  <div style={{
+                    ...text.caption,
+                    color: isSelected ? tokens.colors.text.disabled : tokens.colors.text.tertiary
+                  }}>
+                    {option.period}
+                  </div>
+                </div>
+                {isRecommended && !isSelected && (
+                  <div style={{
+                    fontSize: '11px',
+                    fontWeight: tokens.typography.weights.medium,
+                    color: tokens.colors.text.primary,
+                    backgroundColor: tokens.colors.gray[200],
+                    padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`,
+                    borderRadius: tokens.borderRadius.sm
+                  }}>
+                    Recommended
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Custom time input */}
+      {showCustom && (
+        <div style={{ marginBottom: tokens.spacing['2xl'] }}>
+          <label style={{
+            ...text.body,
+            color: tokens.colors.text.secondary,
+            marginBottom: tokens.spacing.sm,
+            display: 'block'
+          }}>
+            Choose your time
+          </label>
+          <input
+            type="time"
+            value={customTime}
+            onChange={(e) => setCustomTime(e.target.value)}
+            autoFocus
+            style={{
+              ...input.timeRange,
+              width: '100%',
+              marginBottom: tokens.spacing.md
+            }}
+            {...focusHandlers.input}
+          />
+          <button
+            onClick={() => {
+              setShowCustom(false);
+              setCustomTime('');
+            }}
+            style={{
               ...text.body,
-              color: tokens.colors.text.secondary,
-              marginBottom: tokens.spacing.sm,
-              display: 'block'
-            }}>
-              Choose your time
-            </label>
-            <input
-              type="time"
-              value={customTime}
-              onChange={(e) => setCustomTime(e.target.value)}
-              autoFocus
-              style={{
-                ...input.timeRange,
-                width: '100%',
-                marginBottom: tokens.spacing.md
-              }}
-              {...focusHandlers.input}
-            />
-            <button
-              onClick={() => {
-                setShowCustom(false);
-                setCustomTime('');
-              }}
-              style={{
-                ...text.body,
-                color: tokens.colors.text.tertiary,
-                backgroundColor: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                textDecoration: 'underline'
-              }}
-            >
-              ← Back to options
-            </button>
-          </div>
-        )}
+              color: tokens.colors.text.tertiary,
+              backgroundColor: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              textDecoration: 'underline'
+            }}
+          >
+            ← Back to options
+          </button>
+        </div>
+      )}
 
-        {/* Continue button */}
-        <button
-          onClick={handleContinue}
-          disabled={showCustom && !customTime}
-          style={{
-            ...(showCustom && !customTime ? button.disabled : button.primary),
-            width: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: tokens.spacing.sm
-          }}
-          {...(!(showCustom && !customTime) ? hoverHandlers.darkBg : {})}
-        >
-          Start Tomorrow
-          <ArrowRight size={20} />
-        </button>
+      {/* Continue button */}
+      <button
+        onClick={handleContinue}
+        disabled={showCustom && !customTime}
+        style={{
+          ...(showCustom && !customTime ? button.disabled : button.primary),
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: tokens.spacing.sm
+        }}
+        {...(!(showCustom && !customTime) ? hoverHandlers.darkBg : {})}
+      >
+        Start Tomorrow
+        <ArrowRight size={20} />
+      </button>
 
-        <p style={{
-          ...text.caption,
-          textAlign: 'center',
-          marginTop: tokens.spacing.lg
-        }}>
-          You can change this anytime in settings
-        </p>
-      </div>
-    </div>
+      <p style={{
+        ...text.caption,
+        textAlign: 'center',
+        marginTop: tokens.spacing.lg
+      }}>
+        You can change this anytime in settings
+      </p>
+    </PageLayout>
   );
 }

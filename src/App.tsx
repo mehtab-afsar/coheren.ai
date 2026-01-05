@@ -1,5 +1,5 @@
 import { useStore } from './store/useStore';
-import Welcome from './pages/Welcome';
+import ChatOnboarding from './pages/ChatOnboarding';
 import GoalSelection from './pages/GoalSelection';
 import SpecificGoal from './pages/SpecificGoal';
 import UniversalQuestions from './pages/UniversalQuestions';
@@ -32,7 +32,7 @@ function App() {
 
   return (
     <>
-      {step === 0 && <Welcome />}
+      {step === 0 && <ChatOnboarding />}
       {step === 1 && <GoalSelection />}
       {step === 2 && <SpecificGoal />}
       {step === 3 && <UniversalQuestions />}

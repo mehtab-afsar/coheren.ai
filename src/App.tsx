@@ -6,6 +6,7 @@ import UniversalQuestions from './pages/UniversalQuestions';
 import CategoryQuestions from './pages/CategoryQuestions';
 import RoadmapGeneration from './pages/RoadmapGeneration';
 import CheckInSetup from './pages/CheckInSetup';
+import WelcomeAnimation from './pages/WelcomeAnimation';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 
@@ -39,9 +40,10 @@ function App() {
       {step === 4 && <CategoryQuestions />}
       {step === 5 && <RoadmapGeneration />}
       {step === 6 && <CheckInSetup />}
-      {step === 7 && <Dashboard />}
-      {step === 8 && <Settings />}
-      {step >= 9 && (
+      {step === 7 && <WelcomeAnimation />}
+      {step === 8 && <Dashboard />}
+      {step === 9 && <Settings />}
+      {step >= 10 && (
         <div style={{
           minHeight: '100vh',
           display: 'flex',

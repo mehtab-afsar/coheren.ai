@@ -330,8 +330,85 @@ export function generateTasksForDay(
   });
 }
 
+/**
+ * Generate tasks from AI-generated strategic plan
+ * Exported for use in store
+ */
+export function generateTasksFromAIPlan(roadmap: any, day: number, checkInTime: string): Task[] {
+  if (!roadmap.strategicPlan?.weekTemplates) {
+    console.log('⚠️ No AI plan found, falling back to templates');
+    return generateTasksForDay(roadmap.category, day, checkInTime);
+  }
+
+  const weekNumber = Math.ceil(day / 7);
+  const dayOfWeek = ((day - 1) % 7) + 1;
+
+  // Find the week template
+  const weekTemplate = roadmap.strategicPlan.weekTemplates.find(
+    (w: any) => w.weekNumber === weekNumber
+  ) || roadmap.strategicPlan.weekTemplates[0];
+
+  if (!weekTemplate?.dailyTasks) {
+    console.log('⚠️ No daily tasks in AI plan, falling back to templates');
+    return generateTasksForDay(roadmap.category, day, checkInTime);
+  }
+
+  // Find the day's tasks
+  const dayTasks = weekTemplate.dailyTasks.find(
+    (d: any) => d.dayOfWeek === dayOfWeek
+  ) || weekTemplate.dailyTasks[0];
+
+  console.log(`✅ Using AI-generated tasks for Week ${weekNumber}, Day ${dayOfWeek}`);
+
+  // Convert AI plan format to Task format
+  const tasks: Task[] = [];
+  let taskIndex = 0;
+
+  if (dayTasks.practice) {
+    tasks.push({
+      id: `task-${day}-${taskIndex++}`,
+      title: dayTasks.practice.title,
+      description: dayTasks.practice.title,
+      type: 'practice',
+      duration: dayTasks.practice.duration,
+      completed: false,
+      scheduledFor: checkInTime,
+      day
+    });
+  }
+
+  if (dayTasks.learning) {
+    tasks.push({
+      id: `task-${day}-${taskIndex++}`,
+      title: dayTasks.learning.title,
+      description: dayTasks.learning.title,
+      type: 'learning',
+      duration: dayTasks.learning.duration,
+      completed: false,
+      scheduledFor: checkInTime,
+      day
+    });
+  }
+
+  if (dayTasks.reflection) {
+    tasks.push({
+      id: `task-${day}-${taskIndex++}`,
+      title: dayTasks.reflection.title,
+      description: dayTasks.reflection.title,
+      type: 'reflection',
+      duration: dayTasks.reflection.duration,
+      completed: false,
+      scheduledFor: checkInTime,
+      day
+    });
+  }
+
+  return tasks;
+}
+
 export function generateInitialTasks(roadmap: any, checkInTime: string): Task[] {
   if (!roadmap) return [];
 
-  return generateTasksForDay(roadmap.category, 1, checkInTime);
+  // Try to use AI-generated plan first, fall back to templates if not available
+  return generateTasksFromAIPlan(roadmap, 1, checkInTime);
 }

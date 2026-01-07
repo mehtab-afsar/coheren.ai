@@ -9,15 +9,19 @@ const categoryKeywords: Record<GoalCategory, string[]> = {
   Fitness: [
     'fitness', 'gym', 'workout', 'exercise', 'boxing', 'running', 'yoga',
     'weightlifting', 'cardio', 'strength', 'muscle', 'athletic', 'sport',
-    'train', 'swimming', 'cycling', 'marathon', 'CrossFit', 'pilates',
-    'health', 'body', 'physique', 'shape', 'active', 'jog', 'lift'
+    'train', 'swimming', 'cycling', 'marathon', 'crossfit', 'pilates',
+    'health', 'body', 'physique', 'shape', 'active', 'jog', 'lift',
+    'technique', 'conditioning', 'sparring', 'footwork', 'endurance', 'stamina',
+    'flexibility', 'agility', 'balance', 'speed', 'power', 'performance'
   ],
 
   Exam: [
     'exam', 'test', 'upsc', 'gmat', 'sat', 'gre', 'certification', 'license',
     'qualify', 'assessment', 'competitive', 'entrance', 'board', 'finals',
     'midterm', 'bar exam', 'medical', 'engineering', 'civil service',
-    'interview prep', 'placement', 'university', 'college admission'
+    'interview prep', 'placement', 'university', 'college admission',
+    'ias', 'ips', 'irs', 'jee', 'neet', 'cat', 'gate', 'ssc', 'bank po',
+    'prelims', 'mains', 'clearing', 'cracking', 'qualifying', 'passing'
   ],
 
   Hobby: [
@@ -100,9 +104,29 @@ export function detectCategory(goalText: string): GoalCategory {
     if (normalized.includes('everyday') || normalized.includes('daily')) {
       return 'Habit';
     }
+    // Don't default to Fitness - return null or ask user
+    console.warn('⚠️ No category detected for goal:', goalText);
   }
 
   return maxCategory;
+}
+
+/**
+ * Check if category detection is confident (has keyword matches)
+ */
+export function isCategoryConfident(goalText: string): boolean {
+  const normalized = goalText.toLowerCase().trim();
+  let totalMatches = 0;
+
+  Object.values(categoryKeywords).forEach((keywords) => {
+    keywords.forEach(keyword => {
+      if (normalized.includes(keyword.toLowerCase())) {
+        totalMatches++;
+      }
+    });
+  });
+
+  return totalMatches > 0;
 }
 
 /**

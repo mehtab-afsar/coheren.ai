@@ -13,6 +13,36 @@ const groq = new Groq({
   dangerouslyAllowBrowser: true,
 });
 
+// Helper function to calculate duration in months from timeline
+function calculateDurationInMonths(timeline: string): number {
+  // Check for year (e.g., "by 2027", "2027")
+  const yearMatch = timeline.match(/\d{4}/);
+  if (yearMatch) {
+    const targetYear = parseInt(yearMatch[0]);
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1; // 1-12
+    const yearsFromNow = targetYear - currentYear;
+    const monthsFromYears = yearsFromNow * 12 - currentMonth;
+    console.log(`📅 Calculated duration: ${targetYear} is ${monthsFromYears} months from now`);
+    return Math.max(1, monthsFromYears); // At least 1 month
+  }
+
+  // Extract number and unit
+  const match = timeline.match(/(\d+)\s*(week|month|year|day)s?/i);
+  if (!match) return 3; // Default to 3 months
+
+  const value = parseInt(match[1]);
+  const unit = match[2].toLowerCase();
+
+  // Convert to months
+  if (unit.startsWith('day')) return Math.max(1, Math.ceil(value / 30));
+  if (unit.startsWith('week')) return Math.max(1, Math.ceil(value / 4));
+  if (unit.startsWith('month')) return value;
+  if (unit.startsWith('year')) return value * 12;
+
+  return 3; // Default fallback
+}
+
 interface Message {
   id: string;
   role: 'ai' | 'user';
@@ -292,7 +322,7 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
     if (!collectedData.goal) {
       const isGreeting = /^(hi|hey|hello|yo|sup|what's up|hola|howdy|greetings)\.?$/i.test(input.trim());
       const isQuestion = /^(what|how|who|when|where|why)\s/i.test(input.trim());
-      const isTooShort = input.trim().length < 8;
+      const isTooShort = input.trim().length < 4; // Reduced from 8 to allow "upsc", "jee" etc.
 
       // Only extract goal if it's substantive content (not greeting, not question, long enough)
       if (!isGreeting && !isQuestion && !isTooShort) {
@@ -348,12 +378,23 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
 
     // Extract timeline and milestones
     if (!collectedData.timeline) {
-      // More flexible timeline matching: "3 months", "3 month", "6 weeks", "by June", etc.
-      const timelineMatch = input.match(/(\d+)\s*(week|month|day)s?|(?:in|within|over|for)\s+(\d+)\s+(week|month|day)s?|by\s+(\w+)/i);
+      // Match various timeline formats:
+      // - "3 months", "6 weeks", "2 years"
+      // - "by 2027", "by June", "by December"
+      // - Just a year: "2025", "2027"
+      const timelineMatch = input.match(
+        /(\d+)\s*(week|month|year|day)s?|(?:in|within|over|for|by)\s+(\d+)\s*(week|month|year|day)?s?|(?:by\s+)?(\d{4})|by\s+(\w+)/i
+      );
+
       if (timelineMatch) {
         const target = timelineMatch[0];
         console.log('📅 Extracted timeline:', target);
         setCollectedData(prev => ({ ...prev, timeline: { target, milestones: [] } }));
+      } else if (/^\d{4}$/.test(input.trim())) {
+        // Just a year like "2027"
+        const year = input.trim();
+        console.log('📅 Extracted year as timeline:', year);
+        setCollectedData(prev => ({ ...prev, timeline: { target: `by ${year}`, milestones: [] } }));
       }
 
       // Extract milestones like "run 5k", "read 6 books", "finish 10 chapters"
@@ -386,9 +427,10 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
     }
 
     // Extract daily time
-    if (!collectedData.dailyTime && (lower.includes('minute') || lower.includes('hour') || /\d+\s*min/i.test(input))) {
+    if (!collectedData.dailyTime && (lower.includes('minute') || lower.includes('hour') || lower.includes('hr') || /\d+\s*min/i.test(input))) {
       const timeMatch = input.match(/(\d+)\s*(minute|min|hour|hr)s?/i);
       if (timeMatch) {
+        console.log('⏰ Extracted daily time:', timeMatch[0]);
         setCollectedData(prev => ({ ...prev, dailyTime: timeMatch[0] }));
       }
     }
@@ -413,6 +455,9 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
     const category = collectedData.category;
     const energyPattern = collectedData.energyPattern as 'morning' | 'afternoon' | 'evening' | 'night';
 
+    console.log('🎯 Creating plan with category:', category);
+    console.log('📋 Full collected data:', collectedData);
+
     // Show loading message
     const loadingMessage: Message = {
       id: Date.now().toString(),
@@ -435,47 +480,83 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
     }, 300);
 
     try {
-      // Build strategic plan prompt for Groq
-      const planPrompt = `Create a detailed strategic weekly plan for this goal:
+      // Calculate duration in months from timeline
+      const durationInMonths = collectedData.timeline?.target
+        ? calculateDurationInMonths(collectedData.timeline.target)
+        : 3;
+      const totalWeeks = Math.ceil(durationInMonths * 4); // 4 weeks per month
 
-GOAL: "${collectedData.goal}"
-CATEGORY: ${category}
-SKILL LEVEL: ${collectedData.skillLevel}
-SUB-GOALS: ${collectedData.subGoals.join(', ') || 'Not specified'}
-TIMELINE: ${collectedData.timeline?.target || '3 months'}
-MILESTONES: ${collectedData.timeline?.milestones.join('; ') || 'None specified'}
-DAILY TIME: ${collectedData.dailyTime || '30 minutes'}
+      console.log(`📊 Duration calculation: ${collectedData.timeline?.target} = ${durationInMonths} months = ${totalWeeks} weeks`);
 
-Generate a week-by-week strategic plan as JSON with this EXACT format:
+      // Build strategic plan prompt for Groq with system message for better JSON compliance
+      const planPrompt = `You are a JSON API. Return ONLY valid JSON, no explanations.
+
+Create a strategic weekly plan for:
+- GOAL: "${collectedData.goal}"
+- CATEGORY: ${category}
+- SKILL LEVEL: ${collectedData.skillLevel}
+- TIMELINE: ${durationInMonths} months (${totalWeeks} weeks)
+- DAILY TIME: ${collectedData.dailyTime || '30 minutes'}
+
+Return this EXACT JSON structure (no markdown, no code blocks, no explanations):
+
 {
-  "totalWeeks": <number>,
-  "duration": <number of months>,
+  "totalWeeks": ${totalWeeks},
+  "duration": ${durationInMonths},
   "weekTemplates": [
     {
       "weekNumber": 1,
-      "focus": "<1-3 word theme>",
-      "description": "<What to achieve this week>",
+      "focus": "Foundation",
+      "description": "Build basic understanding",
       "dailyTasks": [
         {
           "dayOfWeek": 1,
-          "practice": {"title": "<task>", "duration": <minutes>},
-          "learning": {"title": "<task>", "duration": <minutes>},
-          "reflection": {"title": "<task>", "duration": <minutes>}
+          "practice": {"title": "Specific ${category.toLowerCase()} practice task", "duration": 30},
+          "learning": {"title": "Learn key ${category.toLowerCase()} concept", "duration": 20},
+          "reflection": {"title": "Reflect on progress", "duration": 10}
+        },
+        {
+          "dayOfWeek": 2,
+          "practice": {"title": "Different ${category.toLowerCase()} practice", "duration": 30},
+          "learning": {"title": "Study ${category.toLowerCase()} technique", "duration": 20},
+          "reflection": {"title": "Note challenges", "duration": 10}
+        },
+        {
+          "dayOfWeek": 3,
+          "practice": {"title": "Apply what you learned", "duration": 35},
+          "learning": {"title": "Review ${category.toLowerCase()} basics", "duration": 20},
+          "reflection": {"title": "Track improvements", "duration": 10}
+        },
+        {
+          "dayOfWeek": 4,
+          "practice": {"title": "Increase ${category.toLowerCase()} intensity", "duration": 35},
+          "learning": {"title": "Learn advanced tip", "duration": 20},
+          "reflection": {"title": "Plan next steps", "duration": 10}
+        },
+        {
+          "dayOfWeek": 5,
+          "practice": {"title": "Practice ${category.toLowerCase()} consistently", "duration": 40},
+          "learning": {"title": "Study common mistakes", "duration": 20},
+          "reflection": {"title": "Self-assessment", "duration": 10}
+        },
+        {
+          "dayOfWeek": 6,
+          "practice": {"title": "Light ${category.toLowerCase()} review", "duration": 25},
+          "learning": {"title": "Read ${category.toLowerCase()} tips", "duration": 15},
+          "reflection": {"title": "Weekly reflection", "duration": 10}
+        },
+        {
+          "dayOfWeek": 7,
+          "practice": {"title": "Rest or light activity", "duration": 15},
+          "learning": {"title": "Plan week 2", "duration": 15},
+          "reflection": {"title": "Set weekly goal", "duration": 10}
         }
-        ... (7 days total)
       ]
     }
-    ... (4-8 strategic week templates that progressively build)
   ]
 }
 
-RULES:
-- Create ${collectedData.timeline?.target?.includes('month') ? collectedData.timeline.target.match(/\d+/)?.[0] || '3' : '3'} months worth of strategic weeks
-- Each week should build on previous weeks
-- Start easy for ${collectedData.skillLevel === 'beginner' ? 'complete beginners' : collectedData.skillLevel + ' level'}
-- Align with milestones: ${collectedData.timeline?.milestones.join(', ')}
-- Tasks must be specific to "${category}" category
-- Return ONLY valid JSON, no markdown or explanations`;
+Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 easy for ${collectedData.skillLevel} level. Make all tasks specific to ${category} and the goal "${collectedData.goal}".`;
 
       console.log('🚀 Calling Groq API to generate strategic plan...');
       const completion = await groq.chat.completions.create({

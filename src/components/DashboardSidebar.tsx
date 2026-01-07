@@ -1,10 +1,10 @@
-import { Home, User, TrendingUp, Target, Settings, Menu, X } from 'lucide-react';
+import { Home, User, TrendingUp, Target, Settings, Menu, X, Map } from 'lucide-react';
 import { useState } from 'react';
 import { tokens, text } from '../design-system';
 
 interface DashboardSidebarProps {
-  currentView: 'today' | 'profile' | 'progress' | 'goals' | 'settings';
-  onViewChange: (view: 'today' | 'profile' | 'progress' | 'goals' | 'settings') => void;
+  currentView: 'today' | 'profile' | 'progress' | 'goals' | 'journey' | 'settings';
+  onViewChange: (view: 'today' | 'profile' | 'progress' | 'goals' | 'journey' | 'settings') => void;
 }
 
 export default function DashboardSidebar({ currentView, onViewChange }: DashboardSidebarProps) {
@@ -12,9 +12,10 @@ export default function DashboardSidebar({ currentView, onViewChange }: Dashboar
 
   const menuItems = [
     { id: 'today' as const, label: 'Today', icon: Home },
-    { id: 'profile' as const, label: 'Profile', icon: User },
+    { id: 'journey' as const, label: 'Journey', icon: Map },
     { id: 'progress' as const, label: 'Progress', icon: TrendingUp },
     { id: 'goals' as const, label: 'Goals', icon: Target },
+    { id: 'profile' as const, label: 'Profile', icon: User },
     { id: 'settings' as const, label: 'Settings', icon: Settings },
   ];
 

@@ -3,7 +3,7 @@ import { useStore } from '../../store/useStore';
 import { tokens, text, card } from '../../design-system';
 
 export default function ProgressView() {
-  const { tasks, currentDay, streak } = useStore();
+  const { tasks, currentDay, streak, roadmap } = useStore();
 
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter(t => t.completed).length;
@@ -11,11 +11,18 @@ export default function ProgressView() {
 
   // Calculate weekly stats
   const currentWeek = Math.ceil(currentDay / 7);
+  const totalWeeks = roadmap?.strategicPlan?.totalWeeks || Math.ceil((roadmap?.duration || 3) * 4);
   const thisWeekTasks = tasks.filter(t => Math.ceil(t.day / 7) === currentWeek);
   const thisWeekCompleted = thisWeekTasks.filter(t => t.completed).length;
   const weeklyCompletion = thisWeekTasks.length > 0
     ? Math.round((thisWeekCompleted / thisWeekTasks.length) * 100)
     : 0;
+
+  // Calculate which weeks to display (weeks that have been reached or started)
+  const highestWeekWithTasks = tasks.length > 0
+    ? Math.max(...tasks.map(t => Math.ceil(t.day / 7)))
+    : currentWeek;
+  const weeksToShow = Math.min(highestWeekWithTasks, totalWeeks);
 
   return (
     <div>
@@ -122,7 +129,7 @@ export default function ProgressView() {
           flexDirection: 'column',
           gap: tokens.spacing.md
         }}>
-          {[1, 2, 3, 4].map(week => {
+          {Array.from({ length: weeksToShow }, (_, i) => i + 1).map(week => {
             const weekTasks = tasks.filter(t => Math.ceil(t.day / 7) === week);
             const weekCompleted = weekTasks.filter(t => t.completed).length;
             const weekProgress = weekTasks.length > 0

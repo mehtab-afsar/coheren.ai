@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { OnboardingState, GoalCategory } from '../types/index.js';
-import { generateTasksForDay } from '../utils/taskGenerator.js';
+import { generateTasksForDay, generateTasksFromAIPlan } from '../utils/taskGenerator.js';
 
 interface Task {
   id: string;
@@ -246,12 +246,15 @@ export const useStore = create<AppStore>()(
           }
         }
 
-        const nextDayTasks = generateTasksForDay(
-          state.roadmap.category,
-          state.currentDay,
-          state.checkInTime,
-          difficultyMultiplier
-        );
+        // Try to use AI-generated plan first, fall back to templates with adaptive difficulty
+        const nextDayTasks = state.roadmap.strategicPlan
+          ? generateTasksFromAIPlan(state.roadmap, state.currentDay, state.checkInTime)
+          : generateTasksForDay(
+              state.roadmap.category,
+              state.currentDay,
+              state.checkInTime,
+              difficultyMultiplier
+            );
 
         set((state) => ({
           tasks: [...state.tasks, ...nextDayTasks]

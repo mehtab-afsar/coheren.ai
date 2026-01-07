@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { tokens } from '../design-system';
 import DashboardSidebar from '../components/DashboardSidebar';
 import TodayView from '../components/views/TodayView';
+import JourneyView from '../components/views/JourneyView';
 import ProfileView from '../components/views/ProfileView';
 import ProgressView from '../components/views/ProgressView';
 import GoalsView from '../components/views/GoalsView';
 import SettingsView from '../components/views/SettingsView';
 
-type ViewType = 'today' | 'profile' | 'progress' | 'goals' | 'settings';
+type ViewType = 'today' | 'journey' | 'profile' | 'progress' | 'goals' | 'settings';
 
 export default function Dashboard() {
   const [currentView, setCurrentView] = useState<ViewType>('today');
@@ -16,6 +17,8 @@ export default function Dashboard() {
     switch (currentView) {
       case 'today':
         return <TodayView />;
+      case 'journey':
+        return <JourneyView />;
       case 'profile':
         return <ProfileView />;
       case 'progress':

@@ -16,7 +16,8 @@ export interface UniversalProfile {
     }>;
   };
   energyPattern: 'morning' | 'afternoon' | 'evening' | 'night';
-  weekendAvailability: 'flexible' | 'limited' | 'busy';
+  weekendAvailability: 'flexible' | 'limited' | 'busy' | '';
+  skillLevel?: 'beginner' | 'intermediate' | 'advanced';
 }
 
 export interface FitnessData {

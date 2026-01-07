@@ -295,7 +295,8 @@ const taskTemplatesByCategory: Record<GoalCategory, TaskTemplate[][]> = {
 export function generateTasksForDay(
   category: GoalCategory,
   day: number,
-  scheduledFor: string
+  scheduledFor: string,
+  adaptiveDifficultyMultiplier: number = 1.0
 ): Task[] {
   const categoryTemplates = taskTemplatesByCategory[category] || taskTemplatesByCategory.Hobby;
 
@@ -305,13 +306,16 @@ export function generateTasksForDay(
 
   // Calculate difficulty multiplier based on week number
   const weekNumber = Math.floor((day - 1) / 7) + 1;
-  const difficultyMultiplier = 1 + (weekNumber - 1) * 0.1; // 10% increase per week
+  const baseDifficultyMultiplier = 1 + (weekNumber - 1) * 0.1; // 10% increase per week
+
+  // Combine base difficulty with adaptive multiplier
+  const finalDifficultyMultiplier = baseDifficultyMultiplier * adaptiveDifficultyMultiplier;
 
   return templates.map((template, index) => {
-    // Increase duration for weeks 2+
+    // Adjust duration based on combined difficulty
     const adjustedDuration = weekNumber > 1
-      ? Math.round(template.duration * difficultyMultiplier)
-      : template.duration;
+      ? Math.round(template.duration * finalDifficultyMultiplier)
+      : Math.round(template.duration * adaptiveDifficultyMultiplier);
 
     return {
       id: `task-${day}-${index}`,

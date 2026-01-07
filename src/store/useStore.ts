@@ -15,6 +15,15 @@ interface Task {
   day: number;
 }
 
+interface WeekPerformance {
+  weekNumber: number;
+  completionRate: number;
+  averageTasksPerDay: number;
+  strugglingTasks: string[];
+  easedTasks: string[];
+  completedAt: string;
+}
+
 interface Roadmap {
   title: string;
   category: GoalCategory;
@@ -28,6 +37,7 @@ interface Roadmap {
   }>;
   startDate: string;
   endDate: string;
+  strategicPlan?: any; // AI-generated strategic plan
 }
 
 interface AppStore extends OnboardingState {
@@ -39,6 +49,7 @@ interface AppStore extends OnboardingState {
   streak: number;
   completionRate: number;
   lastCheckInDate: string | null;
+  performanceHistory: WeekPerformance[];
 
   // Actions
   setStep: (step: number) => void;
@@ -53,6 +64,7 @@ interface AppStore extends OnboardingState {
   canAdvanceDay: () => boolean;
   advanceDay: () => boolean;
   generateNextDayTasks: () => void;
+  trackWeekPerformance: () => void;
   resetOnboarding: () => void;
 }
 
@@ -69,6 +81,7 @@ export const useStore = create<AppStore>()(
       streak: 0,
       completionRate: 0,
       lastCheckInDate: null,
+      performanceHistory: [],
 
       setStep: (step) => set({ step }),
 
@@ -141,6 +154,17 @@ export const useStore = create<AppStore>()(
         }
 
         const today = new Date().toISOString().split('T')[0];
+        const state = get();
+
+        // Track weekly performance when completing week 7, 14, 21, etc.
+        const currentWeek = Math.ceil(state.currentDay / 7);
+        const nextDay = state.currentDay + 1;
+        const nextWeek = Math.ceil(nextDay / 7);
+
+        if (nextWeek > currentWeek) {
+          // Completed a week, track performance
+          get().trackWeekPerformance();
+        }
 
         set((state) => ({
           currentDay: state.currentDay + 1,
@@ -154,6 +178,46 @@ export const useStore = create<AppStore>()(
         return true;
       },
 
+      trackWeekPerformance: () => {
+        const state = get();
+        const currentWeek = Math.ceil(state.currentDay / 7);
+
+        // Get all tasks from the just-completed week
+        const weekStartDay = (currentWeek - 1) * 7 + 1;
+        const weekEndDay = currentWeek * 7;
+        const weekTasks = state.tasks.filter(
+          (t) => t.day >= weekStartDay && t.day <= weekEndDay
+        );
+
+        if (weekTasks.length === 0) return;
+
+        const completedTasks = weekTasks.filter((t) => t.completed);
+        const completionRate = (completedTasks.length / weekTasks.length) * 100;
+
+        // Find struggling tasks (not completed)
+        const strugglingTasks = weekTasks
+          .filter((t) => !t.completed)
+          .map((t) => t.type);
+
+        // Find eased tasks (completed quickly or consistently)
+        const easedTasks = completedTasks
+          .filter((t) => t.type === 'reflection') // Reflection tasks are usually easiest
+          .map((t) => t.type);
+
+        const performance: WeekPerformance = {
+          weekNumber: currentWeek,
+          completionRate,
+          averageTasksPerDay: weekTasks.length / 7,
+          strugglingTasks: [...new Set(strugglingTasks)],
+          easedTasks: [...new Set(easedTasks)],
+          completedAt: new Date().toISOString()
+        };
+
+        set((state) => ({
+          performanceHistory: [...state.performanceHistory, performance]
+        }));
+      },
+
       generateNextDayTasks: () => {
         const state = get();
 
@@ -162,10 +226,31 @@ export const useStore = create<AppStore>()(
           return;
         }
 
+        // Check if we should adjust difficulty based on performance
+        const nextWeek = Math.ceil((state.currentDay + 1) / 7);
+        const lastWeekPerformance = state.performanceHistory.find(
+          (p) => p.weekNumber === nextWeek - 1
+        );
+
+        let difficultyMultiplier = 1.0;
+
+        if (lastWeekPerformance) {
+          if (lastWeekPerformance.completionRate < 60) {
+            // Struggling - reduce difficulty by 20%
+            difficultyMultiplier = 0.8;
+            console.log(`Week ${nextWeek}: Reducing difficulty (${lastWeekPerformance.completionRate}% completion)`);
+          } else if (lastWeekPerformance.completionRate > 90) {
+            // Excelling - increase difficulty by 20%
+            difficultyMultiplier = 1.2;
+            console.log(`Week ${nextWeek}: Increasing difficulty (${lastWeekPerformance.completionRate}% completion)`);
+          }
+        }
+
         const nextDayTasks = generateTasksForDay(
           state.roadmap.category,
           state.currentDay,
-          state.checkInTime
+          state.checkInTime,
+          difficultyMultiplier
         );
 
         set((state) => ({
@@ -182,7 +267,8 @@ export const useStore = create<AppStore>()(
         currentDay: 1,
         streak: 0,
         completionRate: 0,
-        lastCheckInDate: null
+        lastCheckInDate: null,
+        performanceHistory: []
       }),
     }),
     {

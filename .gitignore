@@ -45,3 +45,16 @@ yarn-error.log*
 dev-dist/
 sw.js
 workbox-*.js
+
+# Books & PDFs (copyrighted, too large for git)
+books/
+*.pdf
+
+# RAG vector database (generated, too large)
+chroma_db/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/

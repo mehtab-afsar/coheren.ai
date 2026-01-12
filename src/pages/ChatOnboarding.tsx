@@ -5,6 +5,7 @@ import { useStore } from '../store/useStore';
 import { tokens, text, button, input as inputStyles } from '../design-system';
 import { generateInitialTasks } from '../utils/taskGenerator';
 import { detectCategory } from '../utils/categoryDetection';
+import { retrieveKnowledge, type UserContext } from '../rag';
 import type { GoalCategory } from '../types';
 
 // Initialize Groq client
@@ -115,6 +116,43 @@ export default function ChatOnboarding() {
     }
   }, [planGenerationTriggered, isGeneratingPlan]);
 
+  // Watch for all required data being collected and AI mentioning plan
+  const [aiMentionedPlan, setAiMentionedPlan] = useState(false);
+
+  useEffect(() => {
+    // Check if we have ALL required data
+    const hasAllData = !!(
+      collectedData.goal &&
+      collectedData.category &&
+      collectedData.name &&
+      collectedData.skillLevel &&
+      collectedData.timeline
+    );
+
+    console.log('📊 Data check in useEffect:', {
+      hasAllData,
+      aiMentionedPlan,
+      isGeneratingPlan,
+      planGenerationTriggered,
+      data: {
+        goal: !!collectedData.goal,
+        category: !!collectedData.category,
+        name: !!collectedData.name,
+        skillLevel: !!collectedData.skillLevel,
+        timeline: !!collectedData.timeline,
+      }
+    });
+
+    // Trigger plan generation if all conditions met
+    if (hasAllData && aiMentionedPlan && !isGeneratingPlan && !planGenerationTriggered) {
+      console.log('✅ All conditions met! Triggering plan generation from useEffect...');
+      setPlanGenerationTriggered(true);
+      setTimeout(() => {
+        generateStrategicPlan();
+      }, 1000);
+    }
+  }, [collectedData, aiMentionedPlan, isGeneratingPlan, planGenerationTriggered]);
+
   const handleSend = async () => {
     if (!userInput.trim()) return;
 
@@ -163,7 +201,21 @@ ${collectedData.category === 'Fitness' ? '- Ask about current fitness level, spe
 `
         : '';
 
+      // Build RAG context for science-backed coaching
+      const userContext: UserContext = {
+        goal: collectedData.goal || undefined,
+        category: collectedData.category || undefined,
+        energyPattern: collectedData.energyPattern as UserContext['energyPattern'] || undefined,
+        skillLevel: collectedData.skillLevel as UserContext['skillLevel'] || undefined,
+      };
+      const scientificKnowledge = retrieveKnowledge(userContext, 'new-goal');
+
       const systemPrompt = `You are Coheren, an enthusiastic AI goal coach who genuinely cares about helping people achieve their dreams. You're supportive, motivating, and conversational.
+
+${scientificKnowledge}
+
+---
+
 ${collectedData.goal ? `\nUser's goal: "${collectedData.goal}"` : '\nSTART by asking: "What would you like to achieve?" if they greet you or say something casual.'}
 ${categoryContext}
 
@@ -187,13 +239,18 @@ What we have so far:
 - Energy: ${collectedData.energyPattern || 'not yet'}
 - Daily time: ${collectedData.dailyTime || 'not yet'}
 
-PERSONALITY & TONE:
-- Be warm, enthusiastic, and encouraging (use phrases like "That's awesome!", "Love it!", "I'm excited for you!")
-- Show genuine interest in their journey
-- Celebrate their commitment and acknowledge the challenge
-- Use their name when you know it to make it personal
-- Add energy with occasional exclamation marks (but don't overdo it)
+PERSONALITY & TONE (Based on Self-Determination Theory):
+- Support AUTONOMY: Give choices, avoid controlling language ("you must"), say "you might consider"
+- Build COMPETENCE: Celebrate progress, start achievable, express confidence in them
+- Foster RELATEDNESS: Be warm, show genuine care, use their name
+- Be enthusiastic (use phrases like "That's awesome!", "Love it!", "I'm excited for you!")
 - Mirror their communication style - if they're casual, be casual; if formal, be professional
+
+SCIENCE-BACKED COACHING TIPS:
+- For beginners: Mention the "Two-Minute Rule" - start so small you can't fail
+- For timelines: Habits take ~66 days on average to form, set realistic expectations
+- For energy patterns: Match challenging tasks to peak energy times
+- Use "habit stacking": "After [existing habit], you'll [new habit]"
 
 CONVERSATION RULES:
 - Keep responses SHORT (1-2 sentences max, sometimes just a quick question)
@@ -232,7 +289,7 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
       setMessages((prev) => [...prev, aiMessage]);
       setIsTyping(false);
 
-      // Check if AI says plan is ready AND we have all required data
+      // Check if AI says plan is ready - the useEffect will handle triggering when data is ready
       const hasPersonalized = aiResponse.toLowerCase().includes('personalized');
       const hasPlan = aiResponse.toLowerCase().includes('plan') || aiResponse.toLowerCase().includes('strategic');
 
@@ -240,43 +297,12 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
         hasPersonalized,
         hasPlan,
         shouldTrigger: hasPersonalized && hasPlan,
-        collectedData: {
-          goal: collectedData.goal,
-          category: collectedData.category,
-          name: collectedData.name,
-          skillLevel: collectedData.skillLevel,
-          timeline: collectedData.timeline,
-        }
       });
 
       if (hasPersonalized && hasPlan) {
-        console.log('✅ AI mentioned creating personalized plan!');
-
-        // Verify we have all essential data including category
-        if (collectedData.goal &&
-            collectedData.category &&
-            collectedData.name &&
-            collectedData.skillLevel &&
-            collectedData.timeline) {
-          console.log('✅ All required data collected! Triggering plan generation...');
-
-          // Set flag to trigger plan generation on next user input
-          setPlanGenerationTriggered(true);
-
-          // Auto-trigger plan generation immediately (no waiting for user)
-          setTimeout(() => {
-            console.log('⏰ Timeout triggered, calling generateStrategicPlan()...');
-            generateStrategicPlan();
-          }, 1500);
-        } else {
-          console.log('❌ Missing required data:', {
-            hasGoal: !!collectedData.goal,
-            hasCategory: !!collectedData.category,
-            hasName: !!collectedData.name,
-            hasSkillLevel: !!collectedData.skillLevel,
-            hasTimeline: !!collectedData.timeline,
-          });
-        }
+        console.log('✅ AI mentioned creating personalized plan! Setting aiMentionedPlan flag...');
+        setAiMentionedPlan(true);
+        // The useEffect will handle triggering plan generation when all data is ready
       }
 
     } catch (error) {
@@ -488,8 +514,15 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
 
       console.log(`📊 Duration calculation: ${collectedData.timeline?.target} = ${durationInMonths} months = ${totalWeeks} weeks`);
 
-      // Build strategic plan prompt for Groq with system message for better JSON compliance
+      // Build strategic plan prompt for Groq with science-backed approach
       const planPrompt = `You are a JSON API. Return ONLY valid JSON, no explanations.
+
+SCIENTIFIC FOUNDATION FOR HABIT FORMATION:
+- Start TINY (Two-Minute Rule): First weeks should be easy enough that motivation isn't needed
+- HABIT STACKING: Attach new habits to existing routines ("After I [anchor], I will [habit]")
+- PROGRESSIVE OVERLOAD: Increase difficulty by ~10% per week only after consistency
+- CELEBRATION: Include reflection tasks to build positive association
+- ENERGY MATCHING: ${collectedData.energyPattern === 'morning' ? 'Front-load challenging tasks' : collectedData.energyPattern === 'evening' ? 'Save intensive work for evening' : 'Distribute tasks throughout day'}
 
 Create a strategic weekly plan for:
 - GOAL: "${collectedData.goal}"
@@ -497,6 +530,7 @@ Create a strategic weekly plan for:
 - SKILL LEVEL: ${collectedData.skillLevel}
 - TIMELINE: ${durationInMonths} months (${totalWeeks} weeks)
 - DAILY TIME: ${collectedData.dailyTime || '30 minutes'}
+- ENERGY PATTERN: ${collectedData.energyPattern || 'flexible'}
 
 Return this EXACT JSON structure (no markdown, no code blocks, no explanations):
 

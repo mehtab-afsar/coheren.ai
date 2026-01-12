@@ -26,7 +26,6 @@ export default function JourneyView() {
   // Group weeks by month
   const monthsData = Array.from({ length: totalMonths }, (_, monthIndex) => {
     const monthNumber = monthIndex + 1;
-    const weeksInMonth = 4;
     const startWeek = monthIndex * 4 + 1;
     const endWeek = Math.min(startWeek + 3, totalWeeks);
 
@@ -207,8 +206,6 @@ export default function JourneyView() {
         gap: tokens.spacing.xl
       }}>
         {monthsData.map((month) => {
-          const { focus: firstWeekFocus } = getWeekDetails(month.weeks[0]);
-
           return (
             <div key={month.monthNumber} style={card.standard}>
               {/* Month Header */}

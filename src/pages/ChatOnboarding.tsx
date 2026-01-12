@@ -14,6 +14,36 @@ const groq = new Groq({
   dangerouslyAllowBrowser: true,
 });
 
+// Helper function to parse daily time commitment to minutes
+function parseDailyTimeToMinutes(dailyTime: string): number {
+  if (!dailyTime) return 30; // Default 30 minutes
+
+  const lower = dailyTime.toLowerCase();
+
+  // Match patterns like "2 hr", "2 hours", "120 min", "120 minutes", "1.5 hours"
+  const hourMatch = lower.match(/(\d+\.?\d*)\s*(hour|hr)s?/);
+  if (hourMatch) {
+    const hours = parseFloat(hourMatch[1]);
+    console.log(`⏰ Parsed daily time: ${dailyTime} = ${hours * 60} minutes`);
+    return Math.round(hours * 60);
+  }
+
+  const minMatch = lower.match(/(\d+)\s*(minute|min)s?/);
+  if (minMatch) {
+    const minutes = parseInt(minMatch[1]);
+    console.log(`⏰ Parsed daily time: ${dailyTime} = ${minutes} minutes`);
+    return minutes;
+  }
+
+  // Just a number - assume minutes
+  const justNumber = dailyTime.match(/^(\d+)$/);
+  if (justNumber) {
+    return parseInt(justNumber[1]);
+  }
+
+  return 30; // Default
+}
+
 // Helper function to calculate duration in months from timeline
 function calculateDurationInMonths(timeline: string): number {
   // Check for year (e.g., "by 2027", "2027")
@@ -512,7 +542,14 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
         : 3;
       const totalWeeks = Math.ceil(durationInMonths * 4); // 4 weeks per month
 
+      // Calculate task durations based on user's daily time commitment
+      const dailyMinutes = parseDailyTimeToMinutes(collectedData.dailyTime);
+      const practiceDuration = Math.round(dailyMinutes * 0.50); // 50% for practice
+      const learningDuration = Math.round(dailyMinutes * 0.35); // 35% for learning
+      const reflectionDuration = Math.round(dailyMinutes * 0.15); // 15% for reflection
+
       console.log(`📊 Duration calculation: ${collectedData.timeline?.target} = ${durationInMonths} months = ${totalWeeks} weeks`);
+      console.log(`⏰ Daily time: ${collectedData.dailyTime} = ${dailyMinutes} minutes (Practice: ${practiceDuration}, Learning: ${learningDuration}, Reflection: ${reflectionDuration})`);
 
       // Build strategic plan prompt for Groq with science-backed approach
       const planPrompt = `You are a JSON API. Return ONLY valid JSON, no explanations.
@@ -529,8 +566,10 @@ Create a strategic weekly plan for:
 - CATEGORY: ${category}
 - SKILL LEVEL: ${collectedData.skillLevel}
 - TIMELINE: ${durationInMonths} months (${totalWeeks} weeks)
-- DAILY TIME: ${collectedData.dailyTime || '30 minutes'}
+- DAILY TIME: ${dailyMinutes} minutes per day (distribute as: practice ~${practiceDuration}min, learning ~${learningDuration}min, reflection ~${reflectionDuration}min)
 - ENERGY PATTERN: ${collectedData.energyPattern || 'flexible'}
+
+IMPORTANT: The user has ${dailyMinutes} minutes per day. Each day's tasks MUST add up to approximately ${dailyMinutes} minutes total.
 
 Return this EXACT JSON structure (no markdown, no code blocks, no explanations):
 
@@ -545,50 +584,52 @@ Return this EXACT JSON structure (no markdown, no code blocks, no explanations):
       "dailyTasks": [
         {
           "dayOfWeek": 1,
-          "practice": {"title": "Specific ${category.toLowerCase()} practice task", "duration": 30},
-          "learning": {"title": "Learn key ${category.toLowerCase()} concept", "duration": 20},
-          "reflection": {"title": "Reflect on progress", "duration": 10}
+          "practice": {"title": "Specific ${category.toLowerCase()} practice task", "duration": ${practiceDuration}},
+          "learning": {"title": "Learn key ${category.toLowerCase()} concept", "duration": ${learningDuration}},
+          "reflection": {"title": "Reflect on progress", "duration": ${reflectionDuration}}
         },
         {
           "dayOfWeek": 2,
-          "practice": {"title": "Different ${category.toLowerCase()} practice", "duration": 30},
-          "learning": {"title": "Study ${category.toLowerCase()} technique", "duration": 20},
-          "reflection": {"title": "Note challenges", "duration": 10}
+          "practice": {"title": "Different ${category.toLowerCase()} practice", "duration": ${practiceDuration}},
+          "learning": {"title": "Study ${category.toLowerCase()} technique", "duration": ${learningDuration}},
+          "reflection": {"title": "Note challenges", "duration": ${reflectionDuration}}
         },
         {
           "dayOfWeek": 3,
-          "practice": {"title": "Apply what you learned", "duration": 35},
-          "learning": {"title": "Review ${category.toLowerCase()} basics", "duration": 20},
-          "reflection": {"title": "Track improvements", "duration": 10}
+          "practice": {"title": "Apply what you learned", "duration": ${practiceDuration}},
+          "learning": {"title": "Review ${category.toLowerCase()} basics", "duration": ${learningDuration}},
+          "reflection": {"title": "Track improvements", "duration": ${reflectionDuration}}
         },
         {
           "dayOfWeek": 4,
-          "practice": {"title": "Increase ${category.toLowerCase()} intensity", "duration": 35},
-          "learning": {"title": "Learn advanced tip", "duration": 20},
-          "reflection": {"title": "Plan next steps", "duration": 10}
+          "practice": {"title": "Increase ${category.toLowerCase()} intensity", "duration": ${practiceDuration}},
+          "learning": {"title": "Learn advanced tip", "duration": ${learningDuration}},
+          "reflection": {"title": "Plan next steps", "duration": ${reflectionDuration}}
         },
         {
           "dayOfWeek": 5,
-          "practice": {"title": "Practice ${category.toLowerCase()} consistently", "duration": 40},
-          "learning": {"title": "Study common mistakes", "duration": 20},
-          "reflection": {"title": "Self-assessment", "duration": 10}
+          "practice": {"title": "Practice ${category.toLowerCase()} consistently", "duration": ${practiceDuration}},
+          "learning": {"title": "Study common mistakes", "duration": ${learningDuration}},
+          "reflection": {"title": "Self-assessment", "duration": ${reflectionDuration}}
         },
         {
           "dayOfWeek": 6,
-          "practice": {"title": "Light ${category.toLowerCase()} review", "duration": 25},
-          "learning": {"title": "Read ${category.toLowerCase()} tips", "duration": 15},
-          "reflection": {"title": "Weekly reflection", "duration": 10}
+          "practice": {"title": "Light ${category.toLowerCase()} review", "duration": ${practiceDuration}},
+          "learning": {"title": "Read ${category.toLowerCase()} tips", "duration": ${learningDuration}},
+          "reflection": {"title": "Weekly reflection", "duration": ${reflectionDuration}}
         },
         {
           "dayOfWeek": 7,
-          "practice": {"title": "Rest or light activity", "duration": 15},
-          "learning": {"title": "Plan week 2", "duration": 15},
-          "reflection": {"title": "Set weekly goal", "duration": 10}
+          "practice": {"title": "Rest or light activity", "duration": ${Math.round(practiceDuration * 0.5)}},
+          "learning": {"title": "Plan week 2", "duration": ${Math.round(learningDuration * 0.5)}},
+          "reflection": {"title": "Set weekly goal", "duration": ${reflectionDuration}}
         }
       ]
     }
   ]
 }
+
+CRITICAL: Each day's tasks should total approximately ${dailyMinutes} minutes. Use durations around: practice=${practiceDuration}min, learning=${learningDuration}min, reflection=${reflectionDuration}min.
 
 Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 easy for ${collectedData.skillLevel} level. Make all tasks specific to ${category} and the goal "${collectedData.goal}".`;
 

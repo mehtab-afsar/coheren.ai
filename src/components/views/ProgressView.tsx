@@ -33,7 +33,7 @@ export default function ProgressView() {
       {/* Stats Overview */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gridTemplateColumns: 'repeat(4, 1fr)',
         gap: tokens.spacing.lg,
         marginBottom: tokens.spacing['2xl']
       }}>

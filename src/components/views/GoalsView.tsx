@@ -1,9 +1,9 @@
-import { Target, Calendar, TrendingUp, CheckCircle2, Circle } from 'lucide-react';
+import { Target, TrendingUp, CheckCircle2, Circle } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { tokens, text, card } from '../../design-system';
 
 export default function GoalsView() {
-  const { roadmap, currentGoal, currentDay } = useStore();
+  const { roadmap, currentDay } = useStore();
 
   if (!roadmap) {
     return (
@@ -40,30 +40,88 @@ export default function GoalsView() {
       <div style={{
         ...card.standard,
         backgroundColor: tokens.colors.primary,
-        marginBottom: tokens.spacing['2xl']
+        marginBottom: tokens.spacing['2xl'],
+        padding: tokens.spacing.xl
       }}>
+        {/* Header with Goal and Dates */}
         <div style={{
           display: 'flex',
-          alignItems: 'flex-start',
-          gap: tokens.spacing.lg,
-          marginBottom: tokens.spacing.xl
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: tokens.spacing.lg
         }}>
-          <Target size={32} color={tokens.colors.text.inverse} />
-          <div style={{ flex: 1 }}>
+          {/* Left - Goal Title */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: tokens.spacing.md
+          }}>
+            <Target size={24} color={tokens.colors.text.inverse} />
             <h2 style={{
               ...text.h2,
               color: tokens.colors.text.inverse,
-              marginBottom: tokens.spacing.sm
+              margin: 0,
+              textTransform: 'capitalize'
             }}>
               {roadmap.title}
             </h2>
-            <p style={{
-              ...text.body,
-              color: tokens.colors.text.inverse,
-              opacity: 0.9
-            }}>
-              {currentGoal.specificGoal}
-            </p>
+          </div>
+
+          {/* Right - Timeline Dates */}
+          <div style={{
+            display: 'flex',
+            gap: tokens.spacing.xl,
+            alignItems: 'center'
+          }}>
+            <div style={{ textAlign: 'right' }}>
+              <p style={{
+                ...text.caption,
+                color: tokens.colors.text.inverse,
+                opacity: 0.8,
+                marginBottom: tokens.spacing.xs
+              }}>
+                Start Date
+              </p>
+              <p style={{
+                ...text.body,
+                color: tokens.colors.text.inverse,
+                fontWeight: tokens.typography.weights.regular,
+                margin: 0
+              }}>
+                {new Date(roadmap.startDate).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric'
+                })}
+              </p>
+            </div>
+            <div style={{
+              width: '1px',
+              height: '40px',
+              backgroundColor: 'rgba(255, 255, 255, 0.2)'
+            }} />
+            <div style={{ textAlign: 'right' }}>
+              <p style={{
+                ...text.caption,
+                color: tokens.colors.text.inverse,
+                opacity: 0.8,
+                marginBottom: tokens.spacing.xs
+              }}>
+                Target Date
+              </p>
+              <p style={{
+                ...text.body,
+                color: tokens.colors.text.inverse,
+                fontWeight: tokens.typography.weights.regular,
+                margin: 0
+              }}>
+                {new Date(roadmap.endDate).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric'
+                })}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -185,7 +243,7 @@ export default function GoalsView() {
                 borderLeft: isActive
                   ? `4px solid ${tokens.colors.primary}`
                   : isCompleted
-                  ? `4px solid ${tokens.colors.semantic.success}`
+                  ? `4px solid ${tokens.colors.success}`
                   : `4px solid ${tokens.colors.gray[200]}`,
                 opacity: isActive ? 1 : isCompleted ? 0.8 : 0.6
               }}
@@ -202,7 +260,7 @@ export default function GoalsView() {
                   backgroundColor: isActive
                     ? tokens.colors.primary
                     : isCompleted
-                    ? tokens.colors.semantic.success
+                    ? tokens.colors.success
                     : tokens.colors.gray[200],
                   borderRadius: '50%',
                   display: 'flex',
@@ -276,92 +334,6 @@ export default function GoalsView() {
         })}
       </div>
 
-      {/* Timeline */}
-      <div style={{
-        ...card.standard,
-        marginTop: tokens.spacing['2xl']
-      }}>
-        <h3 style={{
-          ...text.h3,
-          marginBottom: tokens.spacing.lg
-        }}>
-          Timeline
-        </h3>
-
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: tokens.spacing.lg
-        }}>
-          <div>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: tokens.spacing.sm,
-              marginBottom: tokens.spacing.xs
-            }}>
-              <Calendar size={16} color={tokens.colors.text.secondary} />
-              <span style={{
-                ...text.caption,
-                color: tokens.colors.text.secondary
-              }}>
-                Start Date
-              </span>
-            </div>
-            <p style={text.body}>
-              {new Date(roadmap.startDate).toLocaleDateString('en-US', {
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric'
-              })}
-            </p>
-          </div>
-
-          <div>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: tokens.spacing.sm,
-              marginBottom: tokens.spacing.xs
-            }}>
-              <Target size={16} color={tokens.colors.text.secondary} />
-              <span style={{
-                ...text.caption,
-                color: tokens.colors.text.secondary
-              }}>
-                Target End Date
-              </span>
-            </div>
-            <p style={text.body}>
-              {new Date(roadmap.endDate).toLocaleDateString('en-US', {
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric'
-              })}
-            </p>
-          </div>
-
-          <div>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: tokens.spacing.sm,
-              marginBottom: tokens.spacing.xs
-            }}>
-              <CheckCircle2 size={16} color={tokens.colors.text.secondary} />
-              <span style={{
-                ...text.caption,
-                color: tokens.colors.text.secondary
-              }}>
-                Recommended Time
-              </span>
-            </div>
-            <p style={text.body}>
-              {roadmap.recommendedTime}
-            </p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

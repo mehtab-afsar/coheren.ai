@@ -43,7 +43,7 @@ export default function ProfileView() {
       {/* Info Grid */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+        gridTemplateColumns: 'repeat(3, 1fr)',
         gap: tokens.spacing.lg,
         marginBottom: tokens.spacing.xl
       }}>

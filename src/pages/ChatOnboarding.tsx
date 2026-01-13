@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Send, Sparkles } from 'lucide-react';
 import Groq from 'groq-sdk';
 import { useStore } from '../store/useStore';
-import { tokens, text, button, input as inputStyles } from '../design-system';
+import { tokens, text, button } from '../design-system';
 import { generateInitialTasks } from '../utils/taskGenerator';
 import { detectCategory } from '../utils/categoryDetection';
 import { retrieveKnowledge, type UserContext } from '../rag';
@@ -485,14 +485,7 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
     const category = collectedData.category;
     const energyPattern = collectedData.energyPattern as 'morning' | 'afternoon' | 'evening' | 'night';
 
-    // Show loading message
-    const loadingMessage: Message = {
-      id: Date.now().toString(),
-      role: 'ai',
-      content: `✨ Awesome! Creating your personalized ${collectedData.timeline?.target || '3-month'} strategic plan for ${collectedData.goal}... This will just take a moment!`,
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, loadingMessage]);
+    // Show typing indicator (removed duplicate loading message)
     setIsTyping(true);
 
     // Simulate progress for better UX
@@ -808,8 +801,27 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: tokens.colors.background, position: 'relative', overflow: 'hidden' }}>
-      {/* Animated Background Illustrations */}
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      backgroundColor: tokens.colors.background,
+      position: 'relative',
+      overflow: 'hidden'
+    }}>
+      {/* Subtle Background Gradient */}
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: `linear-gradient(180deg, ${tokens.colors.primarySubtle}15 0%, transparent 50%)`,
+        pointerEvents: 'none',
+        zIndex: 0,
+      }} />
+
+      {/* Minimal Animated Background Illustrations - More subtle */}
       <div style={{
         position: 'absolute',
         top: 0,
@@ -817,7 +829,7 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
         right: 0,
         bottom: 0,
         pointerEvents: 'none',
-        opacity: 0.03,
+        opacity: 0.015,
         zIndex: 0,
       }}>
         {/* Left side illustrations */}
@@ -861,24 +873,74 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
         </svg>
       </div>
 
-      {/* Progress Bar - shown during plan generation */}
+      {/* Premium Loading Overlay - shown during plan generation */}
       {isGeneratingPlan && (
         <div style={{
           position: 'fixed',
           top: 0,
           left: 0,
           right: 0,
-          height: '4px',
-          backgroundColor: tokens.colors.gray[100],
+          bottom: 0,
+          backgroundColor: 'rgba(255, 252, 249, 0.95)',
+          backdropFilter: 'blur(8px)',
           zIndex: 1000,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: tokens.spacing['2xl'],
         }}>
+          {/* Loading Icon */}
           <div style={{
-            height: '100%',
-            width: `${generationProgress}%`,
-            backgroundColor: tokens.colors.primary,
-            transition: 'width 0.3s ease',
-            boxShadow: `0 0 10px ${tokens.colors.primary}`,
-          }} />
+            animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          }}>
+            <Sparkles size={48} strokeWidth={1.5} color={tokens.colors.primary} />
+          </div>
+
+          {/* Loading Text */}
+          <div style={{ textAlign: 'center', maxWidth: '500px' }}>
+            <h3 style={{
+              fontSize: tokens.typography.sizes.xl,
+              fontWeight: tokens.typography.weights.regular,
+              color: tokens.colors.text.primary,
+              marginBottom: tokens.spacing.md,
+            }}>
+              Creating your personalized plan
+            </h3>
+            <p style={{
+              fontSize: tokens.typography.sizes.base,
+              fontWeight: tokens.typography.weights.light,
+              color: tokens.colors.text.secondary,
+              lineHeight: tokens.typography.lineHeights.relaxed,
+            }}>
+              Analyzing your goals and crafting a strategic roadmap tailored just for you...
+            </p>
+          </div>
+
+          {/* Progress Bar */}
+          <div style={{
+            width: '300px',
+            height: '4px',
+            backgroundColor: tokens.colors.gray[100],
+            borderRadius: tokens.borderRadius.full,
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              height: '100%',
+              width: `${generationProgress}%`,
+              backgroundColor: tokens.colors.primary,
+              transition: 'width 0.5s ease',
+            }} />
+          </div>
+
+          {/* Percentage */}
+          <span style={{
+            fontSize: tokens.typography.sizes.sm,
+            fontWeight: tokens.typography.weights.regular,
+            color: tokens.colors.text.tertiary,
+          }}>
+            {generationProgress}%
+          </span>
         </div>
       )}
 
@@ -925,82 +987,89 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
           flexDirection: 'column',
           gap: tokens.spacing.lg,
         }}>
-          {/* Messages */}
+          {/* Messages - Clean layout without boxes */}
           <div style={{
             flex: 1,
             overflowY: 'auto',
             display: 'flex',
             flexDirection: 'column',
-            gap: tokens.spacing.lg,
+            gap: tokens.spacing['2xl'],
             paddingBottom: tokens.spacing.xl,
           }}>
             {messages.map((message) => (
               <div key={message.id} style={{
-                display: 'flex',
-                justifyContent: message.role === 'user' ? 'flex-end' : 'flex-start',
+                animation: 'fadeIn 0.4s ease-out',
               }}>
-                <div style={{
-                  maxWidth: '80%',
-                  padding: tokens.spacing.lg,
-                  borderRadius: tokens.borderRadius.lg,
-                  backgroundColor: message.role === 'ai' ? tokens.colors.gray[50] : tokens.colors.text.primary,
-                  color: message.role === 'ai' ? tokens.colors.text.primary : tokens.colors.text.inverse,
-                  border: `1px solid ${message.role === 'ai' ? tokens.colors.gray[200] : tokens.colors.text.primary}`,
-                }}>
-                  {message.role === 'ai' && (
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: tokens.spacing.sm,
-                      marginBottom: tokens.spacing.sm,
+                {message.role === 'ai' && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: tokens.spacing.sm,
+                    marginBottom: tokens.spacing.md,
+                  }}>
+                    <Sparkles size={16} strokeWidth={1.5} color={tokens.colors.primary} />
+                    <span style={{
+                      fontSize: tokens.typography.sizes.sm,
+                      color: tokens.colors.text.tertiary,
+                      fontWeight: tokens.typography.weights.regular,
                     }}>
-                      <Sparkles size={16} color={tokens.colors.text.tertiary} />
-                      <span style={{
-                        ...text.caption,
-                        color: tokens.colors.text.tertiary,
-                        fontWeight: tokens.typography.weights.medium,
-                      }}>
-                        Coheren AI
-                      </span>
-                    </div>
-                  )}
-                  <p style={{ ...text.body, margin: 0 }}>{message.content}</p>
-                </div>
+                      Coheren AI
+                    </span>
+                  </div>
+                )}
+                <p style={{
+                  fontSize: tokens.typography.sizes.lg,
+                  fontWeight: message.role === 'ai' ? tokens.typography.weights.light : tokens.typography.weights.regular,
+                  lineHeight: tokens.typography.lineHeights.relaxed,
+                  color: tokens.colors.text.primary,
+                  margin: 0,
+                  paddingLeft: message.role === 'user' ? tokens.spacing.xl : '0',
+                }}>
+                  {message.content}
+                </p>
               </div>
             ))}
 
-            {/* Typing Indicator */}
+            {/* Typing Indicator - Minimal */}
             {isTyping && (
-              <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+              <div>
                 <div style={{
-                  padding: tokens.spacing.lg,
-                  borderRadius: tokens.borderRadius.lg,
-                  backgroundColor: tokens.colors.gray[50],
-                  border: `1px solid ${tokens.colors.gray[200]}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: tokens.spacing.sm,
+                  marginBottom: tokens.spacing.md,
                 }}>
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    <div style={{
-                      width: '8px',
-                      height: '8px',
-                      backgroundColor: tokens.colors.gray[600],
-                      borderRadius: '50%',
-                      animation: 'pulse 1.4s infinite ease-in-out both',
-                    }} />
-                    <div style={{
-                      width: '8px',
-                      height: '8px',
-                      backgroundColor: tokens.colors.gray[600],
-                      borderRadius: '50%',
-                      animation: 'pulse 1.4s infinite ease-in-out both 0.2s',
-                    }} />
-                    <div style={{
-                      width: '8px',
-                      height: '8px',
-                      backgroundColor: tokens.colors.gray[600],
-                      borderRadius: '50%',
-                      animation: 'pulse 1.4s infinite ease-in-out both 0.4s',
-                    }} />
-                  </div>
+                  <Sparkles size={16} strokeWidth={1.5} color={tokens.colors.primary} />
+                  <span style={{
+                    fontSize: tokens.typography.sizes.sm,
+                    color: tokens.colors.text.tertiary,
+                    fontWeight: tokens.typography.weights.regular,
+                  }}>
+                    Coheren AI
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <div style={{
+                    width: '8px',
+                    height: '8px',
+                    backgroundColor: tokens.colors.text.tertiary,
+                    borderRadius: '50%',
+                    animation: 'pulse 1.4s infinite ease-in-out both',
+                  }} />
+                  <div style={{
+                    width: '8px',
+                    height: '8px',
+                    backgroundColor: tokens.colors.text.tertiary,
+                    borderRadius: '50%',
+                    animation: 'pulse 1.4s infinite ease-in-out both 0.2s',
+                  }} />
+                  <div style={{
+                    width: '8px',
+                    height: '8px',
+                    backgroundColor: tokens.colors.text.tertiary,
+                    borderRadius: '50%',
+                    animation: 'pulse 1.4s infinite ease-in-out both 0.4s',
+                  }} />
                 </div>
               </div>
             )}
@@ -1008,13 +1077,12 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input Area */}
+          {/* Input Area - Clean, minimal */}
           <div style={{
             display: 'flex',
             gap: tokens.spacing.md,
-            padding: tokens.spacing.lg,
-            backgroundColor: tokens.colors.background,
-            borderTop: `1px solid ${tokens.colors.gray[200]}`,
+            padding: `${tokens.spacing.lg} 0`,
+            alignItems: 'center',
           }}>
             <input
               ref={inputRef}
@@ -1026,24 +1094,50 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
               disabled={isTyping || planGenerationTriggered}
               autoFocus
               style={{
-                ...inputStyles.base,
                 flex: 1,
+                fontSize: tokens.typography.sizes.lg,
+                fontWeight: tokens.typography.weights.light,
+                padding: `${tokens.spacing.lg} 0`,
+                backgroundColor: 'transparent',
+                border: 'none',
+                borderBottom: `1px solid ${tokens.colors.border}`,
+                borderRadius: '0',
+                color: tokens.colors.text.primary,
+                outline: 'none',
+                transition: tokens.transitions.all,
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderBottomColor = tokens.colors.primary;
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderBottomColor = tokens.colors.border;
               }}
             />
             <button
               onClick={handleSend}
               disabled={!userInput.trim() || isTyping || planGenerationTriggered}
+              onMouseEnter={(e) => {
+                if (!e.currentTarget.disabled) {
+                  e.currentTarget.style.transform = `scale(${tokens.colors.state.hoverScale})`;
+                  e.currentTarget.style.backgroundColor = tokens.colors.primaryHover;
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.backgroundColor = tokens.colors.primary;
+              }}
               style={{
                 ...button.primary,
-                width: '48px',
-                height: '48px',
+                width: '44px',
+                height: '44px',
                 padding: 0,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                opacity: userInput.trim() ? 1 : 0.5,
               }}
             >
-              <Send size={20} />
+              <Send size={18} strokeWidth={1.5} />
             </button>
           </div>
         </div>
@@ -1053,6 +1147,17 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
         @keyframes pulse {
           0%, 80%, 100% { opacity: 0.3; transform: scale(1); }
           40% { opacity: 1; transform: scale(1.2); }
+        }
+
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
       `}</style>
     </div>

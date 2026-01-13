@@ -49,55 +49,78 @@ export const layout = {
 // ============================================
 
 export const button = {
-  // Primary CTA button
+  // Primary CTA button - Premium feel
   primary: {
     padding: `${tokens.spacing.lg} ${tokens.spacing['2xl']}`,
     backgroundColor: tokens.colors.primary,
-    color: tokens.colors.text.inverse,
+    color: tokens.colors.text.onPrimary,
     border: 'none',
-    borderRadius: tokens.borderRadius.lg,
-    fontSize: tokens.typography.sizes.lg,
-    fontWeight: tokens.typography.weights.regular,
+    borderRadius: tokens.borderRadius.md,
+    fontSize: tokens.typography.sizes.base,
+    fontWeight: tokens.typography.weights.medium,
     cursor: 'pointer',
     transition: tokens.transitions.all,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     gap: tokens.spacing.sm,
+    boxShadow: tokens.shadows.xs,
   } as CSSProperties,
 
-  // Secondary button
+  // Primary hover state
+  primaryHover: {
+    backgroundColor: tokens.colors.primaryHover,
+    transform: `scale(${tokens.colors.state.hoverScale})`,
+    boxShadow: tokens.shadows.sm,
+  } as CSSProperties,
+
+  // Secondary button - Subtle
   secondary: {
-    padding: `${tokens.spacing.md} 20px`,
-    backgroundColor: tokens.colors.background,
-    color: tokens.colors.primary,
-    border: `1px solid ${tokens.colors.gray[300]}`,
-    borderRadius: tokens.borderRadius.lg,
-    fontSize: tokens.typography.sizes.md,
-    fontWeight: tokens.typography.weights.light,
+    padding: `${tokens.spacing.md} ${tokens.spacing.xl}`,
+    backgroundColor: tokens.colors.surface,
+    color: tokens.colors.text.secondary,
+    border: `1px solid ${tokens.colors.border}`,
+    borderRadius: tokens.borderRadius.md,
+    fontSize: tokens.typography.sizes.base,
+    fontWeight: tokens.typography.weights.regular,
     cursor: 'pointer',
     transition: tokens.transitions.all,
   } as CSSProperties,
 
-  // Icon button (circular)
+  // Ghost button - Minimal
+  ghost: {
+    padding: `${tokens.spacing.md} ${tokens.spacing.lg}`,
+    backgroundColor: 'transparent',
+    color: tokens.colors.text.secondary,
+    border: 'none',
+    borderRadius: tokens.borderRadius.md,
+    fontSize: tokens.typography.sizes.base,
+    fontWeight: tokens.typography.weights.regular,
+    cursor: 'pointer',
+    transition: tokens.transitions.all,
+  } as CSSProperties,
+
+  // Icon button (circular) - Subtle
   icon: (size: number = 40) => ({
     width: `${size}px`,
     height: `${size}px`,
-    backgroundColor: tokens.colors.gray[50],
-    border: 'none',
+    backgroundColor: tokens.colors.surface,
+    border: `1px solid ${tokens.colors.borderLight}`,
     borderRadius: tokens.borderRadius.full,
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    transition: tokens.transitions.colors,
+    transition: tokens.transitions.all,
+    boxShadow: tokens.shadows.xs,
   } as CSSProperties),
 
   // Disabled state
   disabled: {
     backgroundColor: tokens.colors.state.disabled,
-    color: tokens.colors.text.tertiary,
+    color: tokens.colors.text.disabled,
     cursor: 'not-allowed',
+    opacity: 0.6,
   } as CSSProperties,
 };
 
@@ -106,16 +129,40 @@ export const button = {
 // ============================================
 
 export const input = {
-  // Base input style
+  // Base input style - Premium, subtle
   base: {
     width: '100%',
-    padding: tokens.spacing.lg,
-    fontSize: tokens.typography.sizes.lg,
+    padding: `${tokens.spacing.lg} ${tokens.spacing.xl}`,
+    fontSize: tokens.typography.sizes.base,
     fontWeight: tokens.typography.weights.light,
-    border: `1px solid ${tokens.colors.gray[300]}`,
-    borderRadius: tokens.borderRadius.lg,
+    color: tokens.colors.text.primary,
+    backgroundColor: tokens.colors.surface,
+    border: `1px solid ${tokens.colors.border}`,
+    borderRadius: tokens.borderRadius.md,
     outline: 'none',
-    transition: 'border-color 0.2s',
+    transition: tokens.transitions.colors,
+    boxShadow: tokens.shadows.inner,
+  } as CSSProperties,
+
+  // Focus state
+  focus: {
+    borderColor: tokens.colors.primary,
+    boxShadow: `${tokens.shadows.inner}, 0 0 0 3px ${tokens.colors.state.focusRing}`,
+  } as CSSProperties,
+
+  // Minimal input (for conversational UI)
+  minimal: {
+    width: '100%',
+    padding: `${tokens.spacing.md} 0`,
+    fontSize: tokens.typography.sizes.xl,
+    fontWeight: tokens.typography.weights.light,
+    color: tokens.colors.text.primary,
+    backgroundColor: 'transparent',
+    border: 'none',
+    borderBottom: `2px solid ${tokens.colors.borderLight}`,
+    borderRadius: '0',
+    outline: 'none',
+    transition: tokens.transitions.colors,
   } as CSSProperties,
 
   // Time range container
@@ -137,15 +184,26 @@ export const input = {
 // ============================================
 
 export const card = {
-  // Standard card
+  // Standard card - Premium with ultra-subtle shadow
   standard: {
-    backgroundColor: tokens.colors.background,
-    padding: '20px',
+    backgroundColor: tokens.colors.surface,
+    padding: tokens.spacing['2xl'],
     borderRadius: tokens.borderRadius.lg,
-    border: `1px solid ${tokens.colors.gray[200]}`,
+    border: `1px solid ${tokens.colors.borderLight}`,
+    boxShadow: tokens.shadows.sm,
+    transition: tokens.transitions.all,
   } as CSSProperties,
 
-  // Interactive card (clickable)
+  // Elevated card - Slightly more prominent
+  elevated: {
+    backgroundColor: tokens.colors.surface,
+    padding: tokens.spacing['2xl'],
+    borderRadius: tokens.borderRadius.lg,
+    border: `1px solid ${tokens.colors.borderLight}`,
+    boxShadow: tokens.shadows.md,
+  } as CSSProperties,
+
+  // Interactive card (clickable) - Hover effect
   interactive: {
     padding: tokens.spacing.xl,
     backgroundColor: tokens.colors.background,
@@ -351,19 +409,30 @@ export const flex = {
 // ============================================
 
 export const text = {
-  // Display (large hero text)
-  display: {
-    fontSize: tokens.typography.sizes['4xl'],
-    fontWeight: tokens.typography.weights.light,
+  // Hero (landing pages - 64px, weight 200)
+  hero: {
+    fontSize: tokens.typography.sizes['5xl'],
+    fontWeight: tokens.typography.weights.thin,
     letterSpacing: tokens.typography.letterSpacing.tight,
     lineHeight: tokens.typography.lineHeights.tight,
+    color: tokens.colors.text.primary,
   } as CSSProperties,
 
-  // H1
+  // Display (large hero text - 48px)
+  display: {
+    fontSize: tokens.typography.sizes['4xl'],
+    fontWeight: tokens.typography.weights.thin,
+    letterSpacing: tokens.typography.letterSpacing.tight,
+    lineHeight: tokens.typography.lineHeights.tight,
+    color: tokens.colors.text.primary,
+  } as CSSProperties,
+
+  // H1 (32px)
   h1: {
     fontSize: tokens.typography.sizes['3xl'],
     fontWeight: tokens.typography.weights.light,
-    lineHeight: tokens.typography.lineHeights.normal,
+    lineHeight: tokens.typography.lineHeights.snug,
+    color: tokens.colors.text.primary,
   } as CSSProperties,
 
   // H2
@@ -460,7 +529,7 @@ export const hoverHandlers = {
   // Dark button hover
   darkBg: {
     onMouseEnter: (e: React.MouseEvent<HTMLElement>) => {
-      e.currentTarget.style.backgroundColor = tokens.colors.state.hoverDark;
+      e.currentTarget.style.backgroundColor = tokens.colors.primaryHover;
     },
     onMouseLeave: (e: React.MouseEvent<HTMLElement>) => {
       e.currentTarget.style.backgroundColor = tokens.colors.primary;
@@ -489,9 +558,12 @@ export const focusHandlers = {
   input: {
     onFocus: (e: React.FocusEvent<HTMLInputElement>) => {
       e.currentTarget.style.borderColor = tokens.colors.primary;
+      e.currentTarget.style.boxShadow = `${tokens.shadows.inner}, 0 0 0 3px ${tokens.colors.state.focusRing}`;
     },
     onBlur: (e: React.FocusEvent<HTMLInputElement>) => {
-      e.currentTarget.style.borderColor = tokens.colors.gray[300];
+      e.currentTarget.style.borderColor = tokens.colors.border;
+      e.currentTarget.style.boxShadow = tokens.shadows.inner;
     },
   },
 };
+

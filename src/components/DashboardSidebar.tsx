@@ -1,14 +1,28 @@
 import { Home, User, TrendingUp, Target, Settings, Menu, X, Map } from 'lucide-react';
 import { useState } from 'react';
-import { tokens, text } from '../design-system';
+import { tokens } from '../design-system';
 
 interface DashboardSidebarProps {
   currentView: 'today' | 'profile' | 'progress' | 'goals' | 'journey' | 'settings';
   onViewChange: (view: 'today' | 'profile' | 'progress' | 'goals' | 'journey' | 'settings') => void;
+  isOpen?: boolean;
+  onToggle?: (open: boolean) => void;
 }
 
-export default function DashboardSidebar({ currentView, onViewChange }: DashboardSidebarProps) {
-  const [isOpen, setIsOpen] = useState(true);
+export default function DashboardSidebar({ currentView, onViewChange, isOpen: controlledIsOpen, onToggle }: DashboardSidebarProps) {
+  const [internalIsOpen, setInternalIsOpen] = useState(() => {
+    // Default to open on desktop, closed on mobile
+    return window.innerWidth >= 768;
+  });
+
+  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
+  const setIsOpen = (open: boolean) => {
+    if (onToggle) {
+      onToggle(open);
+    } else {
+      setInternalIsOpen(open);
+    }
+  };
 
   const menuItems = [
     { id: 'today' as const, label: 'Today', icon: Home },
@@ -21,34 +35,44 @@ export default function DashboardSidebar({ currentView, onViewChange }: Dashboar
 
   return (
     <>
-      {/* Mobile Toggle Button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        style={{
-          position: 'fixed',
-          top: tokens.spacing.lg,
-          left: tokens.spacing.lg,
-          zIndex: 1000,
-          width: '40px',
-          height: '40px',
-          backgroundColor: tokens.colors.primary,
-          border: 'none',
-          borderRadius: '8px',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-        aria-label="Toggle sidebar"
-      >
-        {isOpen ? (
-          <X size={20} color={tokens.colors.text.inverse} />
-        ) : (
-          <Menu size={20} color={tokens.colors.text.inverse} />
-        )}
-      </button>
+      {/* Toggle Button - Only shown when sidebar is closed */}
+      {!isOpen && (
+        <button
+          onClick={() => setIsOpen(true)}
+          style={{
+            position: 'fixed',
+            top: tokens.spacing.xl,
+            left: tokens.spacing.xl,
+            zIndex: 1000,
+            width: '44px',
+            height: '44px',
+            backgroundColor: tokens.colors.surface,
+            border: `1px solid ${tokens.colors.borderLight}`,
+            borderRadius: tokens.borderRadius.md,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: tokens.shadows.sm,
+            transition: 'all 500ms cubic-bezier(0.23, 1, 0.32, 1)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = `scale(${tokens.colors.state.hoverScale})`;
+            e.currentTarget.style.boxShadow = tokens.shadows.md;
+            e.currentTarget.style.borderColor = tokens.colors.primary;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = tokens.shadows.sm;
+            e.currentTarget.style.borderColor = tokens.colors.borderLight;
+          }}
+          aria-label="Open sidebar"
+        >
+          <Menu size={20} strokeWidth={1.5} color={tokens.colors.text.secondary} />
+        </button>
+      )}
 
-      {/* Sidebar */}
+      {/* Sidebar - Premium with breathable spacing */}
       <div
         style={{
           position: 'fixed',
@@ -56,33 +80,73 @@ export default function DashboardSidebar({ currentView, onViewChange }: Dashboar
           top: 0,
           width: '260px',
           height: '100vh',
-          backgroundColor: tokens.colors.background,
-          borderRight: `1px solid ${tokens.colors.gray[200]}`,
-          transition: 'left 0.3s ease',
+          backgroundColor: tokens.colors.surface,
+          borderRight: `1px solid ${tokens.colors.borderLight}`,
+          transition: 'left 500ms cubic-bezier(0.23, 1, 0.32, 1)',
           zIndex: 999,
           display: 'flex',
           flexDirection: 'column',
-          paddingTop: '80px', // Space for toggle button
         }}
       >
-        {/* Logo */}
-        <div style={{ padding: `${tokens.spacing.xl} ${tokens.spacing.xl}` }}>
-          <h2 style={{
-            ...text.h2,
-            marginBottom: tokens.spacing.xs,
-          }}>
-            Coheren
-          </h2>
-          <p style={{
-            ...text.caption,
-            color: tokens.colors.text.secondary,
-          }}>
-            AI Goal Coach
-          </p>
+        {/* Logo with Close Button */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          padding: `${tokens.spacing.xl} ${tokens.spacing.xl}`,
+          borderBottom: `1px solid ${tokens.colors.borderLight}`,
+        }}>
+          <div style={{ flex: 1 }}>
+            <h2 style={{
+              fontSize: tokens.typography.sizes.xl,
+              fontWeight: tokens.typography.weights.medium,
+              color: tokens.colors.text.primary,
+              marginBottom: tokens.spacing.xs,
+            }}>
+              Coheren
+            </h2>
+            <p style={{
+              fontSize: tokens.typography.sizes.xs,
+              fontWeight: tokens.typography.weights.light,
+              color: tokens.colors.text.tertiary,
+              fontStyle: 'italic',
+            }}>
+              Think less. Do more.
+            </p>
+          </div>
+
+          <button
+            onClick={() => setIsOpen(false)}
+            style={{
+              width: '32px',
+              height: '32px',
+              backgroundColor: 'transparent',
+              border: 'none',
+              borderRadius: tokens.borderRadius.sm,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: tokens.transitions.all,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = tokens.colors.state.hover;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
+            aria-label="Close sidebar"
+          >
+            <X size={18} strokeWidth={1.5} color={tokens.colors.text.tertiary} />
+          </button>
         </div>
 
-        {/* Navigation */}
-        <nav style={{ flex: 1, padding: `${tokens.spacing.md} 0` }}>
+        {/* Navigation - Premium spacing with top gap */}
+        <nav style={{
+          flex: 1,
+          padding: `${tokens.spacing['2xl']} 0`,
+          paddingTop: tokens.spacing.xl,
+        }}>
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentView === item.id;
@@ -96,29 +160,36 @@ export default function DashboardSidebar({ currentView, onViewChange }: Dashboar
                   display: 'flex',
                   alignItems: 'center',
                   gap: tokens.spacing.md,
-                  padding: `${tokens.spacing.md} ${tokens.spacing.xl}`,
-                  backgroundColor: isActive ? tokens.colors.gray[50] : 'transparent',
+                  padding: `${tokens.spacing.lg} ${tokens.spacing.xl}`,
+                  backgroundColor: isActive ? tokens.colors.primarySubtle : 'transparent',
                   border: 'none',
-                  borderLeft: isActive ? `3px solid ${tokens.colors.primary}` : '3px solid transparent',
+                  borderLeft: isActive ? `2px solid ${tokens.colors.primary}` : '2px solid transparent',
                   cursor: 'pointer',
-                  transition: 'all 0.2s',
+                  transition: tokens.transitions.all,
                   textAlign: 'left',
                 }}
                 onMouseEnter={(e) => {
-                  if (!isActive) e.currentTarget.style.backgroundColor = tokens.colors.gray[50];
+                  if (!isActive) {
+                    e.currentTarget.style.backgroundColor = tokens.colors.state.hover;
+                    e.currentTarget.style.transform = 'translateX(2px)';
+                  }
                 }}
                 onMouseLeave={(e) => {
-                  if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
+                  if (!isActive) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.transform = 'translateX(0)';
+                  }
                 }}
               >
                 <Icon
                   size={20}
+                  strokeWidth={1.5}
                   color={isActive ? tokens.colors.primary : tokens.colors.text.secondary}
                 />
                 <span style={{
-                  ...text.body,
+                  fontSize: tokens.typography.sizes.base,
                   color: isActive ? tokens.colors.primary : tokens.colors.text.primary,
-                  fontWeight: isActive ? tokens.typography.weights.medium : tokens.typography.weights.light,
+                  fontWeight: isActive ? tokens.typography.weights.regular : tokens.typography.weights.light,
                 }}>
                   {item.label}
                 </span>
@@ -130,10 +201,11 @@ export default function DashboardSidebar({ currentView, onViewChange }: Dashboar
         {/* Footer */}
         <div style={{
           padding: tokens.spacing.xl,
-          borderTop: `1px solid ${tokens.colors.gray[200]}`,
+          borderTop: `1px solid ${tokens.colors.borderLight}`,
         }}>
           <p style={{
-            ...text.caption,
+            fontSize: tokens.typography.sizes.xs,
+            fontWeight: tokens.typography.weights.light,
             color: tokens.colors.text.tertiary,
             textAlign: 'center',
           }}>

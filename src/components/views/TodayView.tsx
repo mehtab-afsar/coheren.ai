@@ -1,6 +1,7 @@
-import { Flame, Calendar, TrendingUp, CheckCircle2, Circle, Clock, Play, ArrowRight } from 'lucide-react';
+import { Flame, Calendar, TrendingUp, CheckCircle2, Circle, Clock, Play, ArrowRight, Sparkles } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { tokens, text, card } from '../../design-system';
+import { useState, useRef } from 'react';
 
 export default function TodayView() {
   const {
@@ -14,6 +15,10 @@ export default function TodayView() {
     canAdvanceDay,
     advanceDay,
   } = useStore();
+
+  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
+  const [particles, setParticles] = useState<Array<{ id: string; x: number; y: number }>>([]);
+  const progressCardRef = useRef<HTMLDivElement>(null);
 
   const todaysTasks = tasks.filter(t => t.day === currentDay);
   const completedTasks = todaysTasks.filter(t => t.completed);
@@ -52,90 +57,255 @@ export default function TodayView() {
     }
   };
 
+  const handleCompleteTask = (taskId: string, event: React.MouseEvent) => {
+    const taskElement = (event.currentTarget as HTMLElement).closest('[data-task-card]');
+    if (!taskElement || !progressCardRef.current) {
+      completeTask(taskId);
+      return;
+    }
+
+    const taskRect = taskElement.getBoundingClientRect();
+
+    // Create particles for animation
+    const newParticles = Array.from({ length: 8 }, (_, i) => ({
+      id: `${taskId}-${i}-${Date.now()}`,
+      x: taskRect.left + taskRect.width / 2,
+      y: taskRect.top + taskRect.height / 2,
+    }));
+
+    setParticles(prev => [...prev, ...newParticles]);
+    setCompletingTaskId(taskId);
+
+    // Trigger vanish animation then complete
+    setTimeout(() => {
+      completeTask(taskId);
+      setCompletingTaskId(null);
+    }, 400);
+
+    // Remove particles after animation
+    setTimeout(() => {
+      setParticles(prev => prev.filter(p => !p.id.startsWith(taskId)));
+    }, 1900);
+  };
+
   return (
-    <div>
-      {/* Header */}
-      <div style={{ marginBottom: tokens.spacing['2xl'] }}>
+    <div style={{ position: 'relative' }}>
+      {/* Animated Particles */}
+      {particles.map((particle, index) => {
+        const progressRect = progressCardRef.current?.getBoundingClientRect();
+        const targetX = progressRect ? progressRect.left + progressRect.width / 2 : particle.x;
+        const targetY = progressRect ? progressRect.top + progressRect.height / 2 : particle.y;
+
+        return (
+          <div
+            key={particle.id}
+            style={{
+              position: 'fixed',
+              left: particle.x,
+              top: particle.y,
+              width: '8px',
+              height: '8px',
+              pointerEvents: 'none',
+              zIndex: 10000,
+              opacity: 0,
+              animation: `floatToProgress 1.5s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.05}s forwards`,
+              '--target-x': `${targetX - particle.x}px`,
+              '--target-y': `${targetY - particle.y}px`,
+            } as React.CSSProperties}
+          >
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
+                fill={tokens.colors.primary}
+                style={{
+                  filter: `drop-shadow(0 0 6px ${tokens.colors.primary})`,
+                }}
+              />
+            </svg>
+          </div>
+        );
+      })}
+
+      <style>{`
+        @keyframes floatToProgress {
+          0% {
+            transform: translate(-4px, -4px) scale(0) rotate(0deg);
+            opacity: 0;
+          }
+          10% {
+            transform: translate(-4px, -4px) scale(1.2) rotate(45deg);
+            opacity: 1;
+          }
+          80% {
+            transform: translate(var(--target-x), var(--target-y)) scale(1) rotate(360deg);
+            opacity: 1;
+          }
+          100% {
+            transform: translate(var(--target-x), var(--target-y)) scale(0) rotate(450deg);
+            opacity: 0;
+          }
+        }
+
+        @keyframes magicVanish {
+          0% {
+            opacity: 1;
+            transform: scale(1) rotate(0deg);
+            filter: blur(0px);
+          }
+          50% {
+            opacity: 0.5;
+            transform: scale(0.95) rotate(2deg);
+            filter: blur(2px);
+          }
+          100% {
+            opacity: 0;
+            transform: scale(0.8) rotate(-2deg);
+            filter: blur(8px);
+          }
+        }
+
+        @keyframes progressPulse {
+          0% {
+            box-shadow: ${tokens.shadows.sm};
+            transform: scale(1);
+          }
+          50% {
+            box-shadow: 0 0 30px ${tokens.colors.primary}60, ${tokens.shadows.md};
+            transform: scale(1.03);
+          }
+          100% {
+            box-shadow: ${tokens.shadows.sm};
+            transform: scale(1);
+          }
+        }
+
+        @keyframes celebration {
+          0% {
+            opacity: 0;
+            transform: translateY(20px) scale(0.9);
+          }
+          50% {
+            transform: translateY(-5px) scale(1.02);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+      `}</style>
+
+      {/* Header - Centered */}
+      <div style={{
+        marginBottom: tokens.spacing['3xl'],
+        textAlign: 'center',
+      }}>
         <h1 style={{
           ...text.h1,
-          marginBottom: tokens.spacing.sm,
+          marginBottom: tokens.spacing.md,
         }}>
           {getGreeting()}, {universalProfile.name || 'there'} 👋
         </h1>
         <p style={{
-          ...text.body,
+          fontSize: tokens.typography.sizes.sm,
+          fontWeight: tokens.typography.weights.light,
+          color: tokens.colors.text.tertiary,
+          marginBottom: tokens.spacing.xs,
+        }}>
+          Your Journey
+        </p>
+        <p style={{
+          fontSize: tokens.typography.sizes.md,
+          fontWeight: tokens.typography.weights.regular,
           color: tokens.colors.text.secondary,
         }}>
-          Day {currentDay} • {roadmap?.title}
+          {roadmap?.title} • {roadmap?.duration} months • {Math.ceil((roadmap?.duration || 3) * 4)} weeks
         </p>
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats Grid - Single row layout */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gridTemplateColumns: 'repeat(3, 1fr)',
         gap: tokens.spacing.lg,
-        marginBottom: tokens.spacing['2xl']
+        marginBottom: tokens.spacing['3xl']
       }}>
         {/* Streak Card */}
         <div style={{
           ...card.standard,
           backgroundColor: tokens.colors.primary,
+          boxShadow: tokens.shadows.sm,
+          padding: tokens.spacing.lg,
+          transition: tokens.transitions.all,
         }}>
           <div style={{
             display: 'flex',
             alignItems: 'center',
             gap: tokens.spacing.sm,
-            marginBottom: tokens.spacing.sm
+            marginBottom: tokens.spacing.md
           }}>
-            <Flame size={16} color={streak > 0 ? '#ff6b35' : tokens.colors.gray[700]} />
+            <Flame size={18} strokeWidth={1.5} color={streak > 0 ? '#ff6b35' : tokens.colors.gray[300]} />
             <span style={{
               ...text.caption,
-              color: tokens.colors.text.inverse
+              color: tokens.colors.text.inverse,
+              fontWeight: tokens.typography.weights.regular
             }}>Streak</span>
           </div>
           <div style={{
             ...text.h2,
-            color: tokens.colors.text.inverse
+            color: tokens.colors.text.inverse,
+            fontSize: tokens.typography.sizes['3xl'],
+            marginBottom: tokens.spacing.xs
           }}>
             {streak}
           </div>
           <div style={{
             ...text.caption,
-            fontSize: '11px',
-            color: tokens.colors.text.inverse
+            fontSize: tokens.typography.sizes.sm,
+            color: tokens.colors.text.inverse,
+            opacity: 0.8
           }}>
             {streak === 1 ? 'day' : 'days'}
           </div>
         </div>
 
-        {/* Progress Card */}
-        <div style={{
-          ...card.standard,
-          backgroundColor: tokens.colors.primary,
-        }}>
+        {/* Progress Card with ref */}
+        <div
+          ref={progressCardRef}
+          style={{
+            ...card.standard,
+            backgroundColor: tokens.colors.primary,
+            boxShadow: tokens.shadows.sm,
+            padding: tokens.spacing.lg,
+            transition: 'all 0.4s ease',
+            animation: particles.length > 0 ? 'progressPulse 1s ease-in-out' : 'none',
+          }}
+        >
           <div style={{
             display: 'flex',
             alignItems: 'center',
             gap: tokens.spacing.sm,
-            marginBottom: tokens.spacing.sm
+            marginBottom: tokens.spacing.md
           }}>
-            <TrendingUp size={16} color={tokens.colors.gray[300]} />
+            <TrendingUp size={18} strokeWidth={1.5} color={tokens.colors.gray[300]} />
             <span style={{
               ...text.caption,
-              color: tokens.colors.text.inverse
+              color: tokens.colors.text.inverse,
+              fontWeight: tokens.typography.weights.regular
             }}>Progress</span>
           </div>
           <div style={{
             ...text.h2,
-            color: tokens.colors.text.inverse
+            color: tokens.colors.text.inverse,
+            fontSize: tokens.typography.sizes['3xl'],
+            marginBottom: tokens.spacing.xs
           }}>
             {Math.round(completionRate)}%
           </div>
           <div style={{
             ...text.caption,
-            fontSize: '11px',
-            color: tokens.colors.text.inverse
+            fontSize: tokens.typography.sizes.sm,
+            color: tokens.colors.text.inverse,
+            opacity: 0.8
           }}>
             today
           </div>
@@ -145,29 +315,36 @@ export default function TodayView() {
         <div style={{
           ...card.standard,
           backgroundColor: tokens.colors.primary,
+          boxShadow: tokens.shadows.sm,
+          padding: tokens.spacing.lg,
+          transition: tokens.transitions.all,
         }}>
           <div style={{
             display: 'flex',
             alignItems: 'center',
             gap: tokens.spacing.sm,
-            marginBottom: tokens.spacing.sm
+            marginBottom: tokens.spacing.md
           }}>
-            <Calendar size={16} color={tokens.colors.gray[300]} />
+            <Calendar size={18} strokeWidth={1.5} color={tokens.colors.gray[300]} />
             <span style={{
               ...text.caption,
-              color: tokens.colors.text.inverse
+              color: tokens.colors.text.inverse,
+              fontWeight: tokens.typography.weights.regular
             }}>Week</span>
           </div>
           <div style={{
             ...text.h2,
-            color: tokens.colors.text.inverse
+            color: tokens.colors.text.inverse,
+            fontSize: tokens.typography.sizes['3xl'],
+            marginBottom: tokens.spacing.xs
           }}>
             {Math.ceil(currentDay / 7)}
           </div>
           <div style={{
             ...text.caption,
-            fontSize: '11px',
-            color: tokens.colors.text.inverse
+            fontSize: tokens.typography.sizes.sm,
+            color: tokens.colors.text.inverse,
+            opacity: 0.8
           }}>
             of {Math.ceil((roadmap?.duration || 6) * 4)}
           </div>
@@ -191,49 +368,84 @@ export default function TodayView() {
           </span>
         </div>
 
-        {/* Task List */}
+        {/* Task List - Premium cards with generous spacing */}
         <div style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: tokens.spacing.md
+          gap: tokens.spacing.xl
         }}>
           {todaysTasks.map((task) => {
             const Icon = getTaskIcon(task.type);
+            const isVanishing = completingTaskId === task.id;
 
             return (
               <div
                 key={task.id}
+                data-task-card
                 style={{
                   ...card.standard,
-                  opacity: task.completed ? 0.6 : 1,
-                  transition: 'opacity 0.3s'
+                  backgroundColor: tokens.colors.surface,
+                  padding: tokens.spacing['2xl'],
+                  boxShadow: tokens.shadows.sm,
+                  border: `1px solid ${tokens.colors.borderLight}`,
+                  borderRadius: tokens.borderRadius.lg,
+                  opacity: task.completed ? 0 : 1,
+                  transition: isVanishing ? 'none' : tokens.transitions.all,
+                  cursor: task.completed ? 'default' : 'pointer',
+                  animation: isVanishing ? 'magicVanish 0.4s ease-out forwards' : 'none',
+                  pointerEvents: isVanishing ? 'none' : 'auto',
+                  display: task.completed && !isVanishing ? 'none' : 'block',
+                }}
+                onMouseEnter={(e) => {
+                  if (!task.completed && !isVanishing) {
+                    e.currentTarget.style.transform = `scale(${tokens.colors.state.hoverScale})`;
+                    e.currentTarget.style.boxShadow = tokens.shadows.md;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isVanishing) {
+                    e.currentTarget.style.transform = 'scale(1)';
+                    e.currentTarget.style.boxShadow = tokens.shadows.sm;
+                  }
                 }}
               >
                 <div style={{
                   display: 'flex',
-                  gap: tokens.spacing.lg,
+                  gap: tokens.spacing.xl,
                   alignItems: 'flex-start'
                 }}>
-                  {/* Checkbox */}
+                  {/* Elegant Checkbox */}
                   <button
-                    onClick={() => completeTask(task.id)}
+                    onClick={(e) => handleCompleteTask(task.id, e)}
                     disabled={task.completed}
                     style={{
-                      width: '24px',
-                      height: '24px',
-                      backgroundColor: task.completed ? tokens.colors.primary : tokens.colors.background,
-                      border: `2px solid ${task.completed ? tokens.colors.primary : tokens.colors.gray[300]}`,
+                      width: '28px',
+                      height: '28px',
+                      backgroundColor: task.completed ? tokens.colors.primary : 'transparent',
+                      border: `1.5px solid ${task.completed ? tokens.colors.primary : tokens.colors.gray[300]}`,
                       borderRadius: '50%',
                       cursor: task.completed ? 'default' : 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      transition: 'all 0.2s',
+                      transition: tokens.transitions.all,
                       flexShrink: 0,
                       marginTop: '2px'
                     }}
+                    onMouseEnter={(e) => {
+                      if (!task.completed) {
+                        e.currentTarget.style.borderColor = tokens.colors.primary;
+                        e.currentTarget.style.borderWidth = '2px';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!task.completed) {
+                        e.currentTarget.style.borderColor = tokens.colors.gray[300];
+                        e.currentTarget.style.borderWidth = '1.5px';
+                      }
+                    }}
                   >
-                    {task.completed && <CheckCircle2 size={16} color={tokens.colors.text.inverse} />}
+                    {task.completed && <CheckCircle2 size={18} strokeWidth={2} color={tokens.colors.text.inverse} />}
                   </button>
 
                   {/* Task Content */}
@@ -242,13 +454,14 @@ export default function TodayView() {
                       display: 'flex',
                       alignItems: 'center',
                       gap: tokens.spacing.sm,
-                      marginBottom: tokens.spacing.xs
+                      marginBottom: tokens.spacing.md
                     }}>
-                      <Icon size={14} color={tokens.colors.text.secondary} />
+                      <Icon size={16} strokeWidth={1.5} color={tokens.colors.text.secondary} />
                       <span style={{
                         ...text.caption,
                         color: tokens.colors.text.secondary,
-                        textTransform: 'capitalize'
+                        textTransform: 'capitalize',
+                        fontWeight: tokens.typography.weights.regular
                       }}>
                         {task.type}
                       </span>
@@ -258,25 +471,31 @@ export default function TodayView() {
                       }}>
                         •
                       </span>
-                      <Clock size={14} color={tokens.colors.text.secondary} />
+                      <Clock size={16} strokeWidth={1.5} color={tokens.colors.text.secondary} />
                       <span style={{
                         ...text.caption,
-                        color: tokens.colors.text.secondary
+                        color: tokens.colors.text.secondary,
+                        fontWeight: tokens.typography.weights.regular
                       }}>
                         {formatDuration(task.duration)}
                       </span>
                     </div>
 
                     <h4 style={{
-                      ...text.h4,
-                      marginBottom: tokens.spacing.xs,
+                      fontSize: tokens.typography.sizes.base,
+                      fontWeight: tokens.typography.weights.regular,
+                      lineHeight: tokens.typography.lineHeights.snug,
+                      color: tokens.colors.text.primary,
+                      marginBottom: tokens.spacing.sm,
                       textDecoration: task.completed ? 'line-through' : 'none'
                     }}>
                       {task.title}
                     </h4>
 
                     <p style={{
-                      ...text.bodySmall,
+                      fontSize: tokens.typography.sizes.md,
+                      fontWeight: tokens.typography.weights.light,
+                      lineHeight: tokens.typography.lineHeights.normal,
                       color: tokens.colors.text.secondary
                     }}>
                       {task.description}
@@ -288,51 +507,69 @@ export default function TodayView() {
           })}
         </div>
 
-        {/* All Done / Advance Day */}
+        {/* All Done - Elegant celebration */}
         {allDone && canAdvance && (
           <div style={{
-            ...card.standard,
-            backgroundColor: tokens.colors.primary,
+            marginTop: tokens.spacing['3xl'],
             textAlign: 'center',
-            marginTop: tokens.spacing.lg
+            padding: `${tokens.spacing['3xl']} 0`,
+            animation: 'celebration 0.6s ease-out',
           }}>
-            <div style={{ marginBottom: tokens.spacing.md }}>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: tokens.spacing.md,
+              marginBottom: tokens.spacing.xl,
+            }}>
+              <Sparkles size={32} strokeWidth={1.5} color={tokens.colors.primary} />
               <h3 style={{
-                ...text.h3,
-                color: tokens.colors.text.inverse,
-                marginBottom: tokens.spacing.xs
+                fontSize: tokens.typography.sizes['2xl'],
+                fontWeight: tokens.typography.weights.light,
+                color: tokens.colors.text.primary,
+                margin: 0,
               }}>
-                🎉 All done for today!
+                All tasks completed!
               </h3>
-              <p style={{
-                ...text.body,
-                color: tokens.colors.text.inverse
-              }}>
-                Great work! Ready for tomorrow?
-              </p>
+              <Sparkles size={32} strokeWidth={1.5} color={tokens.colors.primary} />
             </div>
+
+            <p style={{
+              fontSize: tokens.typography.sizes.base,
+              fontWeight: tokens.typography.weights.light,
+              color: tokens.colors.text.secondary,
+              marginBottom: tokens.spacing.xl,
+            }}>
+              Great work today. Ready to continue your journey?
+            </p>
 
             <button
               onClick={handleAdvanceDay}
               style={{
-                padding: `${tokens.spacing.md} ${tokens.spacing.xl}`,
-                backgroundColor: tokens.colors.background,
-                color: tokens.colors.primary,
+                padding: `${tokens.spacing.lg} ${tokens.spacing['2xl']}`,
+                backgroundColor: tokens.colors.primary,
+                color: tokens.colors.text.inverse,
                 border: 'none',
-                borderRadius: tokens.borderRadius.lg,
-                fontSize: tokens.typography.sizes.lg,
+                borderRadius: tokens.borderRadius.md,
+                fontSize: tokens.typography.sizes.base,
                 fontWeight: tokens.typography.weights.regular,
                 cursor: 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: tokens.spacing.sm,
-                transition: 'transform 0.2s'
+                transition: tokens.transitions.all,
+                boxShadow: tokens.shadows.sm,
               }}
-              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = `scale(${tokens.colors.state.hoverScale})`;
+                e.currentTarget.style.boxShadow = tokens.shadows.md;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.boxShadow = tokens.shadows.sm;
+              }}
             >
               Start Tomorrow
-              <ArrowRight size={20} />
+              <ArrowRight size={20} strokeWidth={1.5} />
             </button>
           </div>
         )}
@@ -340,12 +577,18 @@ export default function TodayView() {
         {todaysTasks.length === 0 && (
           <div style={{
             ...card.standard,
+            backgroundColor: tokens.colors.surface,
             textAlign: 'center',
-            padding: tokens.spacing['3xl']
+            padding: tokens.spacing['4xl'],
+            boxShadow: tokens.shadows.sm,
+            border: `1px solid ${tokens.colors.borderLight}`,
+            borderRadius: tokens.borderRadius.lg,
           }}>
             <p style={{
-              ...text.body,
-              color: tokens.colors.text.secondary
+              fontSize: tokens.typography.sizes.base,
+              fontWeight: tokens.typography.weights.light,
+              color: tokens.colors.text.secondary,
+              lineHeight: tokens.typography.lineHeights.relaxed
             }}>
               No tasks for today. Check back tomorrow!
             </p>

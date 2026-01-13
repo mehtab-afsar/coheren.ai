@@ -6,6 +6,7 @@ import { tokens, text, button, input as inputStyles } from '../design-system';
 import { generateInitialTasks } from '../utils/taskGenerator';
 import { detectCategory } from '../utils/categoryDetection';
 import { retrieveKnowledge, type UserContext } from '../rag';
+import { getOrCreateUser, createJourney, generateDayTasks } from '../api/client';
 import type { GoalCategory } from '../types';
 
 // Initialize Groq client
@@ -332,7 +333,20 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
       if (hasPersonalized && hasPlan) {
         console.log('✅ AI mentioned creating personalized plan! Setting aiMentionedPlan flag...');
         setAiMentionedPlan(true);
-        // The useEffect will handle triggering plan generation when all data is ready
+
+        // Direct trigger with delay to allow state to settle
+        setTimeout(() => {
+          console.log('⏰ Delayed plan trigger - checking if we should generate...');
+          // Access latest state via functional update pattern
+          setPlanGenerationTriggered(prev => {
+            if (!prev) {
+              console.log('🚀 Triggering plan generation directly from AI response handler!');
+              generateStrategicPlan();
+              return true;
+            }
+            return prev;
+          });
+        }, 1500);
       }
 
     } catch (error) {
@@ -353,35 +367,37 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
     console.log('📝 Extracting data from input:', input);
 
     // Extract name first (before goal, as name can be in early messages)
+    let nameExtracted = false;
     if (!collectedData.name) {
       // Match "I'm X", "my name is X", "call me X", or just a standalone name
       const nameMatch = input.match(/(?:i'?m|my name is|call me)\s+([a-z]+)/i);
       if (nameMatch) {
         console.log('👤 Extracted name (pattern match):', nameMatch[1]);
         setCollectedData(prev => ({ ...prev, name: nameMatch[1] }));
-        return; // Don't treat name introduction as goal
+        nameExtracted = true;
       }
 
       // If AI just asked "what's your name" and user responds with just a name
-      if (input.trim().length > 2 && input.trim().length < 20 && /^[a-z\s]+$/i.test(input.trim())) {
+      if (!nameExtracted && input.trim().length > 2 && input.trim().length < 20 && /^[a-z\s]+$/i.test(input.trim())) {
         // Check if previous AI message asked about name
         const lastAIMessage = messages.filter(m => m.role === 'ai').pop();
         if (lastAIMessage && lastAIMessage.content.toLowerCase().includes('name')) {
           console.log('👤 Extracted name (direct response):', input.trim());
           setCollectedData(prev => ({ ...prev, name: input.trim() }));
-          return;
+          nameExtracted = true;
         }
       }
     }
 
-    // Extract goal - but NOT from greetings or very short messages
+    // Extract goal - but NOT from greetings, introductions, or very short messages
     if (!collectedData.goal) {
       const isGreeting = /^(hi|hey|hello|yo|sup|what's up|hola|howdy|greetings)\.?$/i.test(input.trim());
       const isQuestion = /^(what|how|who|when|where|why)\s/i.test(input.trim());
       const isTooShort = input.trim().length < 4; // Reduced from 8 to allow "upsc", "jee" etc.
+      const isIntroduction = nameExtracted; // Don't use intro message as goal
 
-      // Only extract goal if it's substantive content (not greeting, not question, long enough)
-      if (!isGreeting && !isQuestion && !isTooShort) {
+      // Only extract goal if it's substantive content (not greeting, not question, not intro, long enough)
+      if (!isGreeting && !isQuestion && !isTooShort && !isIntroduction) {
         const category = detectCategory(input);
         console.log('🎯 Extracted goal:', input, '| Category:', category);
         setCollectedData(prev => ({ ...prev, goal: input, category }));
@@ -649,16 +665,39 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
       let strategicPlan;
       try {
         // Remove markdown code blocks if present
-        const jsonText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        let jsonText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+        // Try to extract JSON if there's extra text around it
+        const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          jsonText = jsonMatch[0];
+        }
+
         strategicPlan = JSON.parse(jsonText);
         console.log('✅ Successfully parsed strategic plan:', strategicPlan);
       } catch (parseError) {
         console.error('❌ JSON parse error:', parseError);
         console.log('📄 Full response:', responseText);
 
-        // If JSON parsing fails, use fallback roadmap
-        console.log('⚠️ Falling back to basic roadmap...');
-        throw new Error('Failed to parse strategic plan');
+        // Create a default strategic plan structure instead of throwing
+        console.log('⚠️ Creating default strategic plan structure...');
+        const totalWeeks = Math.ceil(durationInMonths * 4);
+        strategicPlan = {
+          totalWeeks,
+          duration: durationInMonths,
+          weekTemplates: Array.from({ length: Math.min(totalWeeks, 12) }, (_, i) => ({
+            weekNumber: i + 1,
+            focus: i < 3 ? 'Foundation' : i < 6 ? 'Development' : i < 9 ? 'Mastery' : 'Excellence',
+            description: i < 3 ? 'Build basic understanding' : i < 6 ? 'Strengthen core skills' : i < 9 ? 'Advanced practice' : 'Peak performance',
+            dailyTasks: Array.from({ length: 7 }, (_, d) => ({
+              dayOfWeek: d + 1,
+              practice: { title: `${category} practice session`, duration: practiceDuration },
+              learning: { title: `Learn ${category.toLowerCase()} concepts`, duration: learningDuration },
+              reflection: { title: 'Review and reflect', duration: reflectionDuration }
+            }))
+          }))
+        };
+        console.log('✅ Created default strategic plan:', strategicPlan);
       }
 
       // Update profile and goal
@@ -709,6 +748,41 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
       const initialTasks = generateInitialTasks(roadmap, checkInTime || '07:00');
       setTasks(initialTasks);
 
+      // === SYNC TO BACKEND ===
+      try {
+        // Auto-create user with name from conversation
+        await getOrCreateUser(collectedData.name);
+
+        // Create journey in backend
+        const backendJourney = await createJourney({
+          title: collectedData.goal,
+          category,
+          duration_months: strategicPlan.duration,
+          daily_time_minutes: dailyMinutes,
+          skill_level: collectedData.skillLevel as 'beginner' | 'intermediate' | 'advanced',
+          strategic_plan: strategicPlan,
+        });
+
+        console.log('✅ Journey saved to backend:', backendJourney.id);
+
+        // Generate Day 1 tasks in backend
+        await generateDayTasks(backendJourney.id, 1, initialTasks.map(t => ({
+          title: t.title,
+          description: t.description,
+          type: t.type,
+          duration: t.duration,
+        })));
+
+        console.log('✅ Day 1 tasks saved to backend');
+
+        // Store journey ID for later use
+        localStorage.setItem('coheren_journey_id', backendJourney.id);
+      } catch (backendError) {
+        // Backend sync failed, but local data is still valid
+        console.warn('⚠️ Backend sync failed (app will work offline):', backendError);
+      }
+      // === END BACKEND SYNC ===
+
       // Complete progress bar
       setGenerationProgress(100);
       setIsTyping(false);
@@ -757,6 +831,34 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
 
       const initialTasks = generateInitialTasks(fallbackRoadmap, checkInTime || '07:00');
       setTasks(initialTasks);
+
+      // === SYNC FALLBACK TO BACKEND ===
+      try {
+        await getOrCreateUser(collectedData.name);
+        const dailyMinutes = parseDailyTimeToMinutes(collectedData.dailyTime);
+
+        const backendJourney = await createJourney({
+          title: collectedData.goal,
+          category,
+          duration_months: 3,
+          daily_time_minutes: dailyMinutes,
+          skill_level: collectedData.skillLevel as 'beginner' | 'intermediate' | 'advanced',
+          strategic_plan: fallbackRoadmap,
+        });
+
+        await generateDayTasks(backendJourney.id, 1, initialTasks.map(t => ({
+          title: t.title,
+          description: t.description,
+          type: t.type,
+          duration: t.duration,
+        })));
+
+        localStorage.setItem('coheren_journey_id', backendJourney.id);
+        console.log('✅ Fallback journey saved to backend:', backendJourney.id);
+      } catch (backendError) {
+        console.warn('⚠️ Backend sync failed for fallback:', backendError);
+      }
+      // === END FALLBACK BACKEND SYNC ===
 
       console.log('✅ Fallback roadmap created, transitioning to dashboard...');
       setTimeout(() => setStep(7), 800);

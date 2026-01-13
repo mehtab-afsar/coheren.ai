@@ -104,8 +104,6 @@ export function detectCategory(goalText: string): GoalCategory {
     if (normalized.includes('everyday') || normalized.includes('daily')) {
       return 'Habit';
     }
-    // Don't default to Fitness - return null or ask user
-    console.warn('⚠️ No category detected for goal:', goalText);
   }
 
   return maxCategory;

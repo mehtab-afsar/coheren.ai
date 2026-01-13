@@ -53,8 +53,7 @@ Return ONLY the quote, no explanations or attribution.`;
         }, 800); // Wait for fade out animation
       }, 4000);
 
-    } catch (error) {
-      console.error('Error generating quote:', error);
+    } catch {
       setQuote("Every master was once a beginner. Your journey starts today.");
       setIsLoading(false);
       setFadeIn(true);

@@ -222,7 +222,6 @@ export const useStore = create<AppStore>()(
         const state = get();
 
         if (!state.roadmap) {
-          console.error('Cannot generate tasks: roadmap not set');
           return;
         }
 
@@ -238,11 +237,9 @@ export const useStore = create<AppStore>()(
           if (lastWeekPerformance.completionRate < 60) {
             // Struggling - reduce difficulty by 20%
             difficultyMultiplier = 0.8;
-            console.log(`Week ${nextWeek}: Reducing difficulty (${lastWeekPerformance.completionRate}% completion)`);
           } else if (lastWeekPerformance.completionRate > 90) {
             // Excelling - increase difficulty by 20%
             difficultyMultiplier = 1.2;
-            console.log(`Week ${nextWeek}: Increasing difficulty (${lastWeekPerformance.completionRate}% completion)`);
           }
         }
 

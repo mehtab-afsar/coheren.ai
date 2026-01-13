@@ -25,14 +25,12 @@ function parseDailyTimeToMinutes(dailyTime: string): number {
   const hourMatch = lower.match(/(\d+\.?\d*)\s*(hour|hr)s?/);
   if (hourMatch) {
     const hours = parseFloat(hourMatch[1]);
-    console.log(`⏰ Parsed daily time: ${dailyTime} = ${hours * 60} minutes`);
     return Math.round(hours * 60);
   }
 
   const minMatch = lower.match(/(\d+)\s*(minute|min)s?/);
   if (minMatch) {
     const minutes = parseInt(minMatch[1]);
-    console.log(`⏰ Parsed daily time: ${dailyTime} = ${minutes} minutes`);
     return minutes;
   }
 
@@ -55,7 +53,6 @@ function calculateDurationInMonths(timeline: string): number {
     const currentMonth = new Date().getMonth() + 1; // 1-12
     const yearsFromNow = targetYear - currentYear;
     const monthsFromYears = yearsFromNow * 12 - currentMonth;
-    console.log(`📅 Calculated duration: ${targetYear} is ${monthsFromYears} months from now`);
     return Math.max(1, monthsFromYears); // At least 1 month
   }
 
@@ -160,23 +157,8 @@ export default function ChatOnboarding() {
       collectedData.timeline
     );
 
-    console.log('📊 Data check in useEffect:', {
-      hasAllData,
-      aiMentionedPlan,
-      isGeneratingPlan,
-      planGenerationTriggered,
-      data: {
-        goal: !!collectedData.goal,
-        category: !!collectedData.category,
-        name: !!collectedData.name,
-        skillLevel: !!collectedData.skillLevel,
-        timeline: !!collectedData.timeline,
-      }
-    });
-
     // Trigger plan generation if all conditions met
     if (hasAllData && aiMentionedPlan && !isGeneratingPlan && !planGenerationTriggered) {
-      console.log('✅ All conditions met! Triggering plan generation from useEffect...');
       setPlanGenerationTriggered(true);
       setTimeout(() => {
         generateStrategicPlan();
@@ -308,7 +290,6 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
       });
 
       const aiResponse = completion.choices[0]?.message?.content || "Tell me more!";
-      console.log('🤖 AI Response:', aiResponse);
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -324,23 +305,13 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
       const hasPersonalized = aiResponse.toLowerCase().includes('personalized');
       const hasPlan = aiResponse.toLowerCase().includes('plan') || aiResponse.toLowerCase().includes('strategic');
 
-      console.log('🔍 Plan trigger check:', {
-        hasPersonalized,
-        hasPlan,
-        shouldTrigger: hasPersonalized && hasPlan,
-      });
-
       if (hasPersonalized && hasPlan) {
-        console.log('✅ AI mentioned creating personalized plan! Setting aiMentionedPlan flag...');
         setAiMentionedPlan(true);
 
         // Direct trigger with delay to allow state to settle
         setTimeout(() => {
-          console.log('⏰ Delayed plan trigger - checking if we should generate...');
-          // Access latest state via functional update pattern
           setPlanGenerationTriggered(prev => {
             if (!prev) {
-              console.log('🚀 Triggering plan generation directly from AI response handler!');
               generateStrategicPlan();
               return true;
             }
@@ -349,8 +320,8 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
         }, 1500);
       }
 
-    } catch (error) {
-      console.error('Groq error:', error);
+    } catch {
+      // Handle Groq API error silently
       const fallbackMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'ai',
@@ -364,7 +335,6 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
 
   const extractDataFromInput = (input: string) => {
     const lower = input.toLowerCase();
-    console.log('📝 Extracting data from input:', input);
 
     // Extract name first (before goal, as name can be in early messages)
     let nameExtracted = false;
@@ -372,7 +342,6 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
       // Match "I'm X", "my name is X", "call me X", or just a standalone name
       const nameMatch = input.match(/(?:i'?m|my name is|call me)\s+([a-z]+)/i);
       if (nameMatch) {
-        console.log('👤 Extracted name (pattern match):', nameMatch[1]);
         setCollectedData(prev => ({ ...prev, name: nameMatch[1] }));
         nameExtracted = true;
       }
@@ -382,7 +351,6 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
         // Check if previous AI message asked about name
         const lastAIMessage = messages.filter(m => m.role === 'ai').pop();
         if (lastAIMessage && lastAIMessage.content.toLowerCase().includes('name')) {
-          console.log('👤 Extracted name (direct response):', input.trim());
           setCollectedData(prev => ({ ...prev, name: input.trim() }));
           nameExtracted = true;
         }
@@ -399,7 +367,6 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
       // Only extract goal if it's substantive content (not greeting, not question, not intro, long enough)
       if (!isGreeting && !isQuestion && !isTooShort && !isIntroduction) {
         const category = detectCategory(input);
-        console.log('🎯 Extracted goal:', input, '| Category:', category);
         setCollectedData(prev => ({ ...prev, goal: input, category }));
       }
     }
@@ -410,17 +377,14 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
       if (lower.includes('beginner') || lower.includes('beginer') || lower.includes('begin') ||
           lower.includes('never') || lower.includes('starting fresh') || lower.includes('complete novice') ||
           lower.includes('just start') || lower.includes('from scratch')) {
-        console.log('💪 Extracted skill level: beginner');
         setCollectedData(prev => ({ ...prev, skillLevel: 'beginner' }));
       } else if (lower.includes('intermediate') || lower.includes('intermediat') ||
                  lower.includes('some experience') || lower.includes('used to') ||
                  lower.includes('done before') || lower.includes('tried')) {
-        console.log('💪 Extracted skill level: intermediate');
         setCollectedData(prev => ({ ...prev, skillLevel: 'intermediate' }));
       } else if (lower.includes('advanced') || lower.includes('advanc') ||
                  lower.includes('experienced') || lower.includes('expert') ||
                  lower.includes('good at') || lower.includes('pro')) {
-        console.log('💪 Extracted skill level: advanced');
         setCollectedData(prev => ({ ...prev, skillLevel: 'advanced' }));
       }
     }
@@ -460,19 +424,16 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
 
       if (timelineMatch) {
         const target = timelineMatch[0];
-        console.log('📅 Extracted timeline:', target);
         setCollectedData(prev => ({ ...prev, timeline: { target, milestones: [] } }));
       } else if (/^\d{4}$/.test(input.trim())) {
         // Just a year like "2027"
         const year = input.trim();
-        console.log('📅 Extracted year as timeline:', year);
         setCollectedData(prev => ({ ...prev, timeline: { target: `by ${year}`, milestones: [] } }));
       }
 
       // Extract milestones like "run 5k", "read 6 books", "finish 10 chapters"
       const milestoneMatch = input.match(/(\d+)\s+(book|chapter|km|mile|page|hour|level|lesson)s?/gi);
       if (milestoneMatch && collectedData.timeline) {
-        console.log('🎯 Extracted milestones:', milestoneMatch);
         setCollectedData(prev => ({
           ...prev,
           timeline: prev.timeline
@@ -502,7 +463,6 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
     if (!collectedData.dailyTime && (lower.includes('minute') || lower.includes('hour') || lower.includes('hr') || /\d+\s*min/i.test(input))) {
       const timeMatch = input.match(/(\d+)\s*(minute|min|hour|hr)s?/i);
       if (timeMatch) {
-        console.log('⏰ Extracted daily time:', timeMatch[0]);
         setCollectedData(prev => ({ ...prev, dailyTime: timeMatch[0] }));
       }
     }
@@ -511,13 +471,11 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
   const generateStrategicPlan = async () => {
     // Prevent multiple calls
     if (isGeneratingPlan) {
-      console.log('Plan generation already in progress, skipping...');
       return;
     }
 
-    // NEVER proceed without a category - this should never happen with proper conversation flow
+    // NEVER proceed without a category
     if (!collectedData.category) {
-      console.error('Cannot generate plan without category');
       return;
     }
 
@@ -526,9 +484,6 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
 
     const category = collectedData.category;
     const energyPattern = collectedData.energyPattern as 'morning' | 'afternoon' | 'evening' | 'night';
-
-    console.log('🎯 Creating plan with category:', category);
-    console.log('📋 Full collected data:', collectedData);
 
     // Show loading message
     const loadingMessage: Message = {
@@ -563,9 +518,6 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
       const practiceDuration = Math.round(dailyMinutes * 0.50); // 50% for practice
       const learningDuration = Math.round(dailyMinutes * 0.35); // 35% for learning
       const reflectionDuration = Math.round(dailyMinutes * 0.15); // 15% for reflection
-
-      console.log(`📊 Duration calculation: ${collectedData.timeline?.target} = ${durationInMonths} months = ${totalWeeks} weeks`);
-      console.log(`⏰ Daily time: ${collectedData.dailyTime} = ${dailyMinutes} minutes (Practice: ${practiceDuration}, Learning: ${learningDuration}, Reflection: ${reflectionDuration})`);
 
       // Build strategic plan prompt for Groq with science-backed approach
       const planPrompt = `You are a JSON API. Return ONLY valid JSON, no explanations.
@@ -649,7 +601,6 @@ CRITICAL: Each day's tasks should total approximately ${dailyMinutes} minutes. U
 
 Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 easy for ${collectedData.skillLevel} level. Make all tasks specific to ${category} and the goal "${collectedData.goal}".`;
 
-      console.log('🚀 Calling Groq API to generate strategic plan...');
       const completion = await groq.chat.completions.create({
         messages: [{ role: 'user', content: planPrompt }],
         model: 'llama-3.3-70b-versatile',
@@ -658,8 +609,6 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
       });
 
       const responseText = completion.choices[0]?.message?.content || '';
-      console.log('📦 Groq API response length:', responseText.length, 'characters');
-      console.log('📦 Response preview:', responseText.substring(0, 200));
 
       // Parse JSON response
       let strategicPlan;
@@ -674,13 +623,8 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
         }
 
         strategicPlan = JSON.parse(jsonText);
-        console.log('✅ Successfully parsed strategic plan:', strategicPlan);
-      } catch (parseError) {
-        console.error('❌ JSON parse error:', parseError);
-        console.log('📄 Full response:', responseText);
-
-        // Create a default strategic plan structure instead of throwing
-        console.log('⚠️ Creating default strategic plan structure...');
+      } catch {
+        // Create a default strategic plan structure on parse failure
         const totalWeeks = Math.ceil(durationInMonths * 4);
         strategicPlan = {
           totalWeeks,
@@ -697,7 +641,6 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
             }))
           }))
         };
-        console.log('✅ Created default strategic plan:', strategicPlan);
       }
 
       // Update profile and goal
@@ -763,8 +706,6 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
           strategic_plan: strategicPlan,
         });
 
-        console.log('✅ Journey saved to backend:', backendJourney.id);
-
         // Generate Day 1 tasks in backend
         await generateDayTasks(backendJourney.id, 1, initialTasks.map(t => ({
           title: t.title,
@@ -773,13 +714,10 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
           duration: t.duration,
         })));
 
-        console.log('✅ Day 1 tasks saved to backend');
-
         // Store journey ID for later use
         localStorage.setItem('coheren_journey_id', backendJourney.id);
-      } catch (backendError) {
-        // Backend sync failed, but local data is still valid
-        console.warn('⚠️ Backend sync failed (app will work offline):', backendError);
+      } catch {
+        // Backend sync failed, but local data is still valid - app works offline
       }
       // === END BACKEND SYNC ===
 
@@ -790,9 +728,8 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
       // Wait a moment to show 100% completion, then transition
       setTimeout(() => setStep(7), 800);
 
-    } catch (error) {
-      console.error('❌ Strategic plan generation error:', error);
-      console.log('🔄 Using fallback roadmap...');
+    } catch {
+      // Handle plan generation error - use fallback
       setIsTyping(false);
       setGenerationProgress(100); // Complete progress bar even on error
 
@@ -854,13 +791,11 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
         })));
 
         localStorage.setItem('coheren_journey_id', backendJourney.id);
-        console.log('✅ Fallback journey saved to backend:', backendJourney.id);
-      } catch (backendError) {
-        console.warn('⚠️ Backend sync failed for fallback:', backendError);
+      } catch {
+        // Backend sync failed for fallback - app works offline
       }
       // === END FALLBACK BACKEND SYNC ===
 
-      console.log('✅ Fallback roadmap created, transitioning to dashboard...');
       setTimeout(() => setStep(7), 800);
     }
   };
@@ -1086,7 +1021,7 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
               type="text"
               value={userInput}
               onChange={(e) => setUserInput(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={handleKeyPress}
               placeholder={planGenerationTriggered ? "Generating your plan..." : "Type your message..."}
               disabled={isTyping || planGenerationTriggered}
               autoFocus

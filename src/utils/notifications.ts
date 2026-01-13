@@ -34,7 +34,6 @@ export function getNotificationPermission(): NotificationPermissionState {
  */
 export async function requestNotificationPermission(): Promise<boolean> {
   if (!isNotificationSupported()) {
-    console.warn('Notifications not supported');
     return false;
   }
 
@@ -49,8 +48,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
   try {
     const permission = await Notification.requestPermission();
     return permission === 'granted';
-  } catch (error) {
-    console.error('Error requesting notification permission:', error);
+  } catch {
     return false;
   }
 }
@@ -60,7 +58,6 @@ export async function requestNotificationPermission(): Promise<boolean> {
  */
 export function showNotification(title: string, options?: NotificationOptions): void {
   if (!isNotificationSupported() || Notification.permission !== 'granted') {
-    console.warn('Cannot show notification: permission not granted');
     return;
   }
 
@@ -78,8 +75,8 @@ export function showNotification(title: string, options?: NotificationOptions): 
       window.focus();
       notification.close();
     };
-  } catch (error) {
-    console.error('Error showing notification:', error);
+  } catch {
+    // Silently handle notification errors
   }
 }
 

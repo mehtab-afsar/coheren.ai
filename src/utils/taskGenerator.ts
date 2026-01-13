@@ -336,7 +336,6 @@ export function generateTasksForDay(
  */
 export function generateTasksFromAIPlan(roadmap: any, day: number, checkInTime: string): Task[] {
   if (!roadmap.strategicPlan?.weekTemplates) {
-    console.log('⚠️ No AI plan found, falling back to templates');
     return generateTasksForDay(roadmap.category, day, checkInTime);
   }
 
@@ -349,7 +348,6 @@ export function generateTasksFromAIPlan(roadmap: any, day: number, checkInTime: 
   ) || roadmap.strategicPlan.weekTemplates[0];
 
   if (!weekTemplate?.dailyTasks) {
-    console.log('⚠️ No daily tasks in AI plan, falling back to templates');
     return generateTasksForDay(roadmap.category, day, checkInTime);
   }
 
@@ -357,8 +355,6 @@ export function generateTasksFromAIPlan(roadmap: any, day: number, checkInTime: 
   const dayTasks = weekTemplate.dailyTasks.find(
     (d: any) => d.dayOfWeek === dayOfWeek
   ) || weekTemplate.dailyTasks[0];
-
-  console.log(`✅ Using AI-generated tasks for Week ${weekNumber}, Day ${dayOfWeek}`);
 
   // Convert AI plan format to Task format
   const tasks: Task[] = [];

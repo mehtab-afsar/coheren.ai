@@ -1,4 +1,4 @@
-import { User, Clock, Bell, Trash2, Sunrise, Calendar, Target, Palette, Moon, Sun } from 'lucide-react';
+import { User, Clock, Bell, Trash2, Sunrise, Target, Palette, Moon, Sun } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { tokens, text, card } from '../../design-system';
 import { useState } from 'react';
@@ -13,17 +13,26 @@ export default function SettingsView() {
     roadmap,
   } = useStore();
 
-  const [editMode, setEditMode] = useState(false);
+  const [editingCard, setEditingCard] = useState<string | null>(null);
   const [tempName, setTempName] = useState(universalProfile.name || '');
   const [tempCheckInTime, setTempCheckInTime] = useState(checkInTime);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
-  const handleSaveProfile = () => {
-    if (tempName.trim()) {
-      updateUniversalProfile({ name: tempName.trim() });
+  const handleSaveCard = (cardType: string) => {
+    if (cardType === 'name') {
+      if (tempName.trim()) {
+        updateUniversalProfile({ name: tempName.trim() });
+      }
+    } else if (cardType === 'checkin') {
+      setCheckInTime(tempCheckInTime);
     }
-    setCheckInTime(tempCheckInTime);
-    setEditMode(false);
+    setEditingCard(null);
+  };
+
+  const handleCancelEdit = () => {
+    setTempName(universalProfile.name || '');
+    setTempCheckInTime(checkInTime);
+    setEditingCard(null);
   };
 
   const handleReset = () => {
@@ -37,20 +46,37 @@ export default function SettingsView() {
         Settings
       </h1>
 
-      {/* Quick Stats - Like Today Page */}
+      {/* Quick Stats Grid - 3 rows x 2 columns */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
+        gridTemplateColumns: 'repeat(2, 1fr)',
         gap: tokens.spacing.lg,
         marginBottom: tokens.spacing['3xl']
       }}>
+        {/* Row 1 - Profile & Check-in */}
         {/* Profile Card */}
-        <div style={{
-          ...card.standard,
-          backgroundColor: tokens.colors.surface,
-          padding: tokens.spacing.lg,
-          transition: tokens.transitions.all,
-        }}>
+        <div
+          style={{
+            ...card.standard,
+            backgroundColor: tokens.colors.surface,
+            padding: tokens.spacing.lg,
+            transition: tokens.transitions.all,
+            cursor: editingCard ? 'default' : 'pointer',
+          }}
+          onClick={() => !editingCard && setEditingCard('name')}
+          onMouseEnter={(e) => {
+            if (!editingCard) {
+              e.currentTarget.style.borderColor = tokens.colors.primary;
+              e.currentTarget.style.transform = `scale(${tokens.colors.state.hoverScale})`;
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!editingCard) {
+              e.currentTarget.style.borderColor = tokens.colors.borderLight;
+              e.currentTarget.style.transform = 'scale(1)';
+            }
+          }}
+        >
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -62,35 +88,112 @@ export default function SettingsView() {
               ...text.caption,
               color: tokens.colors.text.secondary,
               fontWeight: tokens.typography.weights.regular
-            }}>Profile</span>
+            }}>Your Name</span>
           </div>
-          <div style={{
-            fontSize: tokens.typography.sizes.lg,
-            fontWeight: tokens.typography.weights.regular,
-            color: tokens.colors.text.primary,
-            marginBottom: tokens.spacing.xs,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis'
-          }}>
-            {universalProfile.name || 'Not set'}
-          </div>
-          <div style={{
-            ...text.caption,
-            fontSize: tokens.typography.sizes.sm,
-            color: tokens.colors.text.tertiary,
-          }}>
-            your name
-          </div>
+
+          {editingCard === 'name' ? (
+            <div onClick={(e) => e.stopPropagation()}>
+              <input
+                autoFocus
+                type="text"
+                value={tempName}
+                onChange={(e) => setTempName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveCard('name');
+                  if (e.key === 'Escape') handleCancelEdit();
+                }}
+                style={{
+                  width: '100%',
+                  fontSize: tokens.typography.sizes.lg,
+                  fontWeight: tokens.typography.weights.regular,
+                  padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`,
+                  border: `1px solid ${tokens.colors.primary}`,
+                  borderRadius: tokens.borderRadius.sm,
+                  backgroundColor: tokens.colors.surface,
+                  marginBottom: tokens.spacing.sm,
+                }}
+                placeholder="Enter your name"
+              />
+              <div style={{ display: 'flex', gap: tokens.spacing.xs }}>
+                <button
+                  onClick={() => handleSaveCard('name')}
+                  style={{
+                    flex: 1,
+                    padding: tokens.spacing.xs,
+                    fontSize: tokens.typography.sizes.sm,
+                    backgroundColor: tokens.colors.primary,
+                    color: tokens.colors.text.inverse,
+                    border: 'none',
+                    borderRadius: tokens.borderRadius.sm,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Save
+                </button>
+                <button
+                  onClick={handleCancelEdit}
+                  style={{
+                    flex: 1,
+                    padding: tokens.spacing.xs,
+                    fontSize: tokens.typography.sizes.sm,
+                    backgroundColor: 'transparent',
+                    color: tokens.colors.text.secondary,
+                    border: `1px solid ${tokens.colors.borderLight}`,
+                    borderRadius: tokens.borderRadius.sm,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div style={{
+                fontSize: tokens.typography.sizes.lg,
+                fontWeight: tokens.typography.weights.regular,
+                color: tokens.colors.text.primary,
+                marginBottom: tokens.spacing.xs,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+              }}>
+                {universalProfile.name || 'Click to set'}
+              </div>
+              <div style={{
+                ...text.caption,
+                fontSize: tokens.typography.sizes.sm,
+                color: tokens.colors.text.tertiary,
+              }}>
+                click to edit
+              </div>
+            </>
+          )}
         </div>
 
         {/* Check-in Time Card */}
-        <div style={{
-          ...card.standard,
-          backgroundColor: tokens.colors.surface,
-          padding: tokens.spacing.lg,
-          transition: tokens.transitions.all,
-        }}>
+        <div
+          style={{
+            ...card.standard,
+            backgroundColor: tokens.colors.surface,
+            padding: tokens.spacing.lg,
+            transition: tokens.transitions.all,
+            cursor: editingCard ? 'default' : 'pointer',
+          }}
+          onClick={() => !editingCard && setEditingCard('checkin')}
+          onMouseEnter={(e) => {
+            if (!editingCard) {
+              e.currentTarget.style.borderColor = tokens.colors.primary;
+              e.currentTarget.style.transform = `scale(${tokens.colors.state.hoverScale})`;
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!editingCard) {
+              e.currentTarget.style.borderColor = tokens.colors.borderLight;
+              e.currentTarget.style.transform = 'scale(1)';
+            }
+          }}
+        >
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -102,26 +205,87 @@ export default function SettingsView() {
               ...text.caption,
               color: tokens.colors.text.secondary,
               fontWeight: tokens.typography.weights.regular
-            }}>Check-in</span>
+            }}>Daily Check-in</span>
           </div>
-          <div style={{
-            fontSize: tokens.typography.sizes.lg,
-            fontWeight: tokens.typography.weights.regular,
-            color: tokens.colors.text.primary,
-            marginBottom: tokens.spacing.xs
-          }}>
-            {checkInTime}
-          </div>
-          <div style={{
-            ...text.caption,
-            fontSize: tokens.typography.sizes.sm,
-            color: tokens.colors.text.tertiary,
-          }}>
-            daily reminder
-          </div>
+
+          {editingCard === 'checkin' ? (
+            <div onClick={(e) => e.stopPropagation()}>
+              <input
+                autoFocus
+                type="time"
+                value={tempCheckInTime}
+                onChange={(e) => setTempCheckInTime(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveCard('checkin');
+                  if (e.key === 'Escape') handleCancelEdit();
+                }}
+                style={{
+                  width: '100%',
+                  fontSize: tokens.typography.sizes.lg,
+                  fontWeight: tokens.typography.weights.regular,
+                  padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`,
+                  border: `1px solid ${tokens.colors.primary}`,
+                  borderRadius: tokens.borderRadius.sm,
+                  backgroundColor: tokens.colors.surface,
+                  marginBottom: tokens.spacing.sm,
+                }}
+              />
+              <div style={{ display: 'flex', gap: tokens.spacing.xs }}>
+                <button
+                  onClick={() => handleSaveCard('checkin')}
+                  style={{
+                    flex: 1,
+                    padding: tokens.spacing.xs,
+                    fontSize: tokens.typography.sizes.sm,
+                    backgroundColor: tokens.colors.primary,
+                    color: tokens.colors.text.inverse,
+                    border: 'none',
+                    borderRadius: tokens.borderRadius.sm,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Save
+                </button>
+                <button
+                  onClick={handleCancelEdit}
+                  style={{
+                    flex: 1,
+                    padding: tokens.spacing.xs,
+                    fontSize: tokens.typography.sizes.sm,
+                    backgroundColor: 'transparent',
+                    color: tokens.colors.text.secondary,
+                    border: `1px solid ${tokens.colors.borderLight}`,
+                    borderRadius: tokens.borderRadius.sm,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div style={{
+                fontSize: tokens.typography.sizes.lg,
+                fontWeight: tokens.typography.weights.regular,
+                color: tokens.colors.text.primary,
+                marginBottom: tokens.spacing.xs
+              }}>
+                {checkInTime}
+              </div>
+              <div style={{
+                ...text.caption,
+                fontSize: tokens.typography.sizes.sm,
+                color: tokens.colors.text.tertiary,
+              }}>
+                click to edit
+              </div>
+            </>
+          )}
         </div>
 
-        {/* Energy Pattern Card */}
+        {/* Row 2 - Energy & Daily Time */}
+        {/* Energy Pattern Card - Read Only */}
         <div style={{
           ...card.standard,
           backgroundColor: tokens.colors.surface,
@@ -145,7 +309,7 @@ export default function SettingsView() {
               ...text.caption,
               color: tokens.colors.text.secondary,
               fontWeight: tokens.typography.weights.regular
-            }}>Energy</span>
+            }}>Energy Pattern</span>
           </div>
           <div style={{
             fontSize: tokens.typography.sizes.lg,
@@ -165,7 +329,7 @@ export default function SettingsView() {
           </div>
         </div>
 
-        {/* Daily Time Card */}
+        {/* Daily Time Card - Read Only */}
         <div style={{
           ...card.standard,
           backgroundColor: tokens.colors.surface,
@@ -183,7 +347,7 @@ export default function SettingsView() {
               ...text.caption,
               color: tokens.colors.text.secondary,
               fontWeight: tokens.typography.weights.regular
-            }}>Daily Time</span>
+            }}>Daily Commitment</span>
           </div>
           <div style={{
             fontSize: tokens.typography.sizes.lg,
@@ -201,103 +365,79 @@ export default function SettingsView() {
             commitment
           </div>
         </div>
+
+        {/* Row 3 - Notifications & Appearance */}
+        {/* Notifications Card */}
+        <div style={{
+          ...card.standard,
+          backgroundColor: tokens.colors.surface,
+          padding: tokens.spacing.lg,
+          transition: tokens.transitions.all,
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: tokens.spacing.sm,
+            marginBottom: tokens.spacing.md
+          }}>
+            <Bell size={18} strokeWidth={1.5} color={tokens.colors.text.secondary} />
+            <span style={{
+              ...text.caption,
+              color: tokens.colors.text.secondary,
+              fontWeight: tokens.typography.weights.regular
+            }}>Notifications</span>
+          </div>
+          <div style={{
+            fontSize: tokens.typography.sizes.sm,
+            fontWeight: tokens.typography.weights.light,
+            color: tokens.colors.text.secondary,
+            lineHeight: tokens.typography.lineHeights.relaxed,
+          }}>
+            Enable in browser settings for daily reminders
+          </div>
+        </div>
+
+        {/* Appearance Card */}
+        <div style={{
+          ...card.standard,
+          backgroundColor: tokens.colors.surface,
+          padding: tokens.spacing.lg,
+          transition: tokens.transitions.all,
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: tokens.spacing.sm,
+            marginBottom: tokens.spacing.md
+          }}>
+            <Palette size={18} strokeWidth={1.5} color={tokens.colors.text.secondary} />
+            <span style={{
+              ...text.caption,
+              color: tokens.colors.text.secondary,
+              fontWeight: tokens.typography.weights.regular
+            }}>Appearance</span>
+          </div>
+          <div style={{
+            fontSize: tokens.typography.sizes.sm,
+            fontWeight: tokens.typography.weights.light,
+            color: tokens.colors.text.secondary,
+            lineHeight: tokens.typography.lineHeights.relaxed,
+          }}>
+            Light mode • Dark mode coming soon
+          </div>
+        </div>
       </div>
 
-      {/* Edit Profile Section */}
+      {/* Additional Profile Details - Read Only */}
       <div style={card.standard}>
         <h2 style={{ ...text.h3, marginBottom: tokens.spacing.lg }}>
-          Account Settings
+          Profile Details
         </h2>
 
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1fr 1fr',
           gap: tokens.spacing.xl
-        }}>
-          {/* Name */}
-          <div>
-            <label style={{
-              ...text.caption,
-              color: tokens.colors.text.secondary,
-              display: 'block',
-              marginBottom: tokens.spacing.sm
-            }}>
-              Your Name
-            </label>
-            {editMode ? (
-              <input
-                type="text"
-                value={tempName}
-                onChange={(e) => setTempName(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: tokens.spacing.md,
-                  border: `1px solid ${tokens.colors.borderLight}`,
-                  borderRadius: tokens.borderRadius.md,
-                  fontSize: tokens.typography.sizes.md,
-                  fontFamily: tokens.typography.fontFamily.primary,
-                  backgroundColor: tokens.colors.surface,
-                }}
-                placeholder="Enter your name"
-              />
-            ) : (
-              <p style={{
-                ...text.body,
-                padding: tokens.spacing.md,
-                backgroundColor: tokens.colors.gray[50],
-                borderRadius: tokens.borderRadius.md,
-                margin: 0
-              }}>
-                {universalProfile.name || 'Not set'}
-              </p>
-            )}
-          </div>
-
-          {/* Check-in Time */}
-          <div>
-            <label style={{
-              ...text.caption,
-              color: tokens.colors.text.secondary,
-              display: 'block',
-              marginBottom: tokens.spacing.sm
-            }}>
-              Daily Check-in Time
-            </label>
-            {editMode ? (
-              <input
-                type="time"
-                value={tempCheckInTime}
-                onChange={(e) => setTempCheckInTime(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: tokens.spacing.md,
-                  border: `1px solid ${tokens.colors.borderLight}`,
-                  borderRadius: tokens.borderRadius.md,
-                  fontSize: tokens.typography.sizes.md,
-                  fontFamily: tokens.typography.fontFamily.primary,
-                  backgroundColor: tokens.colors.surface,
-                }}
-              />
-            ) : (
-              <p style={{
-                ...text.body,
-                padding: tokens.spacing.md,
-                backgroundColor: tokens.colors.gray[50],
-                borderRadius: tokens.borderRadius.md,
-                margin: 0
-              }}>
-                {checkInTime}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Wake Time & Weekend - Read Only */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: tokens.spacing.xl,
-          marginTop: tokens.spacing.lg
         }}>
           <div>
             <label style={{
@@ -340,159 +480,6 @@ export default function SettingsView() {
             }}>
               {universalProfile.weekendAvailability || 'Not set'}
             </p>
-          </div>
-        </div>
-
-        {/* Edit/Save Buttons */}
-        <div style={{ marginTop: tokens.spacing.xl, display: 'flex', gap: tokens.spacing.md }}>
-          {editMode ? (
-            <>
-              <button
-                onClick={handleSaveProfile}
-                style={{
-                  padding: `${tokens.spacing.md} ${tokens.spacing.xl}`,
-                  backgroundColor: tokens.colors.primary,
-                  color: tokens.colors.text.inverse,
-                  border: 'none',
-                  borderRadius: tokens.borderRadius.md,
-                  fontSize: tokens.typography.sizes.base,
-                  fontWeight: tokens.typography.weights.regular,
-                  cursor: 'pointer',
-                  transition: tokens.transitions.all,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = tokens.colors.primaryHover;
-                  e.currentTarget.style.transform = `scale(${tokens.colors.state.hoverScale})`;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = tokens.colors.primary;
-                  e.currentTarget.style.transform = 'scale(1)';
-                }}
-              >
-                Save Changes
-              </button>
-              <button
-                onClick={() => {
-                  setEditMode(false);
-                  setTempName(universalProfile.name || '');
-                  setTempCheckInTime(checkInTime);
-                }}
-                style={{
-                  padding: `${tokens.spacing.md} ${tokens.spacing.xl}`,
-                  backgroundColor: 'transparent',
-                  color: tokens.colors.text.secondary,
-                  border: `1px solid ${tokens.colors.borderLight}`,
-                  borderRadius: tokens.borderRadius.md,
-                  fontSize: tokens.typography.sizes.base,
-                  fontWeight: tokens.typography.weights.regular,
-                  cursor: 'pointer',
-                  transition: tokens.transitions.all,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = tokens.colors.state.hover;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }}
-              >
-                Cancel
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={() => setEditMode(true)}
-              style={{
-                padding: `${tokens.spacing.md} ${tokens.spacing.xl}`,
-                backgroundColor: tokens.colors.surface,
-                color: tokens.colors.text.primary,
-                border: `1px solid ${tokens.colors.borderLight}`,
-                borderRadius: tokens.borderRadius.md,
-                fontSize: tokens.typography.sizes.base,
-                fontWeight: tokens.typography.weights.regular,
-                cursor: 'pointer',
-                transition: tokens.transitions.all,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = tokens.colors.state.hover;
-                e.currentTarget.style.borderColor = tokens.colors.primary;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = tokens.colors.surface;
-                e.currentTarget.style.borderColor = tokens.colors.borderLight;
-              }}
-            >
-              Edit Settings
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Preferences Section */}
-      <div style={{
-        ...card.standard,
-        marginTop: tokens.spacing.xl
-      }}>
-        <h2 style={{ ...text.h3, marginBottom: tokens.spacing.lg }}>
-          Preferences
-        </h2>
-
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: tokens.spacing.lg
-        }}>
-          {/* Notifications */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: tokens.spacing.lg,
-            padding: tokens.spacing.lg,
-            backgroundColor: tokens.colors.gray[50],
-            borderRadius: tokens.borderRadius.md,
-          }}>
-            <Bell size={24} strokeWidth={1.5} color={tokens.colors.text.secondary} />
-            <div style={{ flex: 1 }}>
-              <h3 style={{
-                ...text.h4,
-                marginBottom: tokens.spacing.sm
-              }}>
-                Daily Reminders
-              </h3>
-              <p style={{
-                ...text.bodySmall,
-                color: tokens.colors.text.secondary,
-                margin: 0
-              }}>
-                Enable browser notifications to receive check-in reminders at your preferred time.
-              </p>
-            </div>
-          </div>
-
-          {/* Theme (Placeholder for future) */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: tokens.spacing.lg,
-            padding: tokens.spacing.lg,
-            backgroundColor: tokens.colors.gray[50],
-            borderRadius: tokens.borderRadius.md,
-          }}>
-            <Palette size={24} strokeWidth={1.5} color={tokens.colors.text.secondary} />
-            <div style={{ flex: 1 }}>
-              <h3 style={{
-                ...text.h4,
-                marginBottom: tokens.spacing.sm
-              }}>
-                Appearance
-              </h3>
-              <p style={{
-                ...text.bodySmall,
-                color: tokens.colors.text.secondary,
-                margin: 0
-              }}>
-                Theme customization coming soon. Currently using light mode.
-              </p>
-            </div>
           </div>
         </div>
       </div>

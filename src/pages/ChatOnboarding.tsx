@@ -8,6 +8,7 @@ import { detectCategory } from '../utils/categoryDetection';
 import { retrieveKnowledge, type UserContext } from '../rag';
 import { getOrCreateUser, createJourney, generateDayTasks } from '../api/client';
 import type { GoalCategory } from '../types';
+import LoadingAnimation from '../components/LoadingAnimation';
 
 // Initialize Groq client
 const groq = new Groq({
@@ -881,24 +882,32 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(255, 252, 249, 0.95)',
-          backdropFilter: 'blur(8px)',
+          backgroundColor: 'rgba(255, 252, 249, 0.98)',
+          backdropFilter: 'blur(12px)',
           zIndex: 1000,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: tokens.spacing['2xl'],
+          gap: tokens.spacing['3xl'],
         }}>
-          {/* Loading Icon */}
-          <div style={{
-            animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-          }}>
-            <Sparkles size={48} strokeWidth={1.5} color={tokens.colors.primary} />
-          </div>
+          {/* Logo */}
+          <img
+            src="/logo.png"
+            alt="Coheren AI"
+            style={{
+              width: '120px',
+              height: '120px',
+              objectFit: 'contain',
+              marginBottom: tokens.spacing.lg,
+            }}
+          />
+
+          {/* Loading Animation */}
+          <LoadingAnimation size="large" />
 
           {/* Loading Text */}
-          <div style={{ textAlign: 'center', maxWidth: '500px' }}>
+          <div style={{ textAlign: 'center', maxWidth: '500px', marginTop: tokens.spacing.lg }}>
             <h3 style={{
               fontSize: tokens.typography.sizes.xl,
               fontWeight: tokens.typography.weights.regular,
@@ -947,27 +956,43 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
       {/* Hero Section */}
       <div style={{
         textAlign: 'center',
-        padding: `${tokens.spacing['3xl']} ${tokens.spacing.xl}`,
+        padding: `${tokens.spacing['3xl']} ${tokens.spacing.xl} ${tokens.spacing.lg} ${tokens.spacing.xl}`,
         borderBottom: `1px solid ${tokens.colors.gray[200]}`,
         position: 'relative',
         zIndex: 1,
       }}>
-        <div style={{ marginBottom: tokens.spacing.md }}>
-          <h1 style={text.display}>Coheren</h1>
-          <div style={{
-            height: '1px',
-            width: '96px',
-            backgroundColor: tokens.colors.primary,
-            margin: '0 auto',
-          }} />
-        </div>
-        <p style={{
-          ...text.h3,
-          color: tokens.colors.text.secondary,
-          fontWeight: tokens.typography.weights.light,
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 0,
         }}>
-          Your AI-powered goal coach
-        </p>
+          <h1 style={text.display}>Coheren</h1>
+          <img
+            src="/logo.png"
+            alt="Coheren AI Logo"
+            style={{
+              width: '220px',
+              height: '220px',
+              objectFit: 'contain',
+              userSelect: 'none',
+              pointerEvents: 'none',
+              WebkitUserSelect: 'none',
+              MozUserSelect: 'none',
+              msUserSelect: 'none',
+              marginTop: '-80px',
+            }}
+            draggable="false"
+          />
+          <p style={{
+            ...text.h3,
+            color: tokens.colors.text.secondary,
+            fontWeight: tokens.typography.weights.light,
+            marginTop: '-80px',
+          }}>
+            Your AI-powered goal coach
+          </p>
+        </div>
       </div>
 
       {/* Chat Container */}

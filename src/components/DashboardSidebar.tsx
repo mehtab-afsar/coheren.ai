@@ -91,28 +91,45 @@ export default function DashboardSidebar({ currentView, onViewChange, isOpen: co
         {/* Logo with Close Button */}
         <div style={{
           display: 'flex',
-          alignItems: 'flex-start',
+          alignItems: 'center',
           justifyContent: 'space-between',
-          padding: `${tokens.spacing.xl} ${tokens.spacing.xl}`,
+          padding: `${tokens.spacing.lg} ${tokens.spacing.xl}`,
           borderBottom: `1px solid ${tokens.colors.borderLight}`,
         }}>
-          <div style={{ flex: 1 }}>
-            <h2 style={{
-              fontSize: tokens.typography.sizes.xl,
-              fontWeight: tokens.typography.weights.medium,
-              color: tokens.colors.text.primary,
-              marginBottom: tokens.spacing.xs,
-            }}>
-              Coheren
-            </h2>
-            <p style={{
-              fontSize: tokens.typography.sizes.xs,
-              fontWeight: tokens.typography.weights.light,
-              color: tokens.colors.text.tertiary,
-              fontStyle: 'italic',
-            }}>
-              Think less. Do more.
-            </p>
+          <div style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            gap: tokens.spacing.md,
+          }}>
+            <img
+              src="/logo.png"
+              alt="Coheren AI"
+              style={{
+                width: '32px',
+                height: '32px',
+                objectFit: 'contain',
+              }}
+            />
+            <div>
+              <h2 style={{
+                fontSize: tokens.typography.sizes.lg,
+                fontWeight: tokens.typography.weights.medium,
+                color: tokens.colors.text.primary,
+                marginBottom: 0,
+              }}>
+                Coheren
+              </h2>
+              <p style={{
+                fontSize: tokens.typography.sizes.xs,
+                fontWeight: tokens.typography.weights.light,
+                color: tokens.colors.text.tertiary,
+                fontStyle: 'italic',
+                margin: 0,
+              }}>
+                Think less. Do more.
+              </p>
+            </div>
           </div>
 
           <button

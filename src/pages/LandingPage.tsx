@@ -1,18 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowRight,
-  Target,
   CheckCircle2,
-  Brain,
   Zap,
   Shield,
   Mail,
   Lock,
-  X,
-  ChevronDown,
-  BarChart3,
-  Lightbulb
+  X
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { tokens } from '../design-system';
@@ -20,7 +15,58 @@ import { tokens } from '../design-system';
 export default function LandingPage() {
   const setStep = useStore((state) => state.setStep);
   const [goalInput, setGoalInput] = useState('');
-  const [showFAQ, setShowFAQ] = useState<number | null>(null);
+  const [placeholderText, setPlaceholderText] = useState('');
+
+  const placeholderExamples = [
+    "I want to learn boxing",
+    "I want to prepare for CAT",
+    "I want to build reading habits",
+    "I want to learn guitar",
+    "I want to get fit",
+    "I want to learn Spanish",
+    "I want to code daily"
+  ];
+
+  // Typing animation effect
+  useEffect(() => {
+    let currentText = '';
+    let currentIndex = 0;
+    let isDeleting = false;
+    let phraseIndex = 0;
+
+    const type = () => {
+      const currentPhrase = placeholderExamples[phraseIndex];
+
+      if (!isDeleting) {
+        currentText = currentPhrase.substring(0, currentIndex + 1);
+        currentIndex++;
+
+        if (currentIndex === currentPhrase.length) {
+          isDeleting = true;
+          setTimeout(type, 2000); // Pause at end
+          setPlaceholderText(currentText);
+          return;
+        }
+      } else {
+        currentText = currentPhrase.substring(0, currentIndex - 1);
+        currentIndex--;
+
+        if (currentIndex === 0) {
+          isDeleting = false;
+          phraseIndex = (phraseIndex + 1) % placeholderExamples.length;
+          setTimeout(type, 500); // Pause before next phrase
+          setPlaceholderText(currentText);
+          return;
+        }
+      }
+
+      setPlaceholderText(currentText);
+      setTimeout(type, isDeleting ? 50 : 100);
+    };
+
+    const timer = setTimeout(type, 1000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleGetStarted = (customGoal?: string) => {
     if (customGoal || goalInput.trim()) {
@@ -37,13 +83,69 @@ export default function LandingPage() {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#FAFBFC', overflow: 'hidden' }}>
-      {/* Subtle background gradient */}
+      {/* Enhanced background with animated gradients */}
       <div style={{
         position: 'fixed',
         inset: 0,
-        background: 'radial-gradient(circle at 20% 10%, rgba(67, 56, 202, 0.03) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(16, 185, 129, 0.02) 0%, transparent 50%)',
-        pointerEvents: 'none'
+        background: 'radial-gradient(circle at 20% 10%, rgba(67, 56, 202, 0.08) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(16, 185, 129, 0.05) 0%, transparent 50%)',
+        pointerEvents: 'none',
+        zIndex: 0
       }} />
+
+      {/* Floating orbs for visual interest */}
+      <div style={{
+        position: 'fixed',
+        inset: 0,
+        overflow: 'hidden',
+        pointerEvents: 'none',
+        zIndex: 0
+      }}>
+        <motion.div
+          animate={{
+            y: [0, -30, 0],
+            x: [0, 20, 0],
+            scale: [1, 1.1, 1],
+          }}
+          transition={{
+            duration: 20,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+          style={{
+            position: 'absolute',
+            top: '10%',
+            left: '10%',
+            width: '400px',
+            height: '400px',
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(67, 56, 202, 0.15) 0%, transparent 70%)',
+            filter: 'blur(60px)',
+          }}
+        />
+        <motion.div
+          animate={{
+            y: [0, 40, 0],
+            x: [0, -30, 0],
+            scale: [1, 1.2, 1],
+          }}
+          transition={{
+            duration: 25,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 5
+          }}
+          style={{
+            position: 'absolute',
+            bottom: '10%',
+            right: '10%',
+            width: '500px',
+            height: '500px',
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(16, 185, 129, 0.12) 0%, transparent 70%)',
+            filter: 'blur(80px)',
+          }}
+        />
+      </div>
 
       {/* Navigation */}
       <nav style={{
@@ -53,7 +155,8 @@ export default function LandingPage() {
         alignItems: 'center',
         padding: `${tokens.spacing.xl} ${tokens.spacing['2xl']}`,
         maxWidth: '1200px',
-        margin: '0 auto'
+        margin: '0 auto',
+        zIndex: 10
       }}>
         <button
           onClick={() => {
@@ -81,11 +184,13 @@ export default function LandingPage() {
           />
         </button>
 
-        <button
+        <motion.button
           onClick={() => handleGetStarted()}
+          whileHover={{ scale: 1.05, boxShadow: '0 8px 24px rgba(67, 56, 202, 0.3)' }}
+          whileTap={{ scale: 0.98 }}
           style={{
             padding: `${tokens.spacing.sm} ${tokens.spacing.xl}`,
-            background: tokens.colors.primary,
+            background: `linear-gradient(135deg, ${tokens.colors.primary} 0%, #5B4FCF 100%)`,
             color: 'white',
             border: 'none',
             borderRadius: tokens.borderRadius.lg,
@@ -94,245 +199,463 @@ export default function LandingPage() {
             fontWeight: tokens.typography.weights.medium,
             display: 'flex',
             alignItems: 'center',
-            gap: tokens.spacing.xs
+            gap: tokens.spacing.xs,
+            boxShadow: '0 4px 12px rgba(67, 56, 202, 0.2)',
+            transition: 'all 0.3s ease'
           }}
         >
           Start <ArrowRight size={16} />
-        </button>
+        </motion.button>
       </nav>
 
-      {/* Hero Section - Redesigned */}
+      {/* Hero Section - Full Page */}
       <section style={{
         position: 'relative',
+        minHeight: 'calc(100vh - 80px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
         padding: `${tokens.spacing['5xl']} ${tokens.spacing.xl}`,
         textAlign: 'center',
-        maxWidth: '900px',
-        margin: '0 auto'
+        maxWidth: '1000px',
+        margin: '0 auto',
+        zIndex: 1
       }}>
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8 }}
+          transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
         >
-          <h1 style={{
-            fontSize: '64px',
-            fontWeight: tokens.typography.weights.thin,
-            letterSpacing: '-0.03em',
-            marginBottom: tokens.spacing.lg,
-            color: '#0F172A',
-            lineHeight: 1.1
-          }}>
+          {/* Decorative badge */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: tokens.spacing.xs,
+              padding: `${tokens.spacing.xs} ${tokens.spacing.md}`,
+              background: 'linear-gradient(135deg, rgba(67, 56, 202, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%)',
+              border: '1px solid rgba(67, 56, 202, 0.2)',
+              borderRadius: tokens.borderRadius.full,
+              marginBottom: tokens.spacing.xl,
+              fontSize: tokens.typography.sizes.sm,
+              fontWeight: tokens.typography.weights.medium,
+              color: tokens.colors.primary
+            }}
+          >
+            <Zap size={14} fill={tokens.colors.primary} />
+            AI-Powered Consistency
+          </motion.div>
+
+          <motion.h1
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.3 }}
+            style={{
+              fontSize: '96px',
+              fontWeight: 200,
+              letterSpacing: '-0.04em',
+              marginBottom: tokens.spacing['2xl'],
+              background: 'linear-gradient(135deg, #0F172A 0%, #334155 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              lineHeight: 1.05
+            }}
+          >
             Think less. Do more.
-          </h1>
+          </motion.h1>
 
-          <p style={{
-            fontSize: tokens.typography.sizes.xl,
-            fontWeight: tokens.typography.weights.light,
-            color: '#475569',
-            marginBottom: tokens.spacing['3xl'],
-            lineHeight: 1.6
-          }}>
-            AI that turns your goals into one simple task per day.
-          </p>
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.4 }}
+            style={{
+              fontSize: '28px',
+              fontWeight: tokens.typography.weights.light,
+              color: '#475569',
+              lineHeight: 1.6,
+              maxWidth: '800px',
+              margin: `0 auto ${tokens.spacing['4xl']} auto`
+            }}
+          >
+            AI that turns your goals into{' '}
+            <span style={{
+              color: tokens.colors.primary,
+              fontWeight: tokens.typography.weights.medium,
+              position: 'relative'
+            }}>
+              one simple task
+              <motion.span
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{ duration: 0.6, delay: 1.2 }}
+                style={{
+                  position: 'absolute',
+                  bottom: '-4px',
+                  left: 0,
+                  right: 0,
+                  height: '2px',
+                  background: `linear-gradient(90deg, ${tokens.colors.primary}, rgba(16, 185, 129, 0.8))`,
+                  transformOrigin: 'left',
+                  borderRadius: '2px'
+                }}
+              />
+            </span>
+            {' '}per day.
+          </motion.p>
 
-          {/* Direct input field */}
-          <div style={{
-            maxWidth: '600px',
-            margin: '0 auto',
-            marginBottom: tokens.spacing.xl
-          }}>
+          {/* Enhanced input field */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.5 }}
+            style={{
+              maxWidth: '700px',
+              margin: `0 auto ${tokens.spacing['2xl']} auto`
+            }}
+          >
             <div style={{
+              position: 'relative',
               display: 'flex',
               gap: tokens.spacing.sm,
-              padding: tokens.spacing.xs,
-              backgroundColor: 'white',
-              borderRadius: tokens.borderRadius.xl,
-              border: '2px solid #E2E8F0',
-              boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
-              transition: 'all 0.3s'
-            }}>
+              padding: '8px',
+              background: 'linear-gradient(135deg, white 0%, #F8FAFC 100%)',
+              borderRadius: tokens.borderRadius['2xl'],
+              border: '1px solid #E2E8F0',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.boxShadow = '0 12px 40px rgba(67, 56, 202, 0.12), 0 2px 8px rgba(0,0,0,0.06)';
+              e.currentTarget.style.borderColor = 'rgba(67, 56, 202, 0.3)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.boxShadow = '0 8px 32px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)';
+              e.currentTarget.style.borderColor = '#E2E8F0';
+            }}
+            >
               <input
                 type="text"
-                placeholder="What's your goal?"
+                placeholder={placeholderText || "What's your goal?"}
                 value={goalInput}
                 onChange={(e) => setGoalInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 style={{
                   flex: 1,
-                  padding: `${tokens.spacing.md} ${tokens.spacing.lg}`,
+                  padding: `${tokens.spacing.xl} ${tokens.spacing['2xl']}`,
                   border: 'none',
                   outline: 'none',
-                  fontSize: tokens.typography.sizes.lg,
+                  fontSize: tokens.typography.sizes.xl,
                   backgroundColor: 'transparent',
-                  color: '#0F172A'
+                  color: '#0F172A',
+                  fontWeight: tokens.typography.weights.light
                 }}
               />
-              <button
+              <motion.button
                 onClick={() => handleGetStarted()}
                 disabled={!goalInput.trim()}
+                whileHover={goalInput.trim() ? { scale: 1.05 } : {}}
+                whileTap={goalInput.trim() ? { scale: 0.95 } : {}}
                 style={{
-                  padding: `${tokens.spacing.md} ${tokens.spacing.xl}`,
-                  background: goalInput.trim() ? tokens.colors.primary : '#CBD5E1',
-                  color: 'white',
+                  padding: `${tokens.spacing.lg} ${tokens.spacing['3xl']}`,
+                  background: goalInput.trim()
+                    ? `linear-gradient(135deg, ${tokens.colors.primary} 0%, #5B4FCF 100%)`
+                    : '#E2E8F0',
+                  color: goalInput.trim() ? 'white' : '#94A3B8',
                   border: 'none',
-                  borderRadius: tokens.borderRadius.lg,
+                  borderRadius: tokens.borderRadius.xl,
                   cursor: goalInput.trim() ? 'pointer' : 'not-allowed',
-                  fontSize: tokens.typography.sizes.base,
-                  fontWeight: tokens.typography.weights.medium,
+                  fontSize: tokens.typography.sizes.lg,
+                  fontWeight: tokens.typography.weights.semibold,
                   display: 'flex',
                   alignItems: 'center',
-                  gap: tokens.spacing.xs,
-                  transition: 'all 0.2s'
+                  gap: tokens.spacing.sm,
+                  boxShadow: goalInput.trim() ? '0 4px 12px rgba(67, 56, 202, 0.3)' : 'none',
+                  transition: 'all 0.3s ease'
                 }}
               >
-                <ArrowRight size={20} />
-              </button>
+                Start <ArrowRight size={20} />
+              </motion.button>
             </div>
-          </div>
+          </motion.div>
 
-          {/* Quick examples */}
-          <div style={{
-            display: 'flex',
-            gap: tokens.spacing.md,
-            justifyContent: 'center',
-            flexWrap: 'wrap',
-            marginBottom: tokens.spacing.sm
-          }}>
-            <span style={{ fontSize: tokens.typography.sizes.sm, color: '#64748B' }}>or try:</span>
-            {['Learn guitar', 'Get fit', 'Learn to code'].map((example) => (
-              <button
+          {/* Quick examples with enhanced styling */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.6 }}
+            style={{
+              display: 'flex',
+              gap: tokens.spacing.md,
+              justifyContent: 'center',
+              flexWrap: 'wrap',
+              marginBottom: tokens.spacing.sm
+            }}
+          >
+            <span style={{
+              fontSize: tokens.typography.sizes.sm,
+              color: '#64748B',
+              fontWeight: tokens.typography.weights.medium
+            }}>
+              or try:
+            </span>
+            {['Learn guitar', 'Get fit', 'Learn to code'].map((example, index) => (
+              <motion.button
                 key={example}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.7 + index * 0.1 }}
                 onClick={() => handleGetStarted(example)}
+                whileHover={{
+                  scale: 1.05,
+                  y: -2
+                }}
+                whileTap={{ scale: 0.95 }}
                 style={{
-                  padding: `${tokens.spacing.xs} ${tokens.spacing.md}`,
-                  backgroundColor: 'white',
+                  padding: `${tokens.spacing.sm} ${tokens.spacing.lg}`,
+                  background: 'white',
                   border: '1px solid #E2E8F0',
                   borderRadius: tokens.borderRadius.full,
                   cursor: 'pointer',
                   fontSize: tokens.typography.sizes.sm,
                   color: '#475569',
-                  transition: 'all 0.2s'
+                  fontWeight: tokens.typography.weights.medium,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                  transition: 'all 0.2s ease'
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = tokens.colors.primary;
                   e.currentTarget.style.color = tokens.colors.primary;
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(67, 56, 202, 0.15)';
+                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(67, 56, 202, 0.05) 0%, rgba(16, 185, 129, 0.05) 100%)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.borderColor = '#E2E8F0';
                   e.currentTarget.style.color = '#475569';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)';
+                  e.currentTarget.style.background = 'white';
                 }}
               >
                 {example}
-              </button>
+              </motion.button>
             ))}
-          </div>
+          </motion.div>
 
-          <p style={{
-            fontSize: tokens.typography.sizes.sm,
-            color: '#94A3B8',
-            marginTop: tokens.spacing.md
-          }}>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.8, delay: 1.5 }}
+            style={{
+              fontSize: tokens.typography.sizes.base,
+              color: '#94A3B8',
+              marginTop: tokens.spacing.xl
+            }}
+          >
             No signup required to start
-          </p>
+          </motion.p>
+
+          {/* Scroll indicator */}
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 2 }}
+            style={{
+              position: 'absolute',
+              bottom: tokens.spacing['3xl'],
+              left: '50%',
+              transform: 'translateX(-50%)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: tokens.spacing.sm
+            }}
+          >
+            <motion.div
+              animate={{ y: [0, 8, 0] }}
+              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+              style={{
+                fontSize: tokens.typography.sizes.xs,
+                color: '#94A3B8',
+                fontWeight: tokens.typography.weights.medium,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase'
+              }}
+            >
+              Scroll to explore
+            </motion.div>
+            <motion.div
+              animate={{ y: [0, 8, 0] }}
+              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", delay: 0.2 }}
+              style={{
+                width: '24px',
+                height: '36px',
+                border: '2px solid #CBD5E1',
+                borderRadius: tokens.borderRadius.full,
+                position: 'relative'
+              }}
+            >
+              <motion.div
+                animate={{ y: [0, 12, 0] }}
+                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                style={{
+                  width: '4px',
+                  height: '8px',
+                  backgroundColor: tokens.colors.primary,
+                  borderRadius: '2px',
+                  position: 'absolute',
+                  top: '6px',
+                  left: '50%',
+                  transform: 'translateX(-50%)'
+                }}
+              />
+            </motion.div>
+          </motion.div>
         </motion.div>
       </section>
 
-      {/* How It Works - Redesigned with specifics */}
+      {/* How It Works - Second Page/Section */}
       <section style={{
+        minHeight: '100vh',
         padding: `${tokens.spacing['5xl']} ${tokens.spacing.xl}`,
-        backgroundColor: 'white'
+        background: 'linear-gradient(180deg, #FAFBFC 0%, white 50%, #FAFBFC 100%)',
+        position: 'relative',
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
       }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        {/* Enhanced Decorative elements */}
+        <div style={{
+          position: 'absolute',
+          top: '5%',
+          left: '5%',
+          width: '500px',
+          height: '500px',
+          borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(67, 56, 202, 0.06) 0%, transparent 70%)',
+          filter: 'blur(80px)',
+          pointerEvents: 'none'
+        }} />
+        <div style={{
+          position: 'absolute',
+          bottom: '10%',
+          right: '5%',
+          width: '400px',
+          height: '400px',
+          borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(16, 185, 129, 0.06) 0%, transparent 70%)',
+          filter: 'blur(80px)',
+          pointerEvents: 'none'
+        }} />
+
+        <div style={{ maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            style={{ textAlign: 'center', marginBottom: tokens.spacing['3xl'] }}
+            style={{ textAlign: 'center', marginBottom: tokens.spacing['5xl'] }}
           >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              style={{
+                display: 'inline-block',
+                padding: `${tokens.spacing.sm} ${tokens.spacing.lg}`,
+                background: `linear-gradient(135deg, ${tokens.colors.primary}15 0%, rgba(16, 185, 129, 0.15) 100%)`,
+                borderRadius: tokens.borderRadius.full,
+                marginBottom: tokens.spacing.xl,
+                border: `1px solid ${tokens.colors.primary}30`
+              }}
+            >
+              <span style={{
+                fontSize: tokens.typography.sizes.sm,
+                fontWeight: tokens.typography.weights.semibold,
+                color: tokens.colors.primary,
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase'
+              }}>
+                How It Works
+              </span>
+            </motion.div>
+
             <h2 style={{
-              fontSize: tokens.typography.sizes['4xl'],
-              fontWeight: tokens.typography.weights.light,
-              letterSpacing: '-0.02em',
-              marginBottom: tokens.spacing.lg,
-              color: '#0F172A'
+              fontSize: '56px',
+              fontWeight: 200,
+              letterSpacing: '-0.03em',
+              marginBottom: tokens.spacing.md,
+              color: '#0F172A',
+              lineHeight: 1.1
             }}>
-              How Coheren works
+              Three steps to success
             </h2>
+            <p style={{
+              fontSize: tokens.typography.sizes.xl,
+              color: '#64748B',
+              maxWidth: '650px',
+              margin: '0 auto',
+              lineHeight: 1.6,
+              fontWeight: tokens.typography.weights.light
+            }}>
+              Simple enough for today. Powerful enough for any goal.
+            </p>
           </motion.div>
 
+          {/* Modern Card Grid Layout */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-            gap: tokens.spacing['3xl']
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: tokens.spacing['2xl'],
+            position: 'relative',
+            maxWidth: '1400px',
+            margin: '0 auto'
           }}>
+
             {/* Step 1 */}
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.5 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
               style={{
-                padding: tokens.spacing['2xl'],
+                padding: tokens.spacing['3xl'],
                 textAlign: 'left'
               }}
             >
               <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '48px',
-                height: '48px',
-                borderRadius: '50%',
-                backgroundColor: tokens.colors.primary + '15',
+                fontSize: tokens.typography.sizes.sm,
+                fontWeight: tokens.typography.weights.semibold,
                 color: tokens.colors.primary,
-                fontSize: tokens.typography.sizes.xl,
-                fontWeight: tokens.typography.weights.medium,
-                marginBottom: tokens.spacing.lg
+                marginBottom: tokens.spacing.md,
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase'
               }}>
-                1
+                Step 1
               </div>
 
               <h3 style={{
-                fontSize: tokens.typography.sizes['2xl'],
-                fontWeight: tokens.typography.weights.medium,
-                marginBottom: tokens.spacing.md,
-                color: '#0F172A'
+                fontSize: tokens.typography.sizes['3xl'],
+                fontWeight: tokens.typography.weights.semibold,
+                marginBottom: tokens.spacing.lg,
+                color: '#0F172A',
+                letterSpacing: '-0.02em'
               }}>
-                Tell us your goal
+                Share your goal
               </h3>
 
               <p style={{
-                fontSize: tokens.typography.sizes.base,
+                fontSize: tokens.typography.sizes.lg,
                 color: '#64748B',
-                lineHeight: 1.7,
-                marginBottom: tokens.spacing.lg
+                lineHeight: 1.8,
+                fontWeight: tokens.typography.weights.light
               }}>
-                "I want to learn guitar"
+                Tell Coheren what you want to achieve. "Learn Spanish", "Run a 5K", "Build an app" — anything goes.
               </p>
-
-              <p style={{
-                fontSize: tokens.typography.sizes.sm,
-                color: '#94A3B8',
-                lineHeight: 1.6,
-                marginBottom: tokens.spacing.sm
-              }}>
-                AI asks: Your schedule? Energy patterns? Experience level?
-              </p>
-
-              <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: tokens.spacing.xs,
-                padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`,
-                backgroundColor: '#F1F5F9',
-                borderRadius: tokens.borderRadius.md,
-                fontSize: tokens.typography.sizes.xs,
-                color: '#64748B',
-                fontWeight: tokens.typography.weights.medium
-              }}>
-                <Clock size={12} />5 minutes
-              </div>
             </motion.div>
 
             {/* Step 2 */}
@@ -340,68 +663,41 @@ export default function LandingPage() {
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: 0.1 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
               style={{
-                padding: tokens.spacing['2xl'],
+                padding: tokens.spacing['3xl'],
                 textAlign: 'left'
               }}
             >
               <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '48px',
-                height: '48px',
-                borderRadius: '50%',
-                backgroundColor: tokens.colors.primary + '15',
+                fontSize: tokens.typography.sizes.sm,
+                fontWeight: tokens.typography.weights.semibold,
                 color: tokens.colors.primary,
-                fontSize: tokens.typography.sizes.xl,
-                fontWeight: tokens.typography.weights.medium,
-                marginBottom: tokens.spacing.lg
+                marginBottom: tokens.spacing.md,
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase'
               }}>
-                2
+                Step 2
               </div>
 
               <h3 style={{
-                fontSize: tokens.typography.sizes['2xl'],
-                fontWeight: tokens.typography.weights.medium,
-                marginBottom: tokens.spacing.md,
-                color: '#0F172A'
+                fontSize: tokens.typography.sizes['3xl'],
+                fontWeight: tokens.typography.weights.semibold,
+                marginBottom: tokens.spacing.lg,
+                color: '#0F172A',
+                letterSpacing: '-0.02em'
               }}>
-                We plan everything
+                AI creates your roadmap
               </h3>
 
               <p style={{
-                fontSize: tokens.typography.sizes.base,
+                fontSize: tokens.typography.sizes.lg,
                 color: '#64748B',
-                lineHeight: 1.7,
-                marginBottom: tokens.spacing.sm
+                lineHeight: 1.8,
+                fontWeight: tokens.typography.weights.light
               }}>
-                AI analyzes behavioral research + your life context
+                Our AI instantly generates a personalized timeline with daily micro-tasks calibrated to your pace.
               </p>
-
-              <p style={{
-                fontSize: tokens.typography.sizes.base,
-                color: '#64748B',
-                lineHeight: 1.7,
-                marginBottom: tokens.spacing.lg
-              }}>
-                Creates 180-day roadmap with daily tasks
-              </p>
-
-              <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: tokens.spacing.xs,
-                padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`,
-                backgroundColor: '#F1F5F9',
-                borderRadius: tokens.borderRadius.md,
-                fontSize: tokens.typography.sizes.xs,
-                color: '#64748B',
-                fontWeight: tokens.typography.weights.medium
-              }}>
-                <Zap size={12} />Instant
-              </div>
             </motion.div>
 
             {/* Step 3 */}
@@ -409,96 +705,115 @@ export default function LandingPage() {
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: 0.2 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
               style={{
-                padding: tokens.spacing['2xl'],
+                padding: tokens.spacing['3xl'],
                 textAlign: 'left'
               }}
             >
               <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '48px',
-                height: '48px',
-                borderRadius: '50%',
-                backgroundColor: tokens.colors.primary + '15',
+                fontSize: tokens.typography.sizes.sm,
+                fontWeight: tokens.typography.weights.semibold,
                 color: tokens.colors.primary,
-                fontSize: tokens.typography.sizes.xl,
-                fontWeight: tokens.typography.weights.medium,
-                marginBottom: tokens.spacing.lg
+                marginBottom: tokens.spacing.md,
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase'
               }}>
-                3
+                Step 3
               </div>
 
               <h3 style={{
-                fontSize: tokens.typography.sizes['2xl'],
-                fontWeight: tokens.typography.weights.medium,
-                marginBottom: tokens.spacing.md,
-                color: '#0F172A'
+                fontSize: tokens.typography.sizes['3xl'],
+                fontWeight: tokens.typography.weights.semibold,
+                marginBottom: tokens.spacing.lg,
+                color: '#0F172A',
+                letterSpacing: '-0.02em'
               }}>
-                You just show up
+                Focus on today
               </h3>
 
               <p style={{
-                fontSize: tokens.typography.sizes.base,
+                fontSize: tokens.typography.sizes.lg,
                 color: '#64748B',
-                lineHeight: 1.7,
-                marginBottom: tokens.spacing.sm
+                lineHeight: 1.8,
+                fontWeight: tokens.typography.weights.light
               }}>
-                Every day: one task, perfectly sized for you
-              </p>
-
-              <p style={{
-                fontSize: tokens.typography.sizes.base,
-                color: '#64748B',
-                lineHeight: 1.7,
-                marginBottom: tokens.spacing.sm
-              }}>
-                Complete it. Tomorrow's task appears.
-              </p>
-
-              <p style={{
-                fontSize: tokens.typography.sizes.base,
-                color: '#0F172A',
-                lineHeight: 1.7,
-                fontWeight: tokens.typography.weights.medium,
-                marginTop: tokens.spacing.md
-              }}>
-                No decisions. No planning. Just consistency.
+                Each morning, get your ONE task. Complete it, build momentum, achieve your goal.
               </p>
             </motion.div>
           </div>
 
-          {/* CTA */}
-          <div style={{ textAlign: 'center', marginTop: tokens.spacing['4xl'] }}>
-            <button
+          {/* Enhanced CTA */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            style={{ textAlign: 'center', marginTop: tokens.spacing['4xl'] }}
+          >
+            <motion.button
               onClick={() => handleGetStarted()}
+              whileHover={{
+                scale: 1.05,
+                boxShadow: '0 12px 32px rgba(67, 56, 202, 0.4)'
+              }}
+              whileTap={{ scale: 0.98 }}
               style={{
-                padding: `${tokens.spacing.lg} ${tokens.spacing['2xl']}`,
-                background: tokens.colors.primary,
+                padding: `${tokens.spacing.lg} ${tokens.spacing['3xl']}`,
+                background: `linear-gradient(135deg, ${tokens.colors.primary} 0%, #5B4FCF 100%)`,
                 color: 'white',
                 border: 'none',
-                borderRadius: tokens.borderRadius.xl,
+                borderRadius: tokens.borderRadius['2xl'],
                 cursor: 'pointer',
                 fontSize: tokens.typography.sizes.lg,
-                fontWeight: tokens.typography.weights.medium,
+                fontWeight: tokens.typography.weights.semibold,
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: tokens.spacing.sm,
-                boxShadow: '0 4px 16px rgba(67, 56, 202, 0.3)'
+                gap: tokens.spacing.md,
+                boxShadow: '0 8px 24px rgba(67, 56, 202, 0.35)',
+                position: 'relative',
+                overflow: 'hidden',
+                transition: 'all 0.3s ease'
               }}
             >
-              Create my roadmap <ArrowRight size={20} />
-            </button>
-          </div>
+              <span style={{ position: 'relative', zIndex: 1 }}>Create my roadmap</span>
+              <motion.span
+                animate={{ x: [0, 4, 0] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+                style={{ position: 'relative', zIndex: 1 }}
+              >
+                <ArrowRight size={20} />
+              </motion.span>
+              {/* Shine effect */}
+              <motion.div
+                animate={{
+                  x: ['-100%', '200%'],
+                }}
+                transition={{
+                  duration: 3,
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                }}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '50%',
+                  height: '100%',
+                  background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)',
+                  transform: 'skewX(-20deg)'
+                }}
+              />
+            </motion.button>
+          </motion.div>
         </div>
       </section>
 
-      {/* Example Roadmap Section - NEW */}
+      {/* Example Roadmap Section - Enhanced */}
       <section style={{
         padding: `${tokens.spacing['5xl']} ${tokens.spacing.xl}`,
-        backgroundColor: '#FAFBFC'
+        background: 'linear-gradient(180deg, #FAFBFC 0%, white 100%)',
+        position: 'relative'
       }}>
         <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
           <motion.div
@@ -531,15 +846,27 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
             style={{
               backgroundColor: 'white',
               borderRadius: tokens.borderRadius['2xl'],
-              padding: tokens.spacing['2xl'],
-              boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
-              border: '1px solid #E2E8F0'
+              padding: tokens.spacing['3xl'],
+              boxShadow: '0 8px 40px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)',
+              border: '1px solid #E2E8F0',
+              position: 'relative',
+              overflow: 'hidden'
             }}
           >
+            {/* Decorative gradient overlay */}
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              right: 0,
+              width: '200px',
+              height: '200px',
+              background: 'radial-gradient(circle, rgba(67, 56, 202, 0.06) 0%, transparent 70%)',
+              pointerEvents: 'none'
+            }} />
             {/* Week 1-2 */}
             <div style={{ marginBottom: tokens.spacing['2xl'] }}>
               <div style={{
@@ -821,350 +1148,312 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* FAQ Section - NEW */}
+
+      {/* The Science Behind Coheren - Clean & Simple */}
       <section style={{
         padding: `${tokens.spacing['5xl']} ${tokens.spacing.xl}`,
-        backgroundColor: '#FAFBFC'
+        backgroundColor: 'white'
       }}>
-        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            style={{ textAlign: 'center', marginBottom: tokens.spacing['3xl'] }}
-          >
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: tokens.spacing['4xl'] }}>
             <h2 style={{
-              fontSize: tokens.typography.sizes['4xl'],
-              fontWeight: tokens.typography.weights.light,
-              letterSpacing: '-0.02em',
-              color: '#0F172A'
+              fontSize: '56px',
+              fontWeight: 200,
+              letterSpacing: '-0.03em',
+              marginBottom: tokens.spacing.md,
+              color: '#0F172A',
+              lineHeight: 1.1
             }}>
-              Questions?
+              The science behind Coheren
             </h2>
-          </motion.div>
+            <p style={{
+              fontSize: tokens.typography.sizes.xl,
+              color: '#64748B',
+              maxWidth: '650px',
+              margin: '0 auto',
+              lineHeight: 1.6,
+              fontWeight: tokens.typography.weights.light
+            }}>
+              Our AI doesn't guess. It knows.
+            </p>
+          </div>
 
-          <div style={{ display: 'grid', gap: tokens.spacing.md }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: tokens.spacing['3xl']
+          }}>
             {[
-              {
-                q: 'How long does it take?',
-                a: '5 minutes to chat with AI, then one daily task (10-30 min).'
-              },
-              {
-                q: 'What if I skip a day?',
-                a: 'No guilt. AI adjusts your plan. Just pick up tomorrow.'
-              },
-              {
-                q: 'Can I change my goal mid-journey?',
-                a: 'Yes. AI rebuilds your roadmap from current progress.'
-              },
-              {
-                q: 'What if I have no time?',
-                a: 'Tell us your schedule. We create 10-min tasks if needed.'
-              },
-              {
-                q: 'Is my data private?',
-                a: 'Your goals and progress are private. We never sell data.'
-              }
-            ].map((faq, index) => (
-              <motion.div
+              { title: 'Stanford Behavior Design Lab', desc: 'Built on proven behavior change frameworks' },
+              { title: '200+ Peer-Reviewed Papers', desc: 'Research on habit formation and motivation' },
+              { title: 'Dopamine Science', desc: 'Temporal motivation theory applied' },
+              { title: 'Real-World Testing', desc: 'Validated with beta users' }
+            ].map((item, index) => (
+              <div
                 key={index}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: index * 0.05 }}
                 style={{
-                  backgroundColor: 'white',
-                  borderRadius: tokens.borderRadius.xl,
-                  padding: tokens.spacing.xl,
-                  border: '1px solid #E2E8F0',
-                  cursor: 'pointer'
+                  padding: tokens.spacing['2xl'],
+                  textAlign: 'left'
                 }}
-                onClick={() => setShowFAQ(showFAQ === index ? null : index)}
               >
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: tokens.spacing.md
+                <h3 style={{
+                  fontSize: tokens.typography.sizes['2xl'],
+                  fontWeight: tokens.typography.weights.semibold,
+                  marginBottom: tokens.spacing.md,
+                  color: '#0F172A',
+                  letterSpacing: '-0.02em'
                 }}>
-                  <h3 style={{
-                    fontSize: tokens.typography.sizes.lg,
-                    fontWeight: tokens.typography.weights.medium,
-                    color: '#0F172A'
-                  }}>
-                    {faq.q}
-                  </h3>
-                  <ChevronDown
-                    size={20}
-                    style={{
-                      transform: showFAQ === index ? 'rotate(180deg)' : 'rotate(0deg)',
-                      transition: 'transform 0.3s',
-                      color: '#94A3B8'
-                    }}
-                  />
-                </div>
-                {showFAQ === index && (
-                  <p style={{
-                    marginTop: tokens.spacing.md,
-                    fontSize: tokens.typography.sizes.base,
-                    color: '#64748B',
-                    lineHeight: 1.6
-                  }}>
-                    {faq.a}
-                  </p>
-                )}
-              </motion.div>
+                  {item.title}
+                </h3>
+                <p style={{
+                  fontSize: tokens.typography.sizes.lg,
+                  color: '#64748B',
+                  lineHeight: 1.8,
+                  fontWeight: tokens.typography.weights.light
+                }}>
+                  {item.desc}
+                </p>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* The Science Behind Coheren - NEW (replaces fake stats) */}
-      <section style={{
-        padding: `${tokens.spacing['5xl']} ${tokens.spacing.xl}`,
-        backgroundColor: 'white'
+      {/* Footer - Modern & Clean */}
+      <footer style={{
+        position: 'relative',
+        borderTop: '1px solid #E2E8F0',
+        overflow: 'hidden'
       }}>
-        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            style={{ textAlign: 'center', marginBottom: tokens.spacing['4xl'] }}
-          >
-            <h2 style={{
-              fontSize: tokens.typography.sizes['4xl'],
-              fontWeight: tokens.typography.weights.light,
-              letterSpacing: '-0.02em',
-              marginBottom: tokens.spacing.lg,
-              color: '#0F172A'
-            }}>
-              The science behind Coheren
-            </h2>
-            <p style={{
-              fontSize: tokens.typography.sizes.lg,
-              color: '#64748B',
-              maxWidth: '700px',
-              margin: '0 auto'
-            }}>
-              Our AI doesn't guess. It knows.
-            </p>
-          </motion.div>
+        {/* Animated gradient background */}
+        <motion.div
+          animate={{
+            backgroundPosition: ['0% 50%', '100% 50%', '0% 50%']
+          }}
+          transition={{
+            duration: 10,
+            repeat: Infinity,
+            ease: "linear"
+          }}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'linear-gradient(90deg, #ffffff 0%, #F3E8FF 25%, #E9D5FF 50%, #F3E8FF 75%, #ffffff 100%)',
+            backgroundSize: '200% 100%',
+            zIndex: 0
+          }}
+        />
 
+        {/* Main Footer */}
+        <div style={{
+          maxWidth: '1200px',
+          margin: '0 auto',
+          padding: `${tokens.spacing['5xl']} ${tokens.spacing.xl} ${tokens.spacing['3xl']}`,
+          position: 'relative',
+          zIndex: 1
+        }}>
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-            gap: tokens.spacing['2xl']
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: tokens.spacing['4xl'],
+            marginBottom: tokens.spacing['4xl']
           }}>
-            {[
-              { icon: Brain, title: 'Stanford Behavior Design Lab', desc: 'Built on proven behavior change frameworks' },
-              { icon: Target, title: '200+ Peer-Reviewed Papers', desc: 'Research on habit formation and motivation' },
-              { icon: Lightbulb, title: 'Dopamine Science', desc: 'Temporal motivation theory applied' },
-              { icon: BarChart3, title: 'Real-World Testing', desc: 'Validated with beta users' }
-            ].map((item, index) => {
-              const Icon = item.icon;
-              return (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.5, delay: index * 0.1 }}
-                  style={{
-                    padding: tokens.spacing.xl,
-                    textAlign: 'center'
-                  }}
-                >
-                  <div style={{
-                    width: '56px',
-                    height: '56px',
-                    borderRadius: tokens.borderRadius.xl,
-                    backgroundColor: tokens.colors.primary + '10',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    margin: '0 auto',
-                    marginBottom: tokens.spacing.md
-                  }}>
-                    <Icon size={28} color={tokens.colors.primary} strokeWidth={1.5} />
-                  </div>
-                  <h3 style={{
-                    fontSize: tokens.typography.sizes.lg,
-                    fontWeight: tokens.typography.weights.medium,
-                    marginBottom: tokens.spacing.sm,
-                    color: '#0F172A'
-                  }}>
-                    {item.title}
-                  </h3>
-                  <p style={{
-                    fontSize: tokens.typography.sizes.sm,
-                    color: '#64748B',
-                    lineHeight: 1.6
-                  }}>
-                    {item.desc}
-                  </p>
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
+            {/* Brand Column */}
+            <div style={{ gridColumn: 'span 1' }}>
+              <img
+                src="/logo.png"
+                alt="Coheren"
+                style={{
+                  height: '36px',
+                  width: 'auto',
+                  objectFit: 'contain',
+                  marginBottom: tokens.spacing.lg
+                }}
+              />
+              <p style={{
+                fontSize: tokens.typography.sizes.sm,
+                color: '#64748B',
+                lineHeight: 1.7,
+                marginBottom: tokens.spacing.lg,
+                maxWidth: '280px'
+              }}>
+                Turn your goals into habits with AI-powered consistency coaching.
+              </p>
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: tokens.spacing.xs,
+                padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`,
+                background: 'linear-gradient(135deg, rgba(67, 56, 202, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%)',
+                borderRadius: tokens.borderRadius.md,
+                border: '1px solid rgba(67, 56, 202, 0.2)'
+              }}>
+                <Shield size={12} color={tokens.colors.primary} />
+                <span style={{
+                  fontSize: tokens.typography.sizes.xs,
+                  color: tokens.colors.primary,
+                  fontWeight: tokens.typography.weights.medium
+                }}>
+                  Made in India
+                </span>
+              </div>
+            </div>
 
-      {/* Final CTA - Redesigned */}
-      <section style={{
-        padding: `${tokens.spacing['5xl']} ${tokens.spacing.xl}`,
-        backgroundColor: '#0F172A',
-        textAlign: 'center'
-      }}>
-        <div style={{ maxWidth: '700px', margin: '0 auto' }}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-          >
-            <h2 style={{
-              fontSize: tokens.typography.sizes['4xl'],
-              fontWeight: tokens.typography.weights.light,
-              letterSpacing: '-0.02em',
-              marginBottom: tokens.spacing.lg,
-              color: 'white'
-            }}>
-              Start building consistency
-            </h2>
-
-            {/* Repeat input field */}
-            <div style={{
-              maxWidth: '600px',
-              margin: '0 auto',
-              marginBottom: tokens.spacing.lg
-            }}>
+            {/* Links Columns */}
+            <div>
+              <h3 style={{
+                fontSize: tokens.typography.sizes.xs,
+                fontWeight: tokens.typography.weights.semibold,
+                color: '#0F172A',
+                marginBottom: tokens.spacing.md,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase'
+              }}>
+                Product
+              </h3>
               <div style={{
                 display: 'flex',
-                gap: tokens.spacing.sm,
-                padding: tokens.spacing.xs,
-                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                borderRadius: tokens.borderRadius.xl,
-                border: '2px solid rgba(255, 255, 255, 0.2)'
+                flexDirection: 'column',
+                gap: tokens.spacing.sm
               }}>
-                <input
-                  type="text"
-                  placeholder="What's your goal?"
-                  value={goalInput}
-                  onChange={(e) => setGoalInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
+                {['Features', 'How it works', 'Pricing', 'Roadmap'].map(item => (
+                  <a
+                    key={item}
+                    href={`#${item.toLowerCase().replace(' ', '-')}`}
+                    style={{
+                      fontSize: tokens.typography.sizes.sm,
+                      color: '#64748B',
+                      textDecoration: 'none',
+                      transition: 'color 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = tokens.colors.primary}
+                    onMouseLeave={(e) => e.currentTarget.style.color = '#64748B'}
+                  >
+                    {item}
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h3 style={{
+                fontSize: tokens.typography.sizes.xs,
+                fontWeight: tokens.typography.weights.semibold,
+                color: '#0F172A',
+                marginBottom: tokens.spacing.md,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase'
+              }}>
+                Company
+              </h3>
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: tokens.spacing.sm
+              }}>
+                {['About', 'Blog', 'Careers', 'Press'].map(item => (
+                  <a
+                    key={item}
+                    href={`#${item.toLowerCase()}`}
+                    style={{
+                      fontSize: tokens.typography.sizes.sm,
+                      color: '#64748B',
+                      textDecoration: 'none',
+                      transition: 'color 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = tokens.colors.primary}
+                    onMouseLeave={(e) => e.currentTarget.style.color = '#64748B'}
+                  >
+                    {item}
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h3 style={{
+                fontSize: tokens.typography.sizes.xs,
+                fontWeight: tokens.typography.weights.semibold,
+                color: '#0F172A',
+                marginBottom: tokens.spacing.md,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase'
+              }}>
+                Support
+              </h3>
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: tokens.spacing.sm
+              }}>
+                <a
+                  href="mailto:hello@coheren.ai"
                   style={{
-                    flex: 1,
-                    padding: `${tokens.spacing.md} ${tokens.spacing.lg}`,
-                    border: 'none',
-                    outline: 'none',
-                    fontSize: tokens.typography.sizes.lg,
-                    backgroundColor: 'transparent',
-                    color: 'white'
-                  }}
-                />
-                <button
-                  onClick={() => handleGetStarted()}
-                  disabled={!goalInput.trim()}
-                  style={{
-                    padding: `${tokens.spacing.md} ${tokens.spacing.xl}`,
-                    background: goalInput.trim() ? 'white' : 'rgba(255, 255, 255, 0.2)',
-                    color: goalInput.trim() ? tokens.colors.primary : 'rgba(255, 255, 255, 0.5)',
-                    border: 'none',
-                    borderRadius: tokens.borderRadius.lg,
-                    cursor: goalInput.trim() ? 'pointer' : 'not-allowed',
-                    fontSize: tokens.typography.sizes.base,
-                    fontWeight: tokens.typography.weights.medium,
+                    fontSize: tokens.typography.sizes.sm,
+                    color: '#64748B',
+                    textDecoration: 'none',
+                    transition: 'color 0.2s',
                     display: 'flex',
                     alignItems: 'center',
                     gap: tokens.spacing.xs
                   }}
+                  onMouseEnter={(e) => e.currentTarget.style.color = tokens.colors.primary}
+                  onMouseLeave={(e) => e.currentTarget.style.color = '#64748B'}
                 >
-                  <ArrowRight size={20} />
-                </button>
+                  <Mail size={14} />
+                  Contact us
+                </a>
+                {['Help Center', 'Privacy', 'Terms'].map(item => (
+                  <a
+                    key={item}
+                    href={`#${item.toLowerCase().replace(' ', '-')}`}
+                    style={{
+                      fontSize: tokens.typography.sizes.sm,
+                      color: '#64748B',
+                      textDecoration: 'none',
+                      transition: 'color 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = tokens.colors.primary}
+                    onMouseLeave={(e) => e.currentTarget.style.color = '#64748B'}
+                  >
+                    {item}
+                  </a>
+                ))}
               </div>
             </div>
+          </div>
 
+          {/* Bottom Bar */}
+          <div style={{
+            paddingTop: tokens.spacing['2xl'],
+            borderTop: '1px solid #E2E8F0',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: tokens.spacing.lg
+          }}>
             <p style={{
-              fontSize: tokens.typography.sizes.sm,
-              color: 'rgba(255, 255, 255, 0.6)'
+              fontSize: tokens.typography.sizes.xs,
+              color: '#94A3B8'
             }}>
-              No signup required to start
+              © 2025 Coheren. All rights reserved.
             </p>
-          </motion.div>
-        </div>
-      </section>
 
-      {/* Footer - Trust Signals */}
-      <footer style={{
-        padding: `${tokens.spacing['2xl']} ${tokens.spacing.xl}`,
-        backgroundColor: '#0F172A',
-        borderTop: '1px solid rgba(255, 255, 255, 0.1)'
-      }}>
-        <div style={{
-          maxWidth: '1200px',
-          margin: '0 auto',
-          textAlign: 'center'
-        }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'center',
-            gap: tokens.spacing['2xl'],
-            marginBottom: tokens.spacing.lg,
-            flexWrap: 'wrap'
-          }}>
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: tokens.spacing.xs,
-              color: 'rgba(255, 255, 255, 0.6)',
-              fontSize: tokens.typography.sizes.sm
+              gap: tokens.spacing.xs
             }}>
-              <Lock size={14} />
-              <span>Your data is encrypted and private</span>
-            </div>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: tokens.spacing.xs,
-              color: 'rgba(255, 255, 255, 0.6)',
-              fontSize: tokens.typography.sizes.sm
-            }}>
-              <Mail size={14} />
-              <span>hello@coheren.ai</span>
-            </div>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: tokens.spacing.xs,
-              color: 'rgba(255, 255, 255, 0.6)',
-              fontSize: tokens.typography.sizes.sm
-            }}>
-              <Shield size={14} />
-              <span>Made in India, used globally</span>
+              <Lock size={12} color="#94A3B8" />
+              <span style={{
+                fontSize: tokens.typography.sizes.xs,
+                color: '#94A3B8'
+              }}>
+                Your data is encrypted & private
+              </span>
             </div>
           </div>
-
-          <div style={{
-            display: 'flex',
-            justifyContent: 'center',
-            gap: tokens.spacing.xl,
-            fontSize: tokens.typography.sizes.xs,
-            color: 'rgba(255, 255, 255, 0.4)'
-          }}>
-            <a href="#" style={{ color: 'inherit', textDecoration: 'none' }}>Privacy Policy</a>
-            <a href="#" style={{ color: 'inherit', textDecoration: 'none' }}>Terms</a>
-            <a href="#" style={{ color: 'inherit', textDecoration: 'none' }}>Security</a>
-          </div>
-
-          <p style={{
-            marginTop: tokens.spacing.lg,
-            fontSize: tokens.typography.sizes.xs,
-            color: 'rgba(255, 255, 255, 0.3)'
-          }}>
-            © 2024 Coheren. All rights reserved.
-          </p>
         </div>
       </footer>
     </div>

@@ -14,6 +14,12 @@ interface Task {
   type: 'practice' | 'learning' | 'reflection';
   duration: number;
   completed: boolean;
+  completedAt?: string;
+  skipped: boolean;
+  skippedAt?: string;
+  skipReason?: string;
+  rescheduledFrom?: number;
+  adjustedDifficulty?: 'easier' | 'same' | 'harder';
   scheduledFor: string;
   day: number;
 }
@@ -324,6 +330,7 @@ export function generateTasksForDay(
       type: template.type,
       duration: adjustedDuration,
       completed: false,
+      skipped: false,
       scheduledFor,
       day
     };
@@ -368,6 +375,7 @@ export function generateTasksFromAIPlan(roadmap: any, day: number, checkInTime: 
       type: 'practice',
       duration: dayTasks.practice.duration,
       completed: false,
+      skipped: false,
       scheduledFor: checkInTime,
       day
     });
@@ -381,6 +389,7 @@ export function generateTasksFromAIPlan(roadmap: any, day: number, checkInTime: 
       type: 'learning',
       duration: dayTasks.learning.duration,
       completed: false,
+      skipped: false,
       scheduledFor: checkInTime,
       day
     });
@@ -394,6 +403,7 @@ export function generateTasksFromAIPlan(roadmap: any, day: number, checkInTime: 
       type: 'reflection',
       duration: dayTasks.reflection.duration,
       completed: false,
+      skipped: false,
       scheduledFor: checkInTime,
       day
     });

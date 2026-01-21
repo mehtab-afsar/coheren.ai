@@ -1,4 +1,4 @@
-import { Flame, Calendar, TrendingUp, CheckCircle2, Circle, Clock, Play, ArrowRight, Sparkles } from 'lucide-react';
+import { Flame, Calendar, TrendingUp, CheckCircle2, Circle, Clock, Play, ArrowRight, Sparkles, SkipForward } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { tokens, text, card } from '../../design-system';
 import { useState, useRef } from 'react';
@@ -12,15 +12,18 @@ export default function TodayView() {
     streak,
     completionRate,
     completeTask,
+    skipTask,
     canAdvanceDay,
     advanceDay,
   } = useStore();
 
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
+  const [skippingTaskId, setSkippingTaskId] = useState<string | null>(null);
   const [particles, setParticles] = useState<Array<{ id: string; x: number; y: number }>>([]);
+  const [showSkipMessage, setShowSkipMessage] = useState(false);
   const progressCardRef = useRef<HTMLDivElement>(null);
 
-  const todaysTasks = tasks.filter(t => t.day === currentDay);
+  const todaysTasks = tasks.filter(t => t.day === currentDay && !t.skipped);
   const completedTasks = todaysTasks.filter(t => t.completed);
   const allDone = todaysTasks.length > 0 && todaysTasks.every(t => t.completed);
   const canAdvance = canAdvanceDay();
@@ -88,6 +91,24 @@ export default function TodayView() {
     }, 1900);
   };
 
+  const handleSkipTask = (taskId: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+
+    setSkippingTaskId(taskId);
+
+    // Todoist-style subtle animation (300ms with ease-out)
+    setTimeout(() => {
+      skipTask(taskId, 'User skipped');
+      setSkippingTaskId(null);
+      setShowSkipMessage(true);
+
+      // Hide message after 3 seconds
+      setTimeout(() => {
+        setShowSkipMessage(false);
+      }, 3000);
+    }, 300);
+  };
+
   return (
     <div style={{ position: 'relative' }}>
       {/* Animated Particles */}
@@ -127,6 +148,18 @@ export default function TodayView() {
       })}
 
       <style>{`
+        /* Todoist-inspired animations with Material Design timing */
+        @keyframes slideDown {
+          0% {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-16px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+          }
+        }
+
         @keyframes floatToProgress {
           0% {
             transform: translate(-4px, -4px) scale(0) rotate(0deg);
@@ -221,6 +254,35 @@ export default function TodayView() {
           {roadmap?.title} • {roadmap?.duration} months • {Math.ceil((roadmap?.duration || 3) * 4)} weeks
         </p>
       </div>
+
+      {/* Skip Confirmation Message - Todoist-inspired toast */}
+      {showSkipMessage && (
+        <div style={{
+          position: 'fixed',
+          top: tokens.spacing.xl,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 1000,
+          padding: `${tokens.spacing.md} ${tokens.spacing.xl}`,
+          backgroundColor: tokens.colors.surface,
+          border: `1px solid ${tokens.colors.gray[200]}`,
+          borderRadius: tokens.borderRadius.md,
+          boxShadow: tokens.shadows.lg,
+          display: 'flex',
+          alignItems: 'center',
+          gap: tokens.spacing.sm,
+          animation: 'slideDown 300ms cubic-bezier(.4,0,.2,1)',
+        }}>
+          <CheckCircle2 size={18} color={tokens.colors.success} strokeWidth={2} />
+          <span style={{
+            ...text.body,
+            color: tokens.colors.text.primary,
+            fontWeight: tokens.typography.weights.medium,
+          }}>
+            Task skipped. Tomorrow's task will be adjusted accordingly.
+          </span>
+        </div>
+      )}
 
       {/* Stats Grid - Single row layout */}
       <div style={{
@@ -496,10 +558,67 @@ export default function TodayView() {
                       fontSize: tokens.typography.sizes.md,
                       fontWeight: tokens.typography.weights.light,
                       lineHeight: tokens.typography.lineHeights.normal,
-                      color: tokens.colors.text.secondary
+                      color: tokens.colors.text.secondary,
+                      marginBottom: tokens.spacing.md
                     }}>
                       {task.description}
                     </p>
+
+                    {/* Skip Button - Todoist-inspired subtle action */}
+                    {!task.completed && (
+                      <button
+                        onClick={(e) => handleSkipTask(task.id, e)}
+                        disabled={skippingTaskId === task.id}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: tokens.spacing.xs,
+                          padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`,
+                          backgroundColor: 'transparent',
+                          border: `1px solid ${tokens.colors.gray[200]}`,
+                          borderRadius: tokens.borderRadius.sm,
+                          cursor: skippingTaskId === task.id ? 'default' : 'pointer',
+                          fontSize: tokens.typography.sizes.sm,
+                          fontWeight: tokens.typography.weights.regular,
+                          color: tokens.colors.text.secondary,
+                          transition: 'all 200ms cubic-bezier(.4,0,.2,1)', // Todoist-style easing
+                          opacity: skippingTaskId === task.id ? 0.5 : 1,
+                        }}
+                        onMouseEnter={(e) => {
+                          if (skippingTaskId !== task.id) {
+                            e.currentTarget.style.backgroundColor = tokens.colors.gray[50];
+                            e.currentTarget.style.borderColor = tokens.colors.gray[300];
+                            e.currentTarget.style.color = tokens.colors.text.primary;
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                          e.currentTarget.style.borderColor = tokens.colors.gray[200];
+                          e.currentTarget.style.color = tokens.colors.text.secondary;
+                        }}
+                      >
+                        <SkipForward size={14} strokeWidth={1.5} />
+                        <span>Not Today</span>
+                      </button>
+                    )}
+
+                    {/* Adjusted Task Badge */}
+                    {task.adjustedDifficulty === 'easier' && task.rescheduledFrom && (
+                      <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: tokens.spacing.xs,
+                        marginTop: tokens.spacing.sm,
+                        padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`,
+                        backgroundColor: tokens.colors.primary + '10',
+                        borderRadius: tokens.borderRadius.sm,
+                        fontSize: tokens.typography.sizes.xs,
+                        color: tokens.colors.primary,
+                        fontWeight: tokens.typography.weights.medium,
+                      }}>
+                        ✨ Adjusted for today - made easier based on yesterday
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

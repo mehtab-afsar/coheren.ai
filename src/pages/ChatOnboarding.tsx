@@ -892,16 +892,29 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
           gap: tokens.spacing['3xl'],
         }}>
           {/* Logo */}
-          <img
-            src="/logo.png"
-            alt="Coheren AI"
-            style={{
-              width: '120px',
-              height: '120px',
-              objectFit: 'contain',
-              marginBottom: tokens.spacing.lg,
+          <button
+            onClick={() => {
+              setStep(0);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-          />
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0
+            }}
+          >
+            <img
+              src="/logo.png"
+              alt="Coheren AI"
+              style={{
+                width: '120px',
+                height: '120px',
+                objectFit: 'contain',
+                marginBottom: tokens.spacing.lg,
+              }}
+            />
+          </button>
 
           {/* Loading Animation */}
           <LoadingAnimation size="large" />
@@ -968,22 +981,34 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
           gap: 0,
         }}>
           <h1 style={text.display}>Coheren</h1>
-          <img
-            src="/logo.png"
-            alt="Coheren AI Logo"
+          <button
+            onClick={() => {
+              setStep(0);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
             style={{
-              width: '220px',
-              height: '220px',
-              objectFit: 'contain',
-              userSelect: 'none',
-              pointerEvents: 'none',
-              WebkitUserSelect: 'none',
-              MozUserSelect: 'none',
-              msUserSelect: 'none',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
               marginTop: '-80px',
             }}
-            draggable="false"
-          />
+          >
+            <img
+              src="/logo.png"
+              alt="Coheren AI Logo"
+              style={{
+                width: '220px',
+                height: '220px',
+                objectFit: 'contain',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                MozUserSelect: 'none',
+                msUserSelect: 'none',
+              }}
+              draggable="false"
+            />
+          </button>
           <p style={{
             ...text.h3,
             color: tokens.colors.text.secondary,

@@ -11,6 +11,11 @@ interface Task {
   duration: number; // minutes
   completed: boolean;
   completedAt?: string;
+  skipped: boolean;
+  skippedAt?: string;
+  skipReason?: string;
+  rescheduledFrom?: number; // original day if rescheduled
+  adjustedDifficulty?: 'easier' | 'same' | 'harder';
   scheduledFor: string;
   day: number;
 }
@@ -61,6 +66,7 @@ interface AppStore extends OnboardingState {
   setRoadmap: (roadmap: Roadmap) => void;
   setTasks: (tasks: Task[]) => void;
   completeTask: (taskId: string) => void;
+  skipTask: (taskId: string, reason?: string) => void;
   canAdvanceDay: () => boolean;
   advanceDay: () => boolean;
   generateNextDayTasks: () => void;
@@ -130,6 +136,59 @@ export const useStore = create<AppStore>()(
           const newStreak = allDone ? state.streak + 1 : state.streak;
 
           return { tasks, completionRate, streak: newStreak };
+        }),
+
+      skipTask: (taskId, reason) =>
+        set((state) => {
+          const skippedTask = state.tasks.find((t) => t.id === taskId);
+          if (!skippedTask) return state;
+
+          // Mark task as skipped
+          const tasks = state.tasks.map((task) =>
+            task.id === taskId
+              ? {
+                  ...task,
+                  skipped: true,
+                  skippedAt: new Date().toISOString(),
+                  skipReason: reason
+                }
+              : task
+          );
+
+          // Calculate skip pattern to adjust tomorrow's task
+          const recentTasks = state.tasks
+            .filter((t) => t.day >= state.currentDay - 3 && t.day <= state.currentDay)
+            .slice(-10);
+          const skipCount = recentTasks.filter((t) => t.skipped).length;
+          const skipRate = recentTasks.length > 0 ? skipCount / recentTasks.length : 0;
+
+          // Adjust difficulty for tomorrow based on skip pattern
+          let adjustmentLevel: 'easier' | 'same' | 'harder' = 'easier';
+          if (skipRate > 0.3) {
+            // High skip rate - make it significantly easier
+            adjustmentLevel = 'easier';
+          } else if (skipRate < 0.1 && state.completionRate > 80) {
+            // Low skip rate and high completion - keep same
+            adjustmentLevel = 'same';
+          }
+
+          // Find tomorrow's tasks and adjust them
+          const tomorrowDay = state.currentDay + 1;
+          const adjustedTasks = tasks.map((task) => {
+            if (task.day === tomorrowDay && task.type === skippedTask.type) {
+              // Adjust task difficulty
+              const durationMultiplier = adjustmentLevel === 'easier' ? 0.7 : 1.0;
+              return {
+                ...task,
+                duration: Math.max(10, Math.round(task.duration * durationMultiplier)),
+                adjustedDifficulty: adjustmentLevel,
+                rescheduledFrom: state.currentDay
+              };
+            }
+            return task;
+          });
+
+          return { tasks: adjustedTasks };
         }),
 
       canAdvanceDay: () => {

@@ -1,4 +1,5 @@
 import { useStore } from './store/useStore';
+import LandingPage from './pages/LandingPage';
 import ChatOnboarding from './pages/ChatOnboarding';
 import GoalSelection from './pages/GoalSelection';
 import SpecificGoal from './pages/SpecificGoal';
@@ -33,16 +34,17 @@ function App() {
 
   return (
     <>
-      {step === 0 && <ChatOnboarding />}
-      {step === 1 && <GoalSelection />}
-      {step === 2 && <SpecificGoal />}
-      {step === 3 && <UniversalQuestions />}
-      {step === 4 && <CategoryQuestions />}
-      {step === 5 && <RoadmapGeneration />}
-      {step === 6 && <CheckInSetup />}
-      {step === 7 && <WelcomeAnimation />}
-      {step === 8 && <Dashboard />}
-      {step === 9 && <Settings />}
+      {step === 0 && <LandingPage key="landing" />}
+      {step === 1 && <ChatOnboarding key="chat" />}
+      {step === 2 && <GoalSelection key="goal-selection" />}
+      {step === 3 && <SpecificGoal key="specific-goal" />}
+      {step === 4 && <UniversalQuestions key="universal" />}
+      {step === 5 && <CategoryQuestions key="category" />}
+      {step === 6 && <RoadmapGeneration key="roadmap" />}
+      {step === 7 && <CheckInSetup key="checkin" />}
+      {step === 8 && <WelcomeAnimation key="welcome" />}
+      {step === 9 && <Dashboard key="dashboard" />}
+      {step === 10 && <Settings key="settings" />}
       {step >= 10 && (
         <div style={{
           minHeight: '100vh',

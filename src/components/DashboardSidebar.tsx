@@ -1,6 +1,7 @@
 import { Home, User, TrendingUp, Target, Settings, Menu, X, Map } from 'lucide-react';
 import { useState } from 'react';
 import { tokens } from '../design-system';
+import { useStore } from '../store/useStore';
 
 interface DashboardSidebarProps {
   currentView: 'today' | 'profile' | 'progress' | 'goals' | 'journey' | 'settings';
@@ -10,6 +11,7 @@ interface DashboardSidebarProps {
 }
 
 export default function DashboardSidebar({ currentView, onViewChange, isOpen: controlledIsOpen, onToggle }: DashboardSidebarProps) {
+  const setStep = useStore((state) => state.setStep);
   const [internalIsOpen, setInternalIsOpen] = useState(() => {
     // Default to open on desktop, closed on mobile
     return window.innerWidth >= 768;
@@ -96,12 +98,23 @@ export default function DashboardSidebar({ currentView, onViewChange, isOpen: co
           padding: `${tokens.spacing.lg} ${tokens.spacing.xl}`,
           borderBottom: `1px solid ${tokens.colors.borderLight}`,
         }}>
-          <div style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            gap: tokens.spacing.md,
-          }}>
+          <button
+            onClick={() => {
+              setStep(0);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: tokens.spacing.md,
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+              textAlign: 'left'
+            }}
+          >
             <img
               src="/logo.png"
               alt="Coheren AI"
@@ -130,7 +143,7 @@ export default function DashboardSidebar({ currentView, onViewChange, isOpen: co
                 Think less. Do more.
               </p>
             </div>
-          </div>
+          </button>
 
           <button
             onClick={() => setIsOpen(false)}

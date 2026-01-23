@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import pool from './db/pool.js';
+import supabase from './db/supabase.js';
 
 dotenv.config();
 
@@ -27,34 +27,52 @@ app.post('/api/users/auto', async (req, res) => {
     }
 
     // Check if user exists by device_id (stored in preferences)
-    const existing = await pool.query(
-      `SELECT * FROM users WHERE preferences->>'device_id' = $1`,
-      [device_id]
-    );
+    const { data: existingUsers, error: searchError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('preferences->>device_id', device_id);
 
-    if (existing.rows.length > 0) {
+    if (searchError) {
+      throw searchError;
+    }
+
+    if (existingUsers && existingUsers.length > 0) {
+      const existing = existingUsers[0];
+
       // Update name if provided and different
-      if (name && existing.rows[0].name !== name) {
-        await pool.query(
-          `UPDATE users SET name = $1, updated_at = NOW() WHERE id = $2`,
-          [name, existing.rows[0].id]
-        );
-        existing.rows[0].name = name;
+      if (name && existing.name !== name) {
+        const { data: updated, error: updateError } = await supabase
+          .from('users')
+          .update({ name, updated_at: new Date().toISOString() })
+          .eq('id', existing.id)
+          .select()
+          .single();
+
+        if (updateError) throw updateError;
+
+        console.log('👤 Returning user:', updated.id);
+        return res.json(updated);
       }
-      console.log('👤 Returning user:', existing.rows[0].id);
-      return res.json(existing.rows[0]);
+
+      console.log('👤 Returning user:', existing.id);
+      return res.json(existing);
     }
 
     // Create new user with device_id
-    const result = await pool.query(
-      `INSERT INTO users (name, timezone, preferences)
-       VALUES ($1, $2, $3)
-       RETURNING *`,
-      [name || 'User', timezone, JSON.stringify({ device_id })]
-    );
+    const { data: newUser, error: createError } = await supabase
+      .from('users')
+      .insert([{
+        name: name || 'User',
+        timezone,
+        preferences: { device_id }
+      }])
+      .select()
+      .single();
 
-    console.log('👤 New user created:', result.rows[0].id);
-    res.status(201).json(result.rows[0]);
+    if (createError) throw createError;
+
+    console.log('👤 New user created:', newUser.id);
+    res.status(201).json(newUser);
   } catch (error) {
     console.error('Error in auto user:', error);
     res.status(500).json({ error: error.message });
@@ -68,19 +86,29 @@ app.post('/api/users', async (req, res) => {
 
     // Check if user exists
     if (email) {
-      const existing = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-      if (existing.rows.length > 0) {
-        return res.json(existing.rows[0]);
+      const { data: existing, error: searchError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (searchError) throw searchError;
+
+      if (existing) {
+        return res.json(existing);
       }
     }
 
     // Create new user
-    const result = await pool.query(
-      `INSERT INTO users (name, email, timezone) VALUES ($1, $2, $3) RETURNING *`,
-      [name, email, timezone]
-    );
+    const { data: newUser, error: createError } = await supabase
+      .from('users')
+      .insert([{ name, email, timezone }])
+      .select()
+      .single();
 
-    res.status(201).json(result.rows[0]);
+    if (createError) throw createError;
+
+    res.status(201).json(newUser);
   } catch (error) {
     console.error('Error creating user:', error);
     res.status(500).json({ error: error.message });
@@ -90,11 +118,20 @@ app.post('/api/users', async (req, res) => {
 // Get user by ID
 app.get('/api/users/:id', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM users WHERE id = $1', [req.params.id]);
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      throw error;
     }
-    res.json(result.rows[0]);
+
+    res.json(user);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -105,16 +142,8 @@ app.get('/api/users/:id', async (req, res) => {
 // ============================================
 
 // Create journey with all day records pre-generated
-// Accepts either:
-//   - total_days (e.g., 84 for 12 weeks)
-//   - duration_months (e.g., 3) - will calculate days as duration_months * 28
-//   - target_end_date (e.g., "2026-04-12") - will calculate days dynamically
 app.post('/api/journeys', async (req, res) => {
-  const client = await pool.connect();
-
   try {
-    await client.query('BEGIN');
-
     const {
       user_id,
       title,
@@ -133,22 +162,18 @@ app.post('/api/journeys', async (req, res) => {
     let total_days;
 
     if (providedEndDate) {
-      // Calculate from target end date
       endDate = new Date(providedEndDate);
       total_days = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
     } else if (duration_months) {
-      // Calculate from duration in months (28 days per month for consistency)
       total_days = duration_months * 28;
       endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + total_days);
     } else if (providedDays) {
-      // Use provided total_days
       total_days = providedDays;
       endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + total_days);
     } else {
-      // Default to 84 days (12 weeks)
-      total_days = 84;
+      total_days = 84; // Default to 12 weeks
       endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + total_days);
     }
@@ -156,75 +181,111 @@ app.post('/api/journeys', async (req, res) => {
     console.log(`📅 Journey: ${total_days} days from ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`);
 
     // Create journey
-    const journeyResult = await client.query(
-      `INSERT INTO journeys
-       (user_id, title, category, start_date, target_end_date, total_days, daily_time_minutes, skill_level, strategic_plan)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       RETURNING *`,
-      [user_id, title, category, startDate, endDate, total_days, daily_time_minutes, skill_level, JSON.stringify(strategic_plan)]
-    );
+    const { data: journey, error: journeyError } = await supabase
+      .from('journeys')
+      .insert([{
+        user_id,
+        title,
+        category,
+        start_date: startDate.toISOString().split('T')[0],
+        target_end_date: endDate.toISOString().split('T')[0],
+        total_days,
+        daily_time_minutes,
+        skill_level,
+        strategic_plan
+      }])
+      .select()
+      .single();
 
-    const journey = journeyResult.rows[0];
+    if (journeyError) throw journeyError;
 
     // Create streak record
-    await client.query(
-      `INSERT INTO streak_records (user_id, journey_id, grace_days_allowed)
-       VALUES ($1, $2, 2)`,
-      [user_id, journey.id]
-    );
+    const { error: streakError } = await supabase
+      .from('streak_records')
+      .insert([{
+        user_id,
+        journey_id: journey.id,
+        grace_days_allowed: 2
+      }]);
+
+    if (streakError) throw streakError;
 
     // Pre-generate all day records
+    const dayRecords = [];
     for (let dayNum = 1; dayNum <= total_days; dayNum++) {
       const dayDate = new Date(startDate);
       dayDate.setDate(dayDate.getDate() + dayNum - 1);
       const weekNum = Math.ceil(dayNum / 7);
 
-      await client.query(
-        `INSERT INTO day_records
-         (journey_id, user_id, day_number, calendar_date, week_number, planned_minutes, status)
-         VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
-        [journey.id, user_id, dayNum, dayDate, weekNum, daily_time_minutes]
-      );
+      dayRecords.push({
+        journey_id: journey.id,
+        user_id,
+        day_number: dayNum,
+        calendar_date: dayDate.toISOString().split('T')[0],
+        week_number: weekNum,
+        planned_minutes: daily_time_minutes,
+        status: 'pending'
+      });
     }
 
-    await client.query('COMMIT');
+    // Insert day records in batches (Supabase has a limit on bulk inserts)
+    const batchSize = 100;
+    for (let i = 0; i < dayRecords.length; i += batchSize) {
+      const batch = dayRecords.slice(i, i + batchSize);
+      const { error: dayRecordsError } = await supabase
+        .from('day_records')
+        .insert(batch);
+
+      if (dayRecordsError) throw dayRecordsError;
+    }
 
     console.log(`✅ Journey created with ${total_days} day records`);
     res.status(201).json(journey);
 
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('Error creating journey:', error);
     res.status(500).json({ error: error.message });
-  } finally {
-    client.release();
   }
 });
 
 // Get journey with progress
 app.get('/api/journeys/:id', async (req, res) => {
   try {
-    const journey = await pool.query('SELECT * FROM journeys WHERE id = $1', [req.params.id]);
-    if (journey.rows.length === 0) {
-      return res.status(404).json({ error: 'Journey not found' });
+    const { data: journey, error: journeyError } = await supabase
+      .from('journeys')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+
+    if (journeyError) {
+      if (journeyError.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Journey not found' });
+      }
+      throw journeyError;
     }
 
     // Get day records
-    const dayRecords = await pool.query(
-      'SELECT * FROM day_records WHERE journey_id = $1 ORDER BY day_number',
-      [req.params.id]
-    );
+    const { data: dayRecords, error: dayRecordsError } = await supabase
+      .from('day_records')
+      .select('*')
+      .eq('journey_id', req.params.id)
+      .order('day_number');
+
+    if (dayRecordsError) throw dayRecordsError;
 
     // Get streak
-    const streak = await pool.query(
-      'SELECT * FROM streak_records WHERE journey_id = $1',
-      [req.params.id]
-    );
+    const { data: streak, error: streakError } = await supabase
+      .from('streak_records')
+      .select('*')
+      .eq('journey_id', req.params.id)
+      .single();
+
+    if (streakError && streakError.code !== 'PGRST116') throw streakError;
 
     res.json({
-      ...journey.rows[0],
-      day_records: dayRecords.rows,
-      streak: streak.rows[0] || null
+      ...journey,
+      day_records: dayRecords || [],
+      streak: streak || null
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -234,16 +295,22 @@ app.get('/api/journeys/:id', async (req, res) => {
 // Get user's active journey
 app.get('/api/users/:userId/active-journey', async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT * FROM journeys WHERE user_id = $1 AND status = 'active' ORDER BY created_at DESC LIMIT 1`,
-      [req.params.userId]
-    );
+    const { data: journey, error } = await supabase
+      .from('journeys')
+      .select('*')
+      .eq('user_id', req.params.userId)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (result.rows.length === 0) {
+    if (error) throw error;
+
+    if (!journey) {
       return res.status(404).json({ error: 'No active journey' });
     }
 
-    res.json(result.rows[0]);
+    res.json(journey);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -255,47 +322,60 @@ app.get('/api/journeys/:id/progress', async (req, res) => {
     const journeyId = req.params.id;
 
     // Get journey
-    const journey = await pool.query('SELECT * FROM journeys WHERE id = $1', [journeyId]);
-    if (journey.rows.length === 0) {
-      return res.status(404).json({ error: 'Journey not found' });
+    const { data: journey, error: journeyError } = await supabase
+      .from('journeys')
+      .select('*')
+      .eq('id', journeyId)
+      .single();
+
+    if (journeyError) {
+      if (journeyError.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Journey not found' });
+      }
+      throw journeyError;
     }
 
     // Get all day records
-    const dayRecords = await pool.query(
-      'SELECT * FROM day_records WHERE journey_id = $1',
-      [journeyId]
-    );
+    const { data: dayRecords, error: dayRecordsError } = await supabase
+      .from('day_records')
+      .select('*')
+      .eq('journey_id', journeyId);
+
+    if (dayRecordsError) throw dayRecordsError;
 
     // Calculate expected day (based on current date)
-    const startDate = new Date(journey.rows[0].start_date);
+    const startDate = new Date(journey.start_date);
     const today = new Date();
     const daysSinceStart = Math.floor((today - startDate) / (1000 * 60 * 60 * 24)) + 1;
-    const expectedDay = Math.min(daysSinceStart, journey.rows[0].total_days);
+    const expectedDay = Math.min(daysSinceStart, journey.total_days);
 
     // Calculate stats
-    const pastDays = dayRecords.rows.filter(d => d.day_number <= expectedDay);
+    const pastDays = dayRecords.filter(d => d.day_number <= expectedDay);
     const completedDays = pastDays.filter(d => d.status === 'completed').length;
     const missedDays = pastDays.filter(d => d.status === 'missed').length;
     const partialDays = pastDays.filter(d => d.status === 'partial').length;
 
     // Get streak
-    const streak = await pool.query(
-      'SELECT * FROM streak_records WHERE journey_id = $1',
-      [journeyId]
-    );
+    const { data: streak, error: streakError } = await supabase
+      .from('streak_records')
+      .select('*')
+      .eq('journey_id', journeyId)
+      .single();
+
+    if (streakError && streakError.code !== 'PGRST116') throw streakError;
 
     res.json({
       journey_id: journeyId,
       current_day: expectedDay,
-      total_days: journey.rows[0].total_days,
-      days_remaining: journey.rows[0].total_days - expectedDay,
-      percent_complete: Math.round((expectedDay / journey.rows[0].total_days) * 100),
+      total_days: journey.total_days,
+      days_remaining: journey.total_days - expectedDay,
+      percent_complete: Math.round((expectedDay / journey.total_days) * 100),
       completed_days: completedDays,
       missed_days: missedDays,
       partial_days: partialDays,
       completion_rate: pastDays.length > 0 ? Math.round((completedDays / pastDays.length) * 100) : 0,
-      current_streak: streak.rows[0]?.current_streak || 0,
-      longest_streak: streak.rows[0]?.longest_streak || 0,
+      current_streak: streak?.current_streak || 0,
+      longest_streak: streak?.longest_streak || 0,
       is_on_track: missedDays <= Math.floor(expectedDay * 0.15),
       needs_intervention: missedDays > Math.floor(expectedDay * 0.3)
     });
@@ -314,34 +394,50 @@ app.get('/api/journeys/:id/today', async (req, res) => {
     const journeyId = req.params.id;
 
     // Get journey to calculate current day
-    const journey = await pool.query('SELECT * FROM journeys WHERE id = $1', [journeyId]);
-    if (journey.rows.length === 0) {
-      return res.status(404).json({ error: 'Journey not found' });
+    const { data: journey, error: journeyError } = await supabase
+      .from('journeys')
+      .select('*')
+      .eq('id', journeyId)
+      .single();
+
+    if (journeyError) {
+      if (journeyError.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Journey not found' });
+      }
+      throw journeyError;
     }
 
-    const startDate = new Date(journey.rows[0].start_date);
+    const startDate = new Date(journey.start_date);
     const today = new Date();
     const currentDay = Math.floor((today - startDate) / (1000 * 60 * 60 * 24)) + 1;
 
     // Get day record
-    const dayRecord = await pool.query(
-      'SELECT * FROM day_records WHERE journey_id = $1 AND day_number = $2',
-      [journeyId, currentDay]
-    );
+    const { data: dayRecord, error: dayRecordError } = await supabase
+      .from('day_records')
+      .select('*')
+      .eq('journey_id', journeyId)
+      .eq('day_number', currentDay)
+      .single();
 
-    if (dayRecord.rows.length === 0) {
-      return res.status(404).json({ error: 'Day record not found' });
+    if (dayRecordError) {
+      if (dayRecordError.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Day record not found' });
+      }
+      throw dayRecordError;
     }
 
     // Get tasks for this day
-    const tasks = await pool.query(
-      'SELECT * FROM tasks WHERE day_record_id = $1 ORDER BY task_order',
-      [dayRecord.rows[0].id]
-    );
+    const { data: tasks, error: tasksError } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('day_record_id', dayRecord.id)
+      .order('task_order');
+
+    if (tasksError) throw tasksError;
 
     res.json({
-      ...dayRecord.rows[0],
-      tasks: tasks.rows
+      ...dayRecord,
+      tasks: tasks || []
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -353,23 +449,31 @@ app.get('/api/journeys/:id/days/:dayNumber', async (req, res) => {
   try {
     const { id: journeyId, dayNumber } = req.params;
 
-    const dayRecord = await pool.query(
-      'SELECT * FROM day_records WHERE journey_id = $1 AND day_number = $2',
-      [journeyId, parseInt(dayNumber)]
-    );
+    const { data: dayRecord, error: dayRecordError } = await supabase
+      .from('day_records')
+      .select('*')
+      .eq('journey_id', journeyId)
+      .eq('day_number', parseInt(dayNumber))
+      .single();
 
-    if (dayRecord.rows.length === 0) {
-      return res.status(404).json({ error: 'Day record not found' });
+    if (dayRecordError) {
+      if (dayRecordError.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Day record not found' });
+      }
+      throw dayRecordError;
     }
 
-    const tasks = await pool.query(
-      'SELECT * FROM tasks WHERE day_record_id = $1 ORDER BY task_order',
-      [dayRecord.rows[0].id]
-    );
+    const { data: tasks, error: tasksError } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('day_record_id', dayRecord.id)
+      .order('task_order');
+
+    if (tasksError) throw tasksError;
 
     res.json({
-      ...dayRecord.rows[0],
-      tasks: tasks.rows
+      ...dayRecord,
+      tasks: tasks || []
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -383,39 +487,51 @@ app.post('/api/journeys/:id/days/:dayNumber/generate-tasks', async (req, res) =>
     const { tasks } = req.body; // Array of tasks from AI plan
 
     // Get day record
-    const dayRecord = await pool.query(
-      'SELECT * FROM day_records WHERE journey_id = $1 AND day_number = $2',
-      [journeyId, parseInt(dayNumber)]
-    );
+    const { data: dayRecord, error: dayRecordError } = await supabase
+      .from('day_records')
+      .select('*')
+      .eq('journey_id', journeyId)
+      .eq('day_number', parseInt(dayNumber))
+      .single();
 
-    if (dayRecord.rows.length === 0) {
-      return res.status(404).json({ error: 'Day record not found' });
+    if (dayRecordError) {
+      if (dayRecordError.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Day record not found' });
+      }
+      throw dayRecordError;
     }
 
-    const dayRecordId = dayRecord.rows[0].id;
+    const dayRecordId = dayRecord.id;
 
     // Delete existing tasks (in case of regeneration)
-    await pool.query('DELETE FROM tasks WHERE day_record_id = $1', [dayRecordId]);
+    const { error: deleteError } = await supabase
+      .from('tasks')
+      .delete()
+      .eq('day_record_id', dayRecordId);
+
+    if (deleteError) throw deleteError;
 
     // Insert new tasks
-    for (let i = 0; i < tasks.length; i++) {
-      const task = tasks[i];
-      await pool.query(
-        `INSERT INTO tasks (day_record_id, title, description, type, duration_minutes, task_order)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [dayRecordId, task.title, task.description || task.title, task.type, task.duration, i + 1]
-      );
-    }
+    const newTasks = tasks.map((task, index) => ({
+      day_record_id: dayRecordId,
+      title: task.title,
+      description: task.description || task.title,
+      type: task.type,
+      duration_minutes: task.duration,
+      task_order: index + 1
+    }));
 
-    // Get updated tasks
-    const updatedTasks = await pool.query(
-      'SELECT * FROM tasks WHERE day_record_id = $1 ORDER BY task_order',
-      [dayRecordId]
-    );
+    const { data: insertedTasks, error: insertError } = await supabase
+      .from('tasks')
+      .insert(newTasks)
+      .select()
+      .order('task_order');
+
+    if (insertError) throw insertError;
 
     res.json({
-      ...dayRecord.rows[0],
-      tasks: updatedTasks.rows
+      ...dayRecord,
+      tasks: insertedTasks
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -428,38 +544,41 @@ app.post('/api/journeys/:id/days/:dayNumber/generate-tasks', async (req, res) =>
 
 // Complete a task
 app.post('/api/tasks/:id/complete', async (req, res) => {
-  const client = await pool.connect();
-
   try {
-    await client.query('BEGIN');
-
     const taskId = req.params.id;
     const { quality, notes } = req.body;
 
     // Update task
-    const taskResult = await client.query(
-      `UPDATE tasks
-       SET completed = true, completed_at = NOW(), quality = $2, notes = $3, updated_at = NOW()
-       WHERE id = $1
-       RETURNING *`,
-      [taskId, quality, notes]
-    );
+    const { data: task, error: taskError } = await supabase
+      .from('tasks')
+      .update({
+        completed: true,
+        completed_at: new Date().toISOString(),
+        quality,
+        notes,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', taskId)
+      .select()
+      .single();
 
-    if (taskResult.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'Task not found' });
+    if (taskError) {
+      if (taskError.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Task not found' });
+      }
+      throw taskError;
     }
 
-    const task = taskResult.rows[0];
-
     // Check if all tasks for this day are complete
-    const allTasks = await client.query(
-      'SELECT * FROM tasks WHERE day_record_id = $1',
-      [task.day_record_id]
-    );
+    const { data: allTasks, error: allTasksError } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('day_record_id', task.day_record_id);
 
-    const completedCount = allTasks.rows.filter(t => t.completed).length;
-    const totalCount = allTasks.rows.length;
+    if (allTasksError) throw allTasksError;
+
+    const completedCount = allTasks.filter(t => t.completed).length;
+    const totalCount = allTasks.length;
     const completionRate = (completedCount / totalCount) * 100;
 
     // Update day record status
@@ -470,32 +589,56 @@ app.post('/api/tasks/:id/complete', async (req, res) => {
       dayStatus = 'partial';
     }
 
-    await client.query(
-      `UPDATE day_records
-       SET status = $1, completed_at = CASE WHEN $1 = 'completed' THEN NOW() ELSE NULL END, updated_at = NOW()
-       WHERE id = $2`,
-      [dayStatus, task.day_record_id]
-    );
+    const { error: dayUpdateError } = await supabase
+      .from('day_records')
+      .update({
+        status: dayStatus,
+        completed_at: dayStatus === 'completed' ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', task.day_record_id);
+
+    if (dayUpdateError) throw dayUpdateError;
 
     // Update streak if day completed
     if (dayStatus === 'completed' || dayStatus === 'partial') {
-      const dayRecord = await client.query(
-        'SELECT journey_id FROM day_records WHERE id = $1',
-        [task.day_record_id]
-      );
+      const { data: dayRecord, error: dayRecordError } = await supabase
+        .from('day_records')
+        .select('journey_id')
+        .eq('id', task.day_record_id)
+        .single();
 
-      await client.query(
-        `UPDATE streak_records
-         SET current_streak = current_streak + 1,
-             longest_streak = GREATEST(longest_streak, current_streak + 1),
-             last_active_date = CURRENT_DATE,
-             updated_at = NOW()
-         WHERE journey_id = $1 AND last_active_date < CURRENT_DATE`,
-        [dayRecord.rows[0].journey_id]
-      );
+      if (dayRecordError) throw dayRecordError;
+
+      // Get current streak to check if we need to update today
+      const { data: currentStreak, error: streakFetchError } = await supabase
+        .from('streak_records')
+        .select('*')
+        .eq('journey_id', dayRecord.journey_id)
+        .single();
+
+      if (streakFetchError && streakFetchError.code !== 'PGRST116') throw streakFetchError;
+
+      const today = new Date().toISOString().split('T')[0];
+      const lastActiveDate = currentStreak?.last_active_date;
+
+      // Only update streak if we haven't already counted today
+      if (!lastActiveDate || lastActiveDate !== today) {
+        const newStreak = (currentStreak?.current_streak || 0) + 1;
+
+        const { error: streakUpdateError } = await supabase
+          .from('streak_records')
+          .update({
+            current_streak: newStreak,
+            longest_streak: Math.max(currentStreak?.longest_streak || 0, newStreak),
+            last_active_date: today,
+            updated_at: new Date().toISOString()
+          })
+          .eq('journey_id', dayRecord.journey_id);
+
+        if (streakUpdateError) throw streakUpdateError;
+      }
     }
-
-    await client.query('COMMIT');
 
     res.json({
       task: task,
@@ -504,29 +647,32 @@ app.post('/api/tasks/:id/complete', async (req, res) => {
     });
 
   } catch (error) {
-    await client.query('ROLLBACK');
     res.status(500).json({ error: error.message });
-  } finally {
-    client.release();
   }
 });
 
 // Uncomplete a task
 app.post('/api/tasks/:id/uncomplete', async (req, res) => {
   try {
-    const result = await pool.query(
-      `UPDATE tasks
-       SET completed = false, completed_at = NULL, updated_at = NOW()
-       WHERE id = $1
-       RETURNING *`,
-      [req.params.id]
-    );
+    const { data: task, error } = await supabase
+      .from('tasks')
+      .update({
+        completed: false,
+        completed_at: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', req.params.id)
+      .select()
+      .single();
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Task not found' });
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Task not found' });
+      }
+      throw error;
     }
 
-    res.json(result.rows[0]);
+    res.json(task);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -539,16 +685,20 @@ app.post('/api/tasks/:id/uncomplete', async (req, res) => {
 // Get streak info
 app.get('/api/journeys/:id/streak', async (req, res) => {
   try {
-    const result = await pool.query(
-      'SELECT * FROM streak_records WHERE journey_id = $1',
-      [req.params.id]
-    );
+    const { data: streak, error } = await supabase
+      .from('streak_records')
+      .select('*')
+      .eq('journey_id', req.params.id)
+      .single();
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Streak record not found' });
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Streak record not found' });
+      }
+      throw error;
     }
 
-    res.json(result.rows[0]);
+    res.json(streak);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -561,26 +711,33 @@ app.post('/api/journeys/:id/grace-day', async (req, res) => {
     const { reason } = req.body;
 
     // Check grace days remaining
-    const streak = await pool.query(
-      'SELECT * FROM streak_records WHERE journey_id = $1',
-      [journeyId]
-    );
+    const { data: streak, error: streakError } = await supabase
+      .from('streak_records')
+      .select('*')
+      .eq('journey_id', journeyId)
+      .single();
 
-    if (streak.rows.length === 0) {
-      return res.status(404).json({ error: 'Streak record not found' });
+    if (streakError) {
+      if (streakError.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Streak record not found' });
+      }
+      throw streakError;
     }
 
-    if (streak.rows[0].grace_days_used >= streak.rows[0].grace_days_allowed) {
+    if (streak.grace_days_used >= streak.grace_days_allowed) {
       return res.status(400).json({ error: 'No grace days remaining this week' });
     }
 
     // Update streak
-    await pool.query(
-      `UPDATE streak_records
-       SET grace_days_used = grace_days_used + 1, updated_at = NOW()
-       WHERE journey_id = $1`,
-      [journeyId]
-    );
+    const { error: updateError } = await supabase
+      .from('streak_records')
+      .update({
+        grace_days_used: streak.grace_days_used + 1,
+        updated_at: new Date().toISOString()
+      })
+      .eq('journey_id', journeyId);
+
+    if (updateError) throw updateError;
 
     res.json({ message: 'Grace day used', reason });
   } catch (error) {
@@ -594,7 +751,16 @@ app.post('/api/journeys/:id/grace-day', async (req, res) => {
 
 app.get('/api/health', async (_req, res) => {
   try {
-    await pool.query('SELECT 1');
+    // Simple query to check database connectivity
+    const { data, error } = await supabase
+      .from('users')
+      .select('count')
+      .limit(1);
+
+    if (error && error.code !== 'PGRST116') {
+      throw error;
+    }
+
     res.json({ status: 'ok', database: 'connected' });
   } catch (error) {
     res.status(500).json({ status: 'error', database: 'disconnected' });
@@ -605,4 +771,5 @@ app.get('/api/health', async (_req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📊 API endpoints available at http://localhost:${PORT}/api`);
+  console.log(`☁️  Using Supabase database`);
 });

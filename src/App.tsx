@@ -1,13 +1,6 @@
 import { useStore } from './store/useStore';
 import LandingPage from './pages/LandingPage';
 import ChatOnboarding from './pages/ChatOnboarding';
-import GoalSelection from './pages/GoalSelection';
-import SpecificGoal from './pages/SpecificGoal';
-import UniversalQuestions from './pages/UniversalQuestions';
-import CategoryQuestions from './pages/CategoryQuestions';
-import RoadmapGeneration from './pages/RoadmapGeneration';
-import CheckInSetup from './pages/CheckInSetup';
-import WelcomeAnimation from './pages/WelcomeAnimation';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 
@@ -36,46 +29,8 @@ function App() {
     <>
       {step === 0 && <LandingPage key="landing" />}
       {step === 1 && <ChatOnboarding key="chat" />}
-      {step === 2 && <GoalSelection key="goal-selection" />}
-      {step === 3 && <SpecificGoal key="specific-goal" />}
-      {step === 4 && <UniversalQuestions key="universal" />}
-      {step === 5 && <CategoryQuestions key="category" />}
-      {step === 6 && <RoadmapGeneration key="roadmap" />}
-      {step === 7 && <CheckInSetup key="checkin" />}
-      {step === 8 && <WelcomeAnimation key="welcome" />}
-      {step === 9 && <Dashboard key="dashboard" />}
+      {step === 2 && <Dashboard key="dashboard" />}
       {step === 10 && <Settings key="settings" />}
-      {step >= 10 && (
-        <div style={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexDirection: 'column',
-          gap: '16px'
-        }}>
-          <p style={{ color: '#999', fontWeight: 300 }}>
-            Step {step} - Coming soon...
-          </p>
-          <button
-            onClick={() => {
-              resetOnboarding();
-              window.location.reload();
-            }}
-            style={{
-              padding: '12px 24px',
-              background: 'black',
-              color: 'white',
-              border: 'none',
-              borderRadius: '12px',
-              cursor: 'pointer',
-              fontWeight: 300
-            }}
-          >
-            Start Over
-          </button>
-        </div>
-      )}
 
       {/* Quick reset button - bottom right corner for development */}
       <div style={{

@@ -720,7 +720,7 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
       setIsTyping(false);
 
       // Wait a moment to show 100% completion, then transition
-      setTimeout(() => setStep(7), 800);
+      setTimeout(() => setStep(2), 800);
 
     } catch {
       // Handle plan generation error - use fallback
@@ -790,7 +790,7 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
       }
       // === END FALLBACK BACKEND SYNC ===
 
-      setTimeout(() => setStep(7), 800);
+      setTimeout(() => setStep(2), 800);
     }
   };
 
@@ -966,14 +966,45 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
         </div>
       )}
 
-      {/* Hero Section */}
+      {/* Hero Section with Back Button */}
       <div style={{
         textAlign: 'center',
-        padding: `${tokens.spacing['3xl']} ${tokens.spacing.xl} ${tokens.spacing.lg} ${tokens.spacing.xl}`,
+        padding: `${tokens.spacing['2xl']} ${tokens.spacing.xl} ${tokens.spacing.lg} ${tokens.spacing.xl}`,
         borderBottom: `1px solid ${tokens.colors.gray[200]}`,
         position: 'relative',
         zIndex: 1,
       }}>
+        {/* Back Button */}
+        <button
+          onClick={() => setStep(0)}
+          style={{
+            position: 'absolute',
+            top: tokens.spacing.xl,
+            left: tokens.spacing.xl,
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: tokens.typography.sizes.xl,
+            color: tokens.colors.text.secondary,
+            transition: 'all 0.2s',
+            padding: tokens.spacing.sm,
+            display: 'flex',
+            alignItems: 'center',
+            gap: tokens.spacing.xs,
+            fontWeight: tokens.typography.weights.light
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = tokens.colors.primary;
+            e.currentTarget.style.transform = 'translateX(-4px)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = tokens.colors.text.secondary;
+            e.currentTarget.style.transform = 'translateX(0)';
+          }}
+        >
+          ← Back
+        </button>
+
         <div style={{
           display: 'flex',
           flexDirection: 'column',
@@ -1185,9 +1216,11 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
                 alignItems: 'center',
                 justifyContent: 'center',
                 opacity: userInput.trim() ? 1 : 0.5,
+                fontSize: '20px',
+                fontWeight: 400
               }}
             >
-              <Send size={18} strokeWidth={1.5} />
+              →
             </button>
           </div>
         </div>

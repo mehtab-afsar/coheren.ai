@@ -149,15 +149,26 @@ export default function LandingPage() {
 
       {/* Navigation */}
       <nav style={{
-        position: 'relative',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: `${tokens.spacing.xl} ${tokens.spacing['2xl']}`,
-        maxWidth: '1200px',
-        margin: '0 auto',
-        zIndex: 10
+        position: 'sticky',
+        top: 0,
+        width: '100%',
+        zIndex: 100,
+        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.25) 0%, rgba(250, 251, 252, 0.35) 50%, rgba(255, 255, 255, 0.25) 100%)',
+        backdropFilter: 'blur(24px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+        borderBottom: '1px solid rgba(226, 232, 240, 0.2)',
+        boxShadow: '0 4px 32px rgba(0, 0, 0, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.4)'
       }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: `${tokens.spacing.lg} ${tokens.spacing['2xl']}`,
+          maxWidth: '1200px',
+          margin: '0 auto',
+          width: '100%'
+        }}>
+        {/* Logo */}
         <button
           onClick={() => {
             setStep(0);
@@ -184,28 +195,93 @@ export default function LandingPage() {
           />
         </button>
 
-        <motion.button
-          onClick={() => handleGetStarted()}
-          whileHover={{ scale: 1.05, boxShadow: '0 8px 24px rgba(67, 56, 202, 0.3)' }}
-          whileTap={{ scale: 0.98 }}
-          style={{
-            padding: `${tokens.spacing.sm} ${tokens.spacing.xl}`,
-            background: `linear-gradient(135deg, ${tokens.colors.primary} 0%, #5B4FCF 100%)`,
-            color: 'white',
-            border: 'none',
-            borderRadius: tokens.borderRadius.lg,
-            cursor: 'pointer',
-            fontSize: tokens.typography.sizes.base,
-            fontWeight: tokens.typography.weights.medium,
-            display: 'flex',
-            alignItems: 'center',
-            gap: tokens.spacing.xs,
-            boxShadow: '0 4px 12px rgba(67, 56, 202, 0.2)',
-            transition: 'all 0.3s ease'
-          }}
-        >
-          Start <ArrowRight size={16} />
-        </motion.button>
+        {/* Navigation Links */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: tokens.spacing['2xl']
+        }}>
+          <button
+            onClick={() => {
+              document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: tokens.typography.sizes.base,
+              fontWeight: tokens.typography.weights.medium,
+              color: tokens.colors.text.secondary,
+              transition: 'color 0.2s',
+              padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = tokens.colors.primary}
+            onMouseLeave={(e) => e.currentTarget.style.color = tokens.colors.text.secondary}
+          >
+            How it Works
+          </button>
+
+          <button
+            onClick={() => {
+              document.getElementById('roadmap-preview')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: tokens.typography.sizes.base,
+              fontWeight: tokens.typography.weights.medium,
+              color: tokens.colors.text.secondary,
+              transition: 'color 0.2s',
+              padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = tokens.colors.primary}
+            onMouseLeave={(e) => e.currentTarget.style.color = tokens.colors.text.secondary}
+          >
+            Features
+          </button>
+
+          <button
+            onClick={() => {
+              document.getElementById('why-coheren')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: tokens.typography.sizes.base,
+              fontWeight: tokens.typography.weights.medium,
+              color: tokens.colors.text.secondary,
+              transition: 'color 0.2s',
+              padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = tokens.colors.primary}
+            onMouseLeave={(e) => e.currentTarget.style.color = tokens.colors.text.secondary}
+          >
+            Why Coheren
+          </button>
+
+          <button
+            onClick={() => {
+              document.getElementById('science')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: tokens.typography.sizes.base,
+              fontWeight: tokens.typography.weights.medium,
+              color: tokens.colors.text.secondary,
+              transition: 'color 0.2s',
+              padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = tokens.colors.primary}
+            onMouseLeave={(e) => e.currentTarget.style.color = tokens.colors.text.secondary}
+          >
+            Science
+          </button>
+        </div>
+        </div>
       </nav>
 
       {/* Hero Section - Full Page */}
@@ -360,7 +436,7 @@ export default function LandingPage() {
                 whileHover={goalInput.trim() ? { scale: 1.05 } : {}}
                 whileTap={goalInput.trim() ? { scale: 0.95 } : {}}
                 style={{
-                  padding: `${tokens.spacing.lg} ${tokens.spacing['3xl']}`,
+                  padding: `${tokens.spacing.lg} ${tokens.spacing['2xl']}`,
                   background: goalInput.trim()
                     ? `linear-gradient(135deg, ${tokens.colors.primary} 0%, #5B4FCF 100%)`
                     : '#E2E8F0',
@@ -368,16 +444,18 @@ export default function LandingPage() {
                   border: 'none',
                   borderRadius: tokens.borderRadius.xl,
                   cursor: goalInput.trim() ? 'pointer' : 'not-allowed',
-                  fontSize: tokens.typography.sizes.lg,
-                  fontWeight: tokens.typography.weights.semibold,
+                  fontSize: '24px',
+                  fontWeight: 400,
                   display: 'flex',
                   alignItems: 'center',
+                  justifyContent: 'center',
                   gap: tokens.spacing.sm,
                   boxShadow: goalInput.trim() ? '0 4px 12px rgba(67, 56, 202, 0.3)' : 'none',
-                  transition: 'all 0.3s ease'
+                  transition: 'all 0.3s ease',
+                  minWidth: '56px'
                 }}
               >
-                Start <ArrowRight size={20} />
+                →
               </motion.button>
             </div>
           </motion.div>
@@ -389,135 +467,102 @@ export default function LandingPage() {
             transition={{ duration: 0.8, delay: 0.6 }}
             style={{
               display: 'flex',
-              gap: tokens.spacing.md,
-              justifyContent: 'center',
-              flexWrap: 'wrap',
-              marginBottom: tokens.spacing.sm
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: tokens.spacing.lg,
+              marginTop: tokens.spacing.xl
             }}
           >
             <span style={{
               fontSize: tokens.typography.sizes.sm,
-              color: '#64748B',
-              fontWeight: tokens.typography.weights.medium
-            }}>
-              or try:
-            </span>
-            {['Learn guitar', 'Get fit', 'Learn to code'].map((example, index) => (
-              <motion.button
-                key={example}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.7 + index * 0.1 }}
-                onClick={() => handleGetStarted(example)}
-                whileHover={{
-                  scale: 1.05,
-                  y: -2
-                }}
-                whileTap={{ scale: 0.95 }}
-                style={{
-                  padding: `${tokens.spacing.sm} ${tokens.spacing.lg}`,
-                  background: 'white',
-                  border: '1px solid #E2E8F0',
-                  borderRadius: tokens.borderRadius.full,
-                  cursor: 'pointer',
-                  fontSize: tokens.typography.sizes.sm,
-                  color: '#475569',
-                  fontWeight: tokens.typography.weights.medium,
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-                  transition: 'all 0.2s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = tokens.colors.primary;
-                  e.currentTarget.style.color = tokens.colors.primary;
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(67, 56, 202, 0.15)';
-                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(67, 56, 202, 0.05) 0%, rgba(16, 185, 129, 0.05) 100%)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = '#E2E8F0';
-                  e.currentTarget.style.color = '#475569';
-                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)';
-                  e.currentTarget.style.background = 'white';
-                }}
-              >
-                {example}
-              </motion.button>
-            ))}
-          </motion.div>
-
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, delay: 1.5 }}
-            style={{
-              fontSize: tokens.typography.sizes.base,
               color: '#94A3B8',
-              marginTop: tokens.spacing.xl
-            }}
-          >
-            No signup required to start
-          </motion.p>
+              fontWeight: tokens.typography.weights.regular,
+              letterSpacing: '0.05em',
+              textTransform: 'uppercase'
+            }}>
+              or try
+            </span>
 
-          {/* Scroll indicator */}
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 2 }}
-            style={{
-              position: 'absolute',
-              bottom: tokens.spacing['3xl'],
-              left: '50%',
-              transform: 'translateX(-50%)',
+            <div style={{
               display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: tokens.spacing.sm
-            }}
-          >
+              gap: tokens.spacing.md,
+              justifyContent: 'center',
+              flexWrap: 'wrap'
+            }}>
+              {['Learn guitar', 'Get fit', 'Learn to code'].map((example, index) => (
+                <motion.button
+                  key={example}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: 0.7 + index * 0.1 }}
+                  onClick={() => handleGetStarted(example)}
+                  whileHover={{
+                    scale: 1.05,
+                    y: -2
+                  }}
+                  whileTap={{ scale: 0.95 }}
+                  style={{
+                    padding: `${tokens.spacing.md} ${tokens.spacing.xl}`,
+                    background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(250, 251, 252, 0.95) 100%)',
+                    border: '1px solid rgba(226, 232, 240, 0.6)',
+                    borderRadius: tokens.borderRadius.full,
+                    cursor: 'pointer',
+                    fontSize: tokens.typography.sizes.base,
+                    color: '#475569',
+                    fontWeight: tokens.typography.weights.medium,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255, 255, 255, 0.8)',
+                    transition: 'all 0.2s ease',
+                    backdropFilter: 'blur(8px)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(99, 102, 241, 0.4)';
+                    e.currentTarget.style.color = tokens.colors.primary;
+                    e.currentTarget.style.boxShadow = '0 6px 20px rgba(67, 56, 202, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.9)';
+                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(243, 232, 255, 0.4) 100%)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(226, 232, 240, 0.6)';
+                    e.currentTarget.style.color = '#475569';
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255, 255, 255, 0.8)';
+                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(250, 251, 252, 0.95) 100%)';
+                  }}
+                >
+                  {example}
+                </motion.button>
+              ))}
+            </div>
+
             <motion.div
-              animate={{ y: [0, 8, 0] }}
-              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.8, delay: 1.5 }}
               style={{
-                fontSize: tokens.typography.sizes.xs,
-                color: '#94A3B8',
-                fontWeight: tokens.typography.weights.medium,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase'
+                display: 'flex',
+                alignItems: 'center',
+                gap: tokens.spacing.xs,
+                marginTop: tokens.spacing.md
               }}
             >
-              Scroll to explore
-            </motion.div>
-            <motion.div
-              animate={{ y: [0, 8, 0] }}
-              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", delay: 0.2 }}
-              style={{
-                width: '24px',
-                height: '36px',
-                border: '2px solid #CBD5E1',
-                borderRadius: tokens.borderRadius.full,
-                position: 'relative'
-              }}
-            >
-              <motion.div
-                animate={{ y: [0, 12, 0] }}
-                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                style={{
-                  width: '4px',
-                  height: '8px',
-                  backgroundColor: tokens.colors.primary,
-                  borderRadius: '2px',
-                  position: 'absolute',
-                  top: '6px',
-                  left: '50%',
-                  transform: 'translateX(-50%)'
-                }}
-              />
+              <div style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                backgroundColor: '#10B981'
+              }} />
+              <span style={{
+                fontSize: tokens.typography.sizes.sm,
+                color: '#64748B',
+                fontWeight: tokens.typography.weights.regular
+              }}>
+                No signup required to start
+              </span>
             </motion.div>
           </motion.div>
         </motion.div>
       </section>
 
       {/* How It Works - Second Page/Section */}
-      <section style={{
+      <section id="how-it-works" style={{
         minHeight: '100vh',
         padding: `${tokens.spacing['5xl']} ${tokens.spacing.xl}`,
         background: 'linear-gradient(180deg, #FAFBFC 0%, white 50%, #FAFBFC 100%)',
@@ -525,7 +570,8 @@ export default function LandingPage() {
         overflow: 'hidden',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center'
+        justifyContent: 'center',
+        scrollMarginTop: '80px'
       }}>
         {/* Enhanced Decorative elements */}
         <div style={{
@@ -810,10 +856,11 @@ export default function LandingPage() {
       </section>
 
       {/* Example Roadmap Section - Enhanced */}
-      <section style={{
+      <section id="roadmap-preview" style={{
         padding: `${tokens.spacing['5xl']} ${tokens.spacing.xl}`,
         background: 'linear-gradient(180deg, #FAFBFC 0%, white 100%)',
-        position: 'relative'
+        position: 'relative',
+        scrollMarginTop: '80px'
       }}>
         <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
           <motion.div
@@ -1054,9 +1101,10 @@ export default function LandingPage() {
       </section>
 
       {/* Not Another Todo App - Problem/Solution Format */}
-      <section style={{
+      <section id="why-coheren" style={{
         padding: `${tokens.spacing['5xl']} ${tokens.spacing.xl}`,
-        backgroundColor: 'white'
+        backgroundColor: 'white',
+        scrollMarginTop: '80px'
       }}>
         <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
           <motion.div
@@ -1150,9 +1198,10 @@ export default function LandingPage() {
 
 
       {/* The Science Behind Coheren - Clean & Simple */}
-      <section style={{
+      <section id="science" style={{
         padding: `${tokens.spacing['5xl']} ${tokens.spacing.xl}`,
-        backgroundColor: 'white'
+        backgroundColor: 'white',
+        scrollMarginTop: '80px'
       }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: tokens.spacing['4xl'] }}>

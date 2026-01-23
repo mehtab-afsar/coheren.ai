@@ -1,0 +1,23 @@
+<svg width="280" height="85" viewBox="0 0 280 85" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Text: coheren.ai in Poppins-like thin font -->
+  <g transform="translate(0, 0)" font-family="Poppins, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-weight="300" font-size="32" fill="#1F1F1F">
+    <text x="140" y="35" text-anchor="middle">coheren.ai</text>
+  </g>
+
+  <!-- Icon: Timeline with dots and arrow (proportionally scaled from original SVG) -->
+  <g transform="translate(65, 50)">
+    <!-- Timeline line -->
+    <line x1="0" y1="20" x2="115" y2="20" stroke="#6B7280" stroke-width="2" stroke-linecap="round"/>
+
+    <!-- First dot (smaller) -->
+    <circle cx="30" cy="20" r="6" fill="#6B7280"/>
+
+    <!-- Second dot (larger) -->
+    <circle cx="90" cy="20" r="8" fill="#6B7280"/>
+
+    <!-- Arrow -->
+    <g transform="translate(115, 20)">
+      <polyline points="0,0 25,0 17,-12 30,0 17,12 25,0" fill="none" stroke="#6B7280" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+</svg>

@@ -905,13 +905,14 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
             }}
           >
             <img
-              src="/logo.png"
+              src="/logo.svg"
               alt="Coheren AI"
               style={{
                 width: '120px',
-                height: '120px',
+                height: 'auto',
                 objectFit: 'contain',
                 marginBottom: tokens.spacing.lg,
+                display: 'block'
               }}
             />
           </button>
@@ -1026,16 +1027,17 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
             }}
           >
             <img
-              src="/logo.png"
+              src="/logo.svg"
               alt="Coheren AI Logo"
               style={{
                 width: '220px',
-                height: '220px',
+                height: 'auto',
                 objectFit: 'contain',
                 userSelect: 'none',
                 WebkitUserSelect: 'none',
                 MozUserSelect: 'none',
                 msUserSelect: 'none',
+                display: 'block'
               }}
               draggable="false"
             />

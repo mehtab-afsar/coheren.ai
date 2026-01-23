@@ -3,10 +3,6 @@ import { motion } from 'framer-motion';
 import {
   ArrowRight,
   CheckCircle2,
-  Zap,
-  Shield,
-  Mail,
-  Lock,
   X
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
@@ -168,7 +164,7 @@ export default function LandingPage() {
           margin: '0 auto',
           width: '100%'
         }}>
-        {/* Logo */}
+        {/* Brand Text */}
         <button
           onClick={() => {
             setStep(0);
@@ -176,23 +172,25 @@ export default function LandingPage() {
           }}
           style={{
             display: 'flex',
-            alignItems: 'center',
-            gap: tokens.spacing.sm,
+            flexDirection: 'column',
+            alignItems: 'flex-start',
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            padding: 0
+            padding: 0,
+            transition: 'opacity 0.2s'
           }}
+          onMouseEnter={(e) => e.currentTarget.style.opacity = '0.7'}
+          onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
         >
-          <img
-            src="/logo.png"
-            alt="Coheren"
-            style={{
-              height: '40px',
-              width: 'auto',
-              objectFit: 'contain'
-            }}
-          />
+          <span style={{
+            fontSize: tokens.typography.sizes['2xl'],
+            fontWeight: tokens.typography.weights.light,
+            color: '#0F172A',
+            letterSpacing: '-0.02em'
+          }}>
+            coheren.ai
+          </span>
         </button>
 
         {/* Navigation Links */}
@@ -302,29 +300,6 @@ export default function LandingPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
         >
-          {/* Decorative badge */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: tokens.spacing.xs,
-              padding: `${tokens.spacing.xs} ${tokens.spacing.md}`,
-              background: 'linear-gradient(135deg, rgba(67, 56, 202, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%)',
-              border: '1px solid rgba(67, 56, 202, 0.2)',
-              borderRadius: tokens.borderRadius.full,
-              marginBottom: tokens.spacing.xl,
-              fontSize: tokens.typography.sizes.sm,
-              fontWeight: tokens.typography.weights.medium,
-              color: tokens.colors.primary
-            }}
-          >
-            <Zap size={14} fill={tokens.colors.primary} />
-            AI-Powered Consistency
-          </motion.div>
-
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1061,41 +1036,6 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Footer */}
-            <div style={{
-              marginTop: tokens.spacing['2xl'],
-              padding: tokens.spacing.lg,
-              backgroundColor: '#F8FAFC',
-              borderRadius: tokens.borderRadius.lg,
-              textAlign: 'center'
-            }}>
-              <p style={{
-                fontSize: tokens.typography.sizes.base,
-                color: '#475569',
-                marginBottom: tokens.spacing.sm
-              }}>
-                This is custom-generated for YOUR schedule, experience level, and learning style.
-              </p>
-              <button
-                onClick={() => handleGetStarted()}
-                style={{
-                  marginTop: tokens.spacing.md,
-                  padding: `${tokens.spacing.sm} ${tokens.spacing.xl}`,
-                  background: tokens.colors.primary,
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: tokens.borderRadius.lg,
-                  cursor: 'pointer',
-                  fontSize: tokens.typography.sizes.base,
-                  fontWeight: tokens.typography.weights.medium,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: tokens.spacing.xs
-                }}
-              >
-                Create my roadmap <ArrowRight size={16} />
-              </button>
-            </div>
           </motion.div>
         </div>
       </section>
@@ -1268,252 +1208,93 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Footer - Modern & Clean */}
+      {/* Footer - Minimal & Clean */}
       <footer style={{
-        position: 'relative',
         borderTop: '1px solid #E2E8F0',
-        overflow: 'hidden'
+        backgroundColor: 'white'
       }}>
-        {/* Animated gradient background */}
-        <motion.div
-          animate={{
-            backgroundPosition: ['0% 50%', '100% 50%', '0% 50%']
-          }}
-          transition={{
-            duration: 10,
-            repeat: Infinity,
-            ease: "linear"
-          }}
-          style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'linear-gradient(90deg, #ffffff 0%, #F3E8FF 25%, #E9D5FF 50%, #F3E8FF 75%, #ffffff 100%)',
-            backgroundSize: '200% 100%',
-            zIndex: 0
-          }}
-        />
-
-        {/* Main Footer */}
         <div style={{
           maxWidth: '1200px',
           margin: '0 auto',
-          padding: `${tokens.spacing['5xl']} ${tokens.spacing.xl} ${tokens.spacing['3xl']}`,
-          position: 'relative',
-          zIndex: 1
+          padding: `${tokens.spacing.xl} ${tokens.spacing['2xl']}`,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: tokens.spacing.xl,
+          flexWrap: 'wrap'
         }}>
+          {/* Left side - Full Logo */}
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: tokens.spacing['4xl'],
-            marginBottom: tokens.spacing['4xl']
+            display: 'flex',
+            alignItems: 'center'
           }}>
-            {/* Brand Column */}
-            <div style={{ gridColumn: 'span 1' }}>
-              <img
-                src="/logo.png"
-                alt="Coheren"
-                style={{
-                  height: '36px',
-                  width: 'auto',
-                  objectFit: 'contain',
-                  marginBottom: tokens.spacing.lg
-                }}
-              />
-              <p style={{
-                fontSize: tokens.typography.sizes.sm,
-                color: '#64748B',
-                lineHeight: 1.7,
-                marginBottom: tokens.spacing.lg,
-                maxWidth: '280px'
-              }}>
-                Turn your goals into habits with AI-powered consistency coaching.
-              </p>
-              <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: tokens.spacing.xs,
-                padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`,
-                background: 'linear-gradient(135deg, rgba(67, 56, 202, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%)',
-                borderRadius: tokens.borderRadius.md,
-                border: '1px solid rgba(67, 56, 202, 0.2)'
-              }}>
-                <Shield size={12} color={tokens.colors.primary} />
-                <span style={{
-                  fontSize: tokens.typography.sizes.xs,
-                  color: tokens.colors.primary,
-                  fontWeight: tokens.typography.weights.medium
-                }}>
-                  Made in India
-                </span>
-              </div>
-            </div>
-
-            {/* Links Columns */}
-            <div>
-              <h3 style={{
-                fontSize: tokens.typography.sizes.xs,
-                fontWeight: tokens.typography.weights.semibold,
-                color: '#0F172A',
-                marginBottom: tokens.spacing.md,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase'
-              }}>
-                Product
-              </h3>
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: tokens.spacing.sm
-              }}>
-                {['Features', 'How it works', 'Pricing', 'Roadmap'].map(item => (
-                  <a
-                    key={item}
-                    href={`#${item.toLowerCase().replace(' ', '-')}`}
-                    style={{
-                      fontSize: tokens.typography.sizes.sm,
-                      color: '#64748B',
-                      textDecoration: 'none',
-                      transition: 'color 0.2s'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.color = tokens.colors.primary}
-                    onMouseLeave={(e) => e.currentTarget.style.color = '#64748B'}
-                  >
-                    {item}
-                  </a>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <h3 style={{
-                fontSize: tokens.typography.sizes.xs,
-                fontWeight: tokens.typography.weights.semibold,
-                color: '#0F172A',
-                marginBottom: tokens.spacing.md,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase'
-              }}>
-                Company
-              </h3>
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: tokens.spacing.sm
-              }}>
-                {['About', 'Blog', 'Careers', 'Press'].map(item => (
-                  <a
-                    key={item}
-                    href={`#${item.toLowerCase()}`}
-                    style={{
-                      fontSize: tokens.typography.sizes.sm,
-                      color: '#64748B',
-                      textDecoration: 'none',
-                      transition: 'color 0.2s'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.color = tokens.colors.primary}
-                    onMouseLeave={(e) => e.currentTarget.style.color = '#64748B'}
-                  >
-                    {item}
-                  </a>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <h3 style={{
-                fontSize: tokens.typography.sizes.xs,
-                fontWeight: tokens.typography.weights.semibold,
-                color: '#0F172A',
-                marginBottom: tokens.spacing.md,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase'
-              }}>
-                Support
-              </h3>
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: tokens.spacing.sm
-              }}>
-                <a
-                  href="mailto:hello@coheren.ai"
-                  style={{
-                    fontSize: tokens.typography.sizes.sm,
-                    color: '#64748B',
-                    textDecoration: 'none',
-                    transition: 'color 0.2s',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: tokens.spacing.xs
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.color = tokens.colors.primary}
-                  onMouseLeave={(e) => e.currentTarget.style.color = '#64748B'}
-                >
-                  <Mail size={14} />
-                  Contact us
-                </a>
-                {['Help Center', 'Privacy', 'Terms'].map(item => (
-                  <a
-                    key={item}
-                    href={`#${item.toLowerCase().replace(' ', '-')}`}
-                    style={{
-                      fontSize: tokens.typography.sizes.sm,
-                      color: '#64748B',
-                      textDecoration: 'none',
-                      transition: 'color 0.2s'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.color = tokens.colors.primary}
-                    onMouseLeave={(e) => e.currentTarget.style.color = '#64748B'}
-                  >
-                    {item}
-                  </a>
-                ))}
-              </div>
-            </div>
+            <img
+              src="/logo-full.svg"
+              alt="Coheren"
+              style={{
+                width: '180px',
+                height: 'auto',
+                objectFit: 'contain',
+                display: 'block'
+              }}
+            />
           </div>
 
-          {/* Bottom Bar */}
+          {/* Right side - Mailing list */}
           <div style={{
-            paddingTop: tokens.spacing['2xl'],
-            borderTop: '1px solid #E2E8F0',
             display: 'flex',
-            justifyContent: 'space-between',
             alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: tokens.spacing.lg
+            gap: tokens.spacing.sm
           }}>
-            <p style={{
-              fontSize: tokens.typography.sizes.xs,
-              color: '#94A3B8'
-            }}>
-              © 2025 Coheren. All rights reserved.
-            </p>
-
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: tokens.spacing.xs
-            }}>
-              <Lock size={12} color="#94A3B8" />
-              <span style={{
-                fontSize: tokens.typography.sizes.xs,
-                color: '#94A3B8'
-              }}>
-                Your data is encrypted & private
-              </span>
-            </div>
+            <input
+              type="email"
+              placeholder="Enter your email"
+              style={{
+                padding: `${tokens.spacing.sm} ${tokens.spacing.lg}`,
+                border: '1px solid #E2E8F0',
+                borderRadius: tokens.borderRadius.lg,
+                fontSize: tokens.typography.sizes.sm,
+                color: '#475569',
+                outline: 'none',
+                transition: 'all 0.2s',
+                width: '240px'
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = tokens.colors.primary;
+                e.currentTarget.style.boxShadow = '0 0 0 3px rgba(67, 56, 202, 0.1)';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = '#E2E8F0';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            />
+            <button
+              style={{
+                padding: `${tokens.spacing.sm} ${tokens.spacing.lg}`,
+                background: tokens.colors.primary,
+                color: 'white',
+                border: 'none',
+                borderRadius: tokens.borderRadius.lg,
+                cursor: 'pointer',
+                fontSize: tokens.typography.sizes.sm,
+                fontWeight: tokens.typography.weights.medium,
+                transition: 'all 0.2s',
+                whiteSpace: 'nowrap'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = tokens.colors.primaryHover;
+                e.currentTarget.style.transform = 'scale(1.02)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = tokens.colors.primary;
+                e.currentTarget.style.transform = 'scale(1)';
+              }}
+            >
+              Join Waitlist
+            </button>
           </div>
         </div>
       </footer>
     </div>
-  );
-}
-
-function Clock({ size }: { size: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10"/>
-      <polyline points="12 6 12 12 16 14"/>
-    </svg>
   );
 }

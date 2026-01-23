@@ -116,12 +116,13 @@ export default function DashboardSidebar({ currentView, onViewChange, isOpen: co
             }}
           >
             <img
-              src="/logo.png"
+              src="/logo.svg"
               alt="Coheren AI"
               style={{
                 width: '32px',
-                height: '32px',
+                height: 'auto',
                 objectFit: 'contain',
+                display: 'block'
               }}
             />
             <div>

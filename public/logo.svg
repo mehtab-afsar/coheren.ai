@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Background (transparent by default, can add color if needed) -->
+
+  <!-- Timeline line -->
+  <line x1="30" y1="100" x2="145" y2="100" stroke="#6B7280" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- First dot (smaller) -->
+  <circle cx="60" cy="100" r="6" fill="#6B7280"/>
+
+  <!-- Second dot (larger) -->
+  <circle cx="120" cy="100" r="8" fill="#6B7280"/>
+
+  <!-- Arrow -->
+  <g transform="translate(145, 100)">
+    <polyline points="0,0 25,0 17,-12 30,0 17,12 25,0" fill="none" stroke="#6B7280" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

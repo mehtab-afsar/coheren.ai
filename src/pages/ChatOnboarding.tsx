@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import Groq from 'groq-sdk';
 import { useStore } from '../store/useStore';
 import { tokens, text, button } from '../design-system';

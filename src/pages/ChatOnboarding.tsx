@@ -10,6 +10,11 @@ import { getOrCreateUser, createJourney, generateDayTasks } from '../api/client'
 import type { GoalCategory } from '../types';
 import LoadingAnimation from '../components/LoadingAnimation';
 
+// Import agent system
+import { runOnboardingAgents, generateCompleteRoadmap } from '../agents';
+import type { BuildingStone, StoneAnswer, Agent1Output } from '../agents';
+import StoneQuestions from '../components/StoneQuestions';
+
 // Initialize Groq client
 const groq = new Groq({
   apiKey: import.meta.env.VITE_GROQ_API_KEY,
@@ -128,6 +133,11 @@ export default function ChatOnboarding() {
     timeline: null
   });
 
+  // Agent system state
+  const [onboardingPhase, setOnboardingPhase] = useState<'conversation' | 'stones' | 'generating'>('conversation');
+  const [goalAnalysis, setGoalAnalysis] = useState<Agent1Output | null>(null);
+  const [stones, setStones] = useState<BuildingStone[]>([]);
+
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -158,14 +168,14 @@ export default function ChatOnboarding() {
       collectedData.timeline
     );
 
-    // Trigger plan generation if all conditions met
-    if (hasAllData && aiMentionedPlan && !isGeneratingPlan && !planGenerationTriggered) {
+    // Trigger agent-based onboarding if all conditions met
+    if (hasAllData && aiMentionedPlan && !isGeneratingPlan && !planGenerationTriggered && onboardingPhase === 'conversation') {
       setPlanGenerationTriggered(true);
       setTimeout(() => {
-        generateStrategicPlan();
+        runAnalysisAndGetStones(); // Use new agent system
       }, 1000);
     }
-  }, [collectedData, aiMentionedPlan, isGeneratingPlan, planGenerationTriggered]);
+  }, [collectedData, aiMentionedPlan, isGeneratingPlan, planGenerationTriggered, onboardingPhase]);
 
   const handleSend = async () => {
     if (!userInput.trim()) return;
@@ -466,6 +476,183 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
       if (timeMatch) {
         setCollectedData(prev => ({ ...prev, dailyTime: timeMatch[0] }));
       }
+    }
+  };
+
+  // New function: Run Agent 1 & 2 to get stone questions
+  const runAnalysisAndGetStones = async () => {
+    if (!collectedData.goal || !collectedData.category) {
+      return;
+    }
+
+    setIsTyping(true);
+
+    try {
+      const dailyMinutes = parseDailyTimeToMinutes(collectedData.dailyTime);
+      const durationInMonths = collectedData.timeline?.target
+        ? calculateDurationInMonths(collectedData.timeline.target)
+        : 3;
+      const timelineDays = durationInMonths * 30;
+
+      // Run Agent 1 & 2
+      const { goalAnalysis: analysis, stones: identifiedStones } = await runOnboardingAgents(
+        collectedData.goal,
+        timelineDays,
+        dailyMinutes
+      );
+
+      setGoalAnalysis(analysis);
+      setStones(identifiedStones.requiredStones);
+      setOnboardingPhase('stones');
+      setIsTyping(false);
+
+    } catch (error) {
+      console.error('Error running onboarding agents:', error);
+      setIsTyping(false);
+      // Fallback to old system if agents fail
+      generateStrategicPlan();
+    }
+  };
+
+  // Handler for stone questions completion
+  const handleStoneQuestionsComplete = (answers: StoneAnswer[]) => {
+    setOnboardingPhase('generating');
+    generateStrategicPlanWithAgents(answers);
+  };
+
+  // New function: Generate plan using Agent 3 & 4
+  const generateStrategicPlanWithAgents = async (answers: StoneAnswer[]) => {
+    if (!collectedData.goal || !goalAnalysis) {
+      return;
+    }
+
+    setIsGeneratingPlan(true);
+    setGenerationProgress(0);
+
+    const dailyMinutes = parseDailyTimeToMinutes(collectedData.dailyTime);
+    const durationInMonths = collectedData.timeline?.target
+      ? calculateDurationInMonths(collectedData.timeline.target)
+      : 3;
+    const timelineDays = durationInMonths * 30;
+
+    // Simulate progress
+    const progressInterval = setInterval(() => {
+      setGenerationProgress((prev) => {
+        if (prev >= 90) {
+          clearInterval(progressInterval);
+          return 90;
+        }
+        return prev + 10;
+      });
+    }, 300);
+
+    try {
+      // Run Agent 3 & 4 to generate roadmap and first task
+      const { roadmap: agentRoadmap, firstTask } = await generateCompleteRoadmap(
+        collectedData.goal,
+        timelineDays,
+        dailyMinutes,
+        answers
+      );
+
+      // Convert agent roadmap to our existing format
+      const roadmap = {
+        title: collectedData.goal,
+        category: collectedData.category!,
+        duration: durationInMonths,
+        dailyTime: collectedData.dailyTime || '30 minutes',
+        recommendedTime: collectedData.energyPattern === 'morning' ? '7:00 AM' :
+                        collectedData.energyPattern === 'evening' ? '7:00 PM' : '2:00 PM',
+        phases: agentRoadmap.roadmap.phases.map(phase => ({
+          title: phase.phaseName,
+          weeks: `${phase.weeks[0]}-${phase.weeks[phase.weeks.length - 1]}`,
+          description: phase.primaryGoals.join('. ')
+        })),
+        startDate: new Date().toISOString().split('T')[0],
+        endDate: new Date(Date.now() + durationInMonths * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        agentRoadmap: agentRoadmap.roadmap // Store full agent roadmap
+      };
+
+      // Update profile and goal
+      updateUniversalProfile({
+        name: collectedData.name,
+        energyPattern: collectedData.energyPattern as 'morning' | 'afternoon' | 'evening' | 'night',
+        skillLevel: collectedData.skillLevel || undefined,
+        weekendAvailability: '',
+        dailyRoutine: {
+          wakeTime: collectedData.wakeTime || '7:00 AM',
+          sleepTime: '',
+          workHours: { start: '', end: '' },
+          freeTimeSlots: []
+        }
+      });
+
+      updateCurrentGoal({
+        category: collectedData.category!,
+        specificGoal: collectedData.goal,
+      });
+
+      setRoadmap(roadmap);
+
+      // Convert agent task to our format
+      const initialTasks = [{
+        id: '1',
+        title: firstTask.task.title,
+        description: firstTask.task.description,
+        type: 'practice' as const,
+        duration: firstTask.task.estimatedMinutes,
+        completed: false,
+        skipped: false,
+        checkInTime: checkInTime || '07:00',
+        scheduledFor: new Date().toISOString().split('T')[0],
+        day: 1,
+        dayNumber: 1,
+        steps: firstTask.task.steps.map(step => step.instruction),
+        tips: firstTask.task.tips,
+        successCriteria: firstTask.task.successCriteria.primary
+      }];
+
+      setTasks(initialTasks);
+
+      // Backend sync
+      try {
+        await getOrCreateUser(collectedData.name);
+        const backendJourney = await createJourney({
+          title: collectedData.goal,
+          category: collectedData.category!,
+          duration_months: durationInMonths,
+          daily_time_minutes: dailyMinutes,
+          skill_level: collectedData.skillLevel as 'beginner' | 'intermediate' | 'advanced',
+          strategic_plan: agentRoadmap.roadmap,
+        });
+
+        await generateDayTasks(backendJourney.id, 1, initialTasks.map(t => ({
+          title: t.title,
+          description: t.description,
+          type: t.type,
+          duration: t.duration,
+        })));
+
+        localStorage.setItem('coheren_journey_id', backendJourney.id);
+      } catch {
+        // Backend sync failed, but local data is still valid
+      }
+
+      setGenerationProgress(100);
+      clearInterval(progressInterval);
+
+      // Navigate to app
+      setTimeout(() => {
+        setStep(2);
+      }, 1000);
+
+    } catch (error) {
+      console.error('Error generating plan with agents:', error);
+      clearInterval(progressInterval);
+      setGenerationProgress(0);
+      setIsGeneratingPlan(false);
+      // Fallback to old system
+      generateStrategicPlan();
     }
   };
 
@@ -1053,16 +1240,57 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
         </div>
       </div>
 
+      {/* Stone Questions Phase */}
+      {onboardingPhase === 'stones' && stones.length > 0 && (
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: tokens.spacing.xl,
+          position: 'relative',
+          zIndex: 1,
+        }}>
+          <div style={{ maxWidth: '700px', width: '100%' }}>
+            <div style={{
+              marginBottom: tokens.spacing['2xl'],
+              textAlign: 'center'
+            }}>
+              <h2 style={{
+                fontSize: tokens.typography.sizes['3xl'],
+                fontWeight: tokens.typography.weights.light,
+                color: tokens.colors.text.primary,
+                marginBottom: tokens.spacing.md
+              }}>
+                Let's personalize your journey
+              </h2>
+              <p style={{
+                fontSize: tokens.typography.sizes.base,
+                color: tokens.colors.text.secondary,
+                lineHeight: 1.6
+              }}>
+                A few quick questions to customize your {collectedData.goal} roadmap perfectly for you
+              </p>
+            </div>
+            <StoneQuestions
+              stones={stones}
+              onComplete={handleStoneQuestionsComplete}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Chat Container */}
-      <div style={{
-        flex: 1,
-        display: 'flex',
-        justifyContent: 'center',
-        padding: tokens.spacing.xl,
-        overflow: 'hidden',
-        position: 'relative',
-        zIndex: 1,
-      }}>
+      {onboardingPhase === 'conversation' && (
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          justifyContent: 'center',
+          padding: tokens.spacing.xl,
+          overflow: 'hidden',
+          position: 'relative',
+          zIndex: 1,
+        }}>
         <div style={{
           width: '100%',
           maxWidth: '700px',
@@ -1227,6 +1455,7 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
           </div>
         </div>
       </div>
+      )}
 
       <style>{`
         @keyframes pulse {

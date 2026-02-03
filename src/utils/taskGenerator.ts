@@ -17,7 +17,7 @@ interface Task {
   completedAt?: string;
   skipped: boolean;
   skippedAt?: string;
-  skipReason?: string;
+  skipReason?: 'time' | 'health' | 'difficulty' | 'external';
   rescheduledFrom?: number;
   adjustedDifficulty?: 'easier' | 'same' | 'harder';
   scheduledFor: string;

@@ -98,7 +98,7 @@ export default function TodayView() {
 
     // Todoist-style subtle animation (300ms with ease-out)
     setTimeout(() => {
-      skipTask(taskId, 'User skipped');
+      skipTask(taskId, 'external');
       setSkippingTaskId(null);
       setShowSkipMessage(true);
 

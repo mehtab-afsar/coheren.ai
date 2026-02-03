@@ -2,22 +2,34 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { OnboardingState, GoalCategory } from '../types/index.js';
 import { generateTasksForDay, generateTasksFromAIPlan } from '../utils/taskGenerator.js';
+import type { User } from '@supabase/supabase-js';
+import { getCurrentUser } from '../lib/supabase';
+import { updateTaskCompletion, updateTaskSkip, updateProfile } from '../lib/database';
 
 interface Task {
   id: string;
   title: string;
   description: string;
   type: 'practice' | 'learning' | 'reflection';
-  duration: number; // minutes
+  duration: number; // minutes (planned)
   completed: boolean;
   completedAt?: string;
   skipped: boolean;
   skippedAt?: string;
-  skipReason?: string;
+  skipReason?: 'time' | 'health' | 'difficulty' | 'external';
   rescheduledFrom?: number; // original day if rescheduled
   adjustedDifficulty?: 'easier' | 'same' | 'harder';
   scheduledFor: string;
   day: number;
+  dayNumber?: number; // legacy support
+  steps?: string[]; // step-by-step instructions
+  tips?: string[]; // helpful tips
+  successCriteria?: string; // what success looks like
+  checkInTime?: string; // scheduled time
+  // Agent 5 (Re-calibrator) feedback fields
+  difficultyRating?: number; // 1-5 scale (1=easy, 5=very hard)
+  actualDuration?: number; // actual minutes taken
+  userComment?: string; // struggle notes or feedback
 }
 
 interface WeekPerformance {
@@ -46,6 +58,10 @@ interface Roadmap {
 }
 
 interface AppStore extends OnboardingState {
+  // Auth state
+  user: User | null;
+  isAuthenticated: boolean;
+
   // App state
   checkInTime: string;
   roadmap: Roadmap | null;
@@ -56,6 +72,10 @@ interface AppStore extends OnboardingState {
   lastCheckInDate: string | null;
   performanceHistory: WeekPerformance[];
 
+  // Auth actions
+  setUser: (user: User | null) => void;
+  checkAuth: () => Promise<void>;
+
   // Actions
   setStep: (step: number) => void;
   updateUniversalProfile: (data: Partial<OnboardingState['universalProfile']>) => void;
@@ -65,8 +85,8 @@ interface AppStore extends OnboardingState {
   setCheckInTime: (time: string) => void;
   setRoadmap: (roadmap: Roadmap) => void;
   setTasks: (tasks: Task[]) => void;
-  completeTask: (taskId: string) => void;
-  skipTask: (taskId: string, reason?: string) => void;
+  completeTask: (taskId: string) => Promise<void>;
+  skipTask: (taskId: string, reason?: 'time' | 'health' | 'difficulty' | 'external') => Promise<void>;
   canAdvanceDay: () => boolean;
   advanceDay: () => boolean;
   generateNextDayTasks: () => void;
@@ -77,6 +97,11 @@ interface AppStore extends OnboardingState {
 export const useStore = create<AppStore>()(
   persist(
     (set, get) => ({
+      // Auth state
+      user: null,
+      isAuthenticated: false,
+
+      // App state
       step: 0,
       universalProfile: {},
       currentGoal: {},
@@ -88,6 +113,14 @@ export const useStore = create<AppStore>()(
       completionRate: 0,
       lastCheckInDate: null,
       performanceHistory: [],
+
+      // Auth actions
+      setUser: (user) => set({ user, isAuthenticated: !!user }),
+
+      checkAuth: async () => {
+        const user = await getCurrentUser();
+        set({ user, isAuthenticated: !!user });
+      },
 
       setStep: (step) => set({ step }),
 
@@ -117,7 +150,26 @@ export const useStore = create<AppStore>()(
 
       setTasks: (tasks) => set({ tasks }),
 
-      completeTask: (taskId) =>
+      completeTask: async (taskId) => {
+        const state = get();
+        const task = state.tasks.find(t => t.id === taskId);
+
+        // Update in Supabase if user is authenticated
+        if (state.user && task) {
+          try {
+            await updateTaskCompletion(
+              taskId,
+              true,
+              task.difficultyRating,
+              task.actualDuration,
+              task.userComment
+            );
+            console.log('✅ Task synced to Supabase');
+          } catch (error) {
+            console.error('Failed to sync task to Supabase:', error);
+          }
+        }
+
         set((state) => {
           const tasks = state.tasks.map((task) =>
             task.id === taskId
@@ -135,10 +187,34 @@ export const useStore = create<AppStore>()(
           const allDone = todaysTasks.length > 0 && todaysTasks.every((t) => t.completed);
           const newStreak = allDone ? state.streak + 1 : state.streak;
 
-          return { tasks, completionRate, streak: newStreak };
-        }),
+          // Update streak in profile if user is authenticated
+          if (state.user && newStreak > state.streak) {
+            updateProfile(state.user.id, {
+              persona_traits: {
+                ...(state.universalProfile as any),
+                streak: newStreak,
+                lastCheckIn: new Date().toISOString()
+              }
+            }).catch(err => console.error('Failed to update streak:', err));
+          }
 
-      skipTask: (taskId, reason) =>
+          return { tasks, completionRate, streak: newStreak };
+        });
+      },
+
+      skipTask: async (taskId, reason) => {
+        const state = get();
+
+        // Update in Supabase if user is authenticated and reason is provided
+        if (state.user && reason) {
+          try {
+            await updateTaskSkip(taskId, reason);
+            console.log('✅ Task skip synced to Supabase');
+          } catch (error) {
+            console.error('Failed to sync skip to Supabase:', error);
+          }
+        }
+
         set((state) => {
           const skippedTask = state.tasks.find((t) => t.id === taskId);
           if (!skippedTask) return state;
@@ -189,7 +265,8 @@ export const useStore = create<AppStore>()(
           });
 
           return { tasks: adjustedTasks };
-        }),
+        });
+      },
 
       canAdvanceDay: () => {
         const state = get();

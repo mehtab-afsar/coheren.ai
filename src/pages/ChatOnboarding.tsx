@@ -14,6 +14,7 @@ import LoadingAnimation from '../components/LoadingAnimation';
 import { runOnboardingAgents, generateCompleteRoadmap } from '../agents';
 import type { BuildingStone, StoneAnswer, Agent1Output } from '../agents';
 import StoneQuestions from '../components/StoneQuestions';
+import { syncCompleteRoadmap } from '../lib/database';
 
 // Initialize Groq client
 const groq = new Groq({
@@ -613,6 +614,27 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
       }];
 
       setTasks(initialTasks);
+
+      // Sync to Supabase if user is authenticated
+      const user = useStore.getState().user;
+      if (user) {
+        console.log('📤 Syncing roadmap to Supabase...');
+        try {
+          await syncCompleteRoadmap(
+            user.id,
+            collectedData.goal,
+            `Generated via AI multi-agent system for ${collectedData.category}`,
+            goalAnalysis,
+            answers,
+            agentRoadmap,
+            initialTasks
+          );
+          console.log('✅ Roadmap synced to Supabase successfully!');
+        } catch (error) {
+          console.error('❌ Failed to sync roadmap to Supabase:', error);
+          // Don't block user flow if sync fails
+        }
+      }
 
       // Backend sync
       try {

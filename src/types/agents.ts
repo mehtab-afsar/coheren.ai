@@ -180,6 +180,68 @@ export interface Agent4Output {
 }
 
 // ============================================
+// AGENT 5: CURRICULUM RE-CALIBRATOR TYPES
+// ============================================
+
+export interface CompletedTaskFeedback {
+  dayNumber: number;
+  title: string;
+  difficultyRating: number; // 1-5 scale (1=easy, 5=very hard)
+  completionTime: number; // actual minutes taken
+  userComment?: string; // optional struggle notes
+  skipped: boolean;
+  skipReason?: 'time' | 'health' | 'difficulty' | 'external';
+}
+
+export interface CheckpointAnalysis {
+  checkpointDay: number; // e.g., 14, 28, 42
+  overallMastery: 'struggling' | 'on-track' | 'excelling';
+  strugglingAreas: string[]; // e.g., ["F-chord transitions", "Stamina"]
+  masteringAreas: string[]; // e.g., ["Basic strumming", "Finger positioning"]
+  paceAdjustment: 'slow-down' | 'maintain' | 'accelerate';
+  motivationalInsights: string; // What's working emotionally
+  recommendations: string[]; // Specific changes to make
+  nextSprintFocus: string; // The theme for Days 15-28
+}
+
+export interface RecalibratedSprint {
+  sprintNumber: number; // Which 14-day sprint this is
+  startDay: number;
+  endDay: number;
+  adjustedPhase?: {
+    phaseName: string;
+    focusAreas: Record<string, number>;
+    rationale: string;
+  };
+  modifiedTasks: Array<{
+    dayNumber: number;
+    modification: 'added' | 'removed' | 'adjusted';
+    reason: string;
+    newFocus?: string;
+  }>;
+  pedagogicalChanges: {
+    restDaysAdded: number[];
+    reviewDaysAdded: number[];
+    difficultyReduction: boolean;
+    intensityIncrease: boolean;
+  };
+  personalizedMessage: string; // Message to show user at checkpoint
+}
+
+export interface Agent5Input {
+  context: AgentContext;
+  roadmap: Roadmap;
+  stoneAnswers: StoneAnswer[];
+  completedTasks: CompletedTaskFeedback[];
+  currentDay: number;
+}
+
+export interface Agent5Output {
+  checkpointAnalysis: CheckpointAnalysis;
+  recalibratedSprint: RecalibratedSprint;
+}
+
+// ============================================
 // AGENT SYSTEM TYPES
 // ============================================
 

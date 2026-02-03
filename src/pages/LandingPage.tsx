@@ -8,7 +8,11 @@ import {
 import { useStore } from '../store/useStore';
 import { tokens } from '../design-system';
 
-export default function LandingPage() {
+interface LandingPageProps {
+  onGetStarted?: () => void;
+}
+
+export default function LandingPage({ onGetStarted }: LandingPageProps) {
   const setStep = useStore((state) => state.setStep);
   const [goalInput, setGoalInput] = useState('');
   const [placeholderText, setPlaceholderText] = useState('');
@@ -67,7 +71,11 @@ export default function LandingPage() {
   const handleGetStarted = (customGoal?: string) => {
     if (customGoal || goalInput.trim()) {
       // Could store the goal here if needed
-      setStep(1); // Go to ChatOnboarding
+      if (onGetStarted) {
+        onGetStarted(); // Trigger login flow
+      } else {
+        setStep(1); // Fallback: Go to ChatOnboarding directly
+      }
     }
   };
 

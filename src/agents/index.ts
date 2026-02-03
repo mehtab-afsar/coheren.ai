@@ -9,6 +9,7 @@ export { analyzeGoal } from './agent1-goal-analyzer';
 export { identifyStones } from './agent2-stone-identifier';
 export { buildCurriculum } from './agent3-curriculum-builder';
 export { generateTask } from './agent4-task-generator';
+export { recalibrateCurriculum, shouldTriggerCheckpoint, convertToFeedback } from './agent5-recalibrator';
 
 // Orchestrator
 export {
@@ -16,7 +17,10 @@ export {
   runCurriculumBuilder,
   runTaskGenerator,
   generateCompleteRoadmap,
-  generateTaskBatch
+  generateTaskBatch,
+  runCheckpointRecalibration,
+  generateAdaptedSprint,
+  handleCheckpoint
 } from './orchestrator';
 
 // Re-export types
@@ -25,8 +29,13 @@ export type {
   Agent1Output,
   Agent2Output,
   Agent3Output,
+  Agent5Input,
+  Agent5Output,
   DailyTask,
   StoneAnswer,
   BuildingStone,
-  Roadmap
+  Roadmap,
+  CompletedTaskFeedback,
+  CheckpointAnalysis,
+  RecalibratedSprint
 } from '../types/agents';

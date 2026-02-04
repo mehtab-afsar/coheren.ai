@@ -1100,32 +1100,6 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
           justifyContent: 'center',
           gap: tokens.spacing['3xl'],
         }}>
-          {/* Logo */}
-          <button
-            onClick={() => {
-              setStep(0);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: 0
-            }}
-          >
-            <img
-              src="/logo.svg"
-              alt="Coheren AI"
-              style={{
-                width: '120px',
-                height: 'auto',
-                objectFit: 'contain',
-                marginBottom: tokens.spacing.lg,
-                display: 'block'
-              }}
-            />
-          </button>
-
           {/* Loading Animation */}
           <LoadingAnimation size="large" />
 

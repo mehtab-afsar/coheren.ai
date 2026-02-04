@@ -1,76 +1,15 @@
-# Supabase Setup Guide
+-- ============================================
+-- COHEREN.AI DATABASE SCHEMA
+-- Run these commands in Supabase SQL Editor
+-- ============================================
 
-This guide will help you set up Supabase authentication and database for Coheren.
-
-## 1. Create a Supabase Project
-
-1. Go to [supabase.com](https://supabase.com) and sign in
-2. Click "New Project"
-3. Fill in:
-   - Project name: `coheren` (or your choice)
-   - Database password: (save this securely)
-   - Region: Choose closest to your users
-4. Wait for project to be created (~2 minutes)
-
-## 2. Get Your Credentials
-
-1. Go to Project Settings → API
-2. Copy these values to your `.env` file:
-   - `VITE_SUPABASE_URL`: Your project URL
-   - `VITE_SUPABASE_ANON_KEY`: Your anon/public key
-
-Example `.env`:
-```bash
-VITE_GROQ_API_KEY=gsk_your_groq_key
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-
-## 3. Enable Authentication Providers
-
-### Email Authentication
-
-1. Go to Authentication → Providers
-2. Enable **Email** provider
-3. Configure email settings (optional):
-   - Confirm email: Disabled (for faster testing) or Enabled (for production)
-   - Secure email change: Enabled (recommended)
-
-### Google OAuth (Recommended)
-
-1. Go to Authentication → Providers
-2. Click on **Google** provider
-3. Enable the Google provider
-4. You have two options:
-
-**Option A: Use Supabase's OAuth (Easiest)**
-- Just toggle "Enable Sign in with Google"
-- No configuration needed
-- Works immediately for development
-
-**Option B: Use Your Own Google OAuth Credentials (Production)**
-- Go to [Google Cloud Console](https://console.cloud.google.com/)
-- Create a new project or select existing one
-- Enable Google+ API
-- Go to Credentials → Create Credentials → OAuth client ID
-- Application type: Web application
-- Authorized redirect URIs: `https://your-project.supabase.co/auth/v1/callback`
-- Copy Client ID and Client Secret
-- Paste into Supabase Google provider settings
-
-5. Click Save
-
-## 4. Create Database Schema
-
-Go to SQL Editor and run these queries:
-
-### Enable UUID Extension
-```sql
+-- Enable UUID Extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-```
 
-### 1. Profiles Table
-```sql
+-- ============================================
+-- 1. PROFILES TABLE
+-- ============================================
+
 CREATE TABLE profiles (
   id UUID REFERENCES auth.users(id) PRIMARY KEY,
   full_name TEXT,
@@ -109,10 +48,11 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-```
 
-### 2. User Goals Table
-```sql
+-- ============================================
+-- 2. USER GOALS TABLE
+-- ============================================
+
 CREATE TABLE user_goals (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
@@ -146,10 +86,11 @@ CREATE POLICY "Users can delete own goals"
 -- Index for faster queries
 CREATE INDEX idx_user_goals_user_id ON user_goals(user_id);
 CREATE INDEX idx_user_goals_status ON user_goals(status);
-```
 
-### 3. Goal Stones Table
-```sql
+-- ============================================
+-- 3. GOAL STONES TABLE
+-- ============================================
+
 CREATE TABLE goal_stones (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   goal_id UUID REFERENCES user_goals(id) ON DELETE CASCADE NOT NULL,
@@ -184,10 +125,11 @@ CREATE POLICY "Users can create stones for own goals"
   );
 
 CREATE INDEX idx_goal_stones_goal_id ON goal_stones(goal_id);
-```
 
-### 4. Roadmaps Table
-```sql
+-- ============================================
+-- 4. ROADMAPS TABLE
+-- ============================================
+
 CREATE TABLE roadmaps (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   goal_id UUID REFERENCES user_goals(id) ON DELETE CASCADE NOT NULL,
@@ -220,10 +162,11 @@ CREATE POLICY "Users can create roadmaps for own goals"
   );
 
 CREATE INDEX idx_roadmaps_goal_id ON roadmaps(goal_id);
-```
 
-### 5. Daily Tasks Table
-```sql
+-- ============================================
+-- 5. DAILY TASKS TABLE
+-- ============================================
+
 CREATE TABLE daily_tasks (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   roadmap_id UUID REFERENCES roadmaps(id) ON DELETE CASCADE NOT NULL,
@@ -284,10 +227,11 @@ CREATE POLICY "Users can update own tasks"
 CREATE INDEX idx_daily_tasks_roadmap_id ON daily_tasks(roadmap_id);
 CREATE INDEX idx_daily_tasks_day_number ON daily_tasks(day_number);
 CREATE INDEX idx_daily_tasks_completed ON daily_tasks(is_completed);
-```
 
-### 6. Checkpoints Table (Agent 5)
-```sql
+-- ============================================
+-- 6. CHECKPOINTS TABLE (Agent 5)
+-- ============================================
+
 CREATE TABLE checkpoints (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   roadmap_id UUID REFERENCES roadmaps(id) ON DELETE CASCADE NOT NULL,
@@ -332,116 +276,13 @@ CREATE POLICY "Users can create checkpoints for own roadmaps"
 
 CREATE INDEX idx_checkpoints_roadmap_id ON checkpoints(roadmap_id);
 CREATE INDEX idx_checkpoints_day ON checkpoints(checkpoint_day);
-```
 
-## 5. Test Your Setup
+-- ============================================
+-- DONE! 🎉
+-- ============================================
 
-### Test Authentication
-```typescript
-import { signUp, signIn } from './lib/supabase';
+-- Verify tables were created:
+SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;
 
-// Sign up
-const { data, error } = await signUp(
-  'test@example.com',
-  'password123',
-  { full_name: 'Test User' }
-);
-
-// Sign in
-const { data, error } = await signIn('test@example.com', 'password123');
-```
-
-### Test Database
-```typescript
-import { supabase } from './lib/supabase';
-
-// Create a goal
-const { data: goal, error } = await supabase
-  .from('user_goals')
-  .insert({
-    title: 'Learn Guitar',
-    description: 'Master basic chords in 90 days',
-    status: 'active'
-  })
-  .select()
-  .single();
-
-// Fetch user's goals
-const { data: goals } = await supabase
-  .from('user_goals')
-  .select('*, roadmaps(*)')
-  .eq('status', 'active');
-```
-
-## 6. Optional: Storage for Media
-
-If you want users to upload profile pictures or task photos:
-
-```sql
--- Create a bucket
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('avatars', 'avatars', true);
-
--- Create policy
-CREATE POLICY "Users can upload own avatar"
-  ON storage.objects FOR INSERT
-  WITH CHECK (
-    bucket_id = 'avatars'
-    AND auth.uid()::text = (storage.foldername(name))[1]
-  );
-
-CREATE POLICY "Anyone can view avatars"
-  ON storage.objects FOR SELECT
-  USING (bucket_id = 'avatars');
-```
-
-## 7. Environment Variables Checklist
-
-Make sure your `.env` has:
-- ✅ `VITE_GROQ_API_KEY` (for AI agents)
-- ✅ `VITE_SUPABASE_URL` (from Supabase dashboard)
-- ✅ `VITE_SUPABASE_ANON_KEY` (from Supabase dashboard)
-
-## 8. Deploy to Production
-
-When deploying:
-
-1. **Update Auth Settings**:
-   - Go to Authentication → URL Configuration
-   - Add your production URL to "Site URL"
-   - Add redirect URLs (e.g., `https://yourapp.com/auth/callback`)
-
-2. **Enable Email Confirmation** (recommended):
-   - Go to Authentication → Email Templates
-   - Customize confirmation email template
-
-3. **Set up Environment Variables** in your hosting provider (Vercel, Netlify, etc.)
-
-## Troubleshooting
-
-### "relation does not exist" error
-- Make sure you ran all SQL commands in order
-- Check that tables were created in `public` schema
-
-### RLS policy errors
-- Verify user is authenticated: `await supabase.auth.getUser()`
-- Check policy conditions match your query
-
-### Email not sending
-- Check spam folder
-- Verify SMTP settings in Authentication → Settings
-- For development, use "Disable email confirmation" temporarily
-
-## Next Steps
-
-Once Supabase is set up, the app will:
-1. Show landing page when not logged in
-2. Redirect to login when "Get Started" is clicked
-3. After login:
-   - Check if user has roadmap in database
-   - If yes → Show Dashboard
-   - If no → Show Chat Onboarding to create roadmap
-4. Save all data (goals, roadmaps, tasks, checkpoints) to Supabase
-5. Sync across devices automatically
-
-See [ADAPTIVE_CURRICULUM_GUIDE.md](ADAPTIVE_CURRICULUM_GUIDE.md) for how the rolling curriculum works!
+-- Check RLS is enabled:
+SELECT tablename, rowsecurity FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;

@@ -20,7 +20,22 @@ function App() {
 
   // Initialize auth on mount
   useEffect(() => {
-    checkAuth().then(() => setAuthInitialized(true));
+    // Add timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      console.warn('Auth check timed out, continuing without auth');
+      setAuthInitialized(true);
+    }, 3000); // 3 second timeout
+
+    checkAuth()
+      .then(() => {
+        clearTimeout(timeoutId);
+        setAuthInitialized(true);
+      })
+      .catch((error) => {
+        console.error('Auth check failed:', error);
+        clearTimeout(timeoutId);
+        setAuthInitialized(true); // Continue anyway
+      });
 
     // Listen for auth state changes
     const { data: { subscription } } = onAuthStateChange(async (event, session) => {
@@ -29,28 +44,40 @@ function App() {
         setUser(session.user);
 
         // Check if user has a roadmap in Supabase
-        const { data: goals } = await supabase
-          .from('user_goals')
-          .select('*, roadmaps(*)')
-          .eq('user_id', session.user.id)
-          .eq('status', 'active')
-          .single();
+        try {
+          const { data: goals, error } = await supabase
+            .from('user_goals')
+            .select('*, roadmaps(*)')
+            .eq('user_id', session.user.id)
+            .eq('status', 'active')
+            .single();
 
-        if (goals && goals.roadmaps) {
-          // User has an active goal/roadmap - go to dashboard
-          // TODO: Load roadmap and tasks from Supabase
-          if (step === 0 || step === 1) {
-            useStore.setState({ step: 2 });
+          if (error) {
+            console.warn('Could not fetch goals:', error.message);
           }
-        } else if (roadmap) {
-          // User has local roadmap - go to dashboard
-          if (step === 0 || step === 1) {
-            useStore.setState({ step: 2 });
+
+          if (goals && goals.roadmaps) {
+            // User has an active goal/roadmap - go to dashboard
+            // TODO: Load roadmap and tasks from Supabase
+            if (step === 0 || step === 1) {
+              useStore.setState({ step: 2 });
+            }
+          } else if (roadmap) {
+            // User has local roadmap - go to dashboard
+            if (step === 0 || step === 1) {
+              useStore.setState({ step: 2 });
+            }
+          } else {
+            // User has no roadmap - go to onboarding
+            if (step === 0) {
+              useStore.setState({ step: 1 });
+            }
           }
-        } else {
-          // User has no roadmap - go to onboarding
-          if (step === 0) {
-            useStore.setState({ step: 1 });
+        } catch (err) {
+          console.error('Error checking user goals:', err);
+          // Continue to landing page on error
+          if (step === 0 && roadmap) {
+            useStore.setState({ step: 2 });
           }
         }
       } else {

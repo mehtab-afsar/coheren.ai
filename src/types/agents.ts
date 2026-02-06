@@ -33,14 +33,14 @@ export interface Agent1Output {
 export interface QuestionOption {
   value: string;
   label: string;
-  impact: Record<string, any>;
+  impact: Record<string, unknown>;
 }
 
 export interface Question {
   text: string;
   type: 'multiple_choice' | 'open_ended' | 'yes_no' | 'scale';
   options?: QuestionOption[];
-  parseLogic?: Record<string, any>;
+  parseLogic?: Record<string, unknown>;
   followUpLogic?: {
     if: string;
     then: Question;
@@ -61,8 +61,8 @@ export interface Agent2Output {
 
 export interface StoneAnswer {
   stoneId: string;
-  answer: string | string[];
-  impact: Record<string, any>;
+  answer: string | string[] | number;
+  impact: Record<string, unknown>;
 }
 
 // ============================================
@@ -153,6 +153,21 @@ export interface TaskAdaptations {
   [key: string]: string;
 }
 
+export interface TaskResource {
+  type: 'video' | 'article' | 'interactive' | 'image' | 'pdf' | 'tool' | 'playlist';
+  title: string;
+  url: string;
+  platform?: string;
+  channel?: string;
+  duration?: string;
+  thumbnail?: string;
+  description: string;
+  why: string;
+  skillLevel?: 'beginner' | 'intermediate' | 'advanced' | 'all';
+  topics?: string[];
+  timestamps?: Record<string, string>;
+}
+
 export interface DailyTask {
   day: number;
   phase: number;
@@ -172,6 +187,10 @@ export interface DailyTask {
     buildingOn?: string[];
     nextUp?: string;
     adaptations_applied?: TaskAdaptations;
+    resources?: {
+      primary: TaskResource | null;
+      supplementary: TaskResource[];
+    };
   };
 }
 

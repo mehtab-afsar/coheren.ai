@@ -19,53 +19,53 @@ export default function WelcomeAnimation() {
   const { universalProfile, roadmap, setStep } = useStore();
 
   useEffect(() => {
-    generateMotivationalQuote();
-  }, []);
-
-  const generateMotivationalQuote = async () => {
-    try {
-      // Generate a motivational quote based on the user's goal
-      const prompt = `Generate a short, powerful motivational quote (max 2 sentences) for someone starting their journey to: "${roadmap?.title}".
+    const generateMotivationalQuote = async () => {
+      try {
+        // Generate a motivational quote based on the user's goal
+        const prompt = `Generate a short, powerful motivational quote (max 2 sentences) for someone starting their journey to: "${roadmap?.title}".
 
 Make it personal, inspiring, and action-oriented. Do NOT use generic quotes. Make it specific to their ${roadmap?.category} goal.
 
 Return ONLY the quote, no explanations or attribution.`;
 
-      const completion = await groq.chat.completions.create({
-        messages: [{ role: 'user', content: prompt }],
-        model: 'llama-3.3-70b-versatile',
-        temperature: 0.8,
-        max_tokens: 100,
-      });
+        const completion = await groq.chat.completions.create({
+          messages: [{ role: 'user', content: prompt }],
+          model: 'llama-3.3-70b-versatile',
+          temperature: 0.8,
+          max_tokens: 100,
+        });
 
-      const generatedQuote = completion.choices[0]?.message?.content?.trim() ||
-        "Every master was once a beginner. Your journey starts today.";
+        const generatedQuote = completion.choices[0]?.message?.content?.trim() ||
+          "Every master was once a beginner. Your journey starts today.";
 
-      setQuote(generatedQuote);
-      setIsLoading(false);
-      setFadeIn(true);
+        setQuote(generatedQuote);
+        setIsLoading(false);
+        setFadeIn(true);
 
-      // After 4 seconds, fade out and go to dashboard
-      setTimeout(() => {
-        setFadeOut(true);
+        // After 4 seconds, fade out and go to dashboard
         setTimeout(() => {
-          setStep(8); // Navigate to Dashboard
-        }, 800); // Wait for fade out animation
-      }, 4000);
+          setFadeOut(true);
+          setTimeout(() => {
+            setStep(8); // Navigate to Dashboard
+          }, 800); // Wait for fade out animation
+        }, 4000);
 
-    } catch {
-      setQuote("Every master was once a beginner. Your journey starts today.");
-      setIsLoading(false);
-      setFadeIn(true);
+      } catch {
+        setQuote("Every master was once a beginner. Your journey starts today.");
+        setIsLoading(false);
+        setFadeIn(true);
 
-      setTimeout(() => {
-        setFadeOut(true);
         setTimeout(() => {
-          setStep(8);
-        }, 800);
-      }, 4000);
-    }
-  };
+          setFadeOut(true);
+          setTimeout(() => {
+            setStep(8);
+          }, 800);
+        }, 4000);
+      }
+    };
+
+    generateMotivationalQuote();
+  }, [roadmap?.title, roadmap?.category, setStep]);
 
   return (
     <div style={{

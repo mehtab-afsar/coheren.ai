@@ -28,7 +28,7 @@ export default function CheckInSetup() {
 
     // Generate initial tasks for day 1 using the task generator utility
     if (roadmap) {
-      const initialTasks = generateInitialTasks(roadmap.category, finalTime);
+      const initialTasks = generateInitialTasks(roadmap, finalTime);
       useStore.getState().setTasks(initialTasks);
     }
 

@@ -5,8 +5,9 @@ import { generateTasksForDay, generateTasksFromAIPlan } from '../utils/taskGener
 import type { User } from '@supabase/supabase-js';
 import { getCurrentUser } from '../lib/supabase';
 import { updateTaskCompletion, updateTaskSkip, updateProfile } from '../lib/database';
+import type { TaskResource } from '../types/agents.js';
 
-interface Task {
+export interface Task {
   id: string;
   title: string;
   description: string;
@@ -26,10 +27,16 @@ interface Task {
   tips?: string[]; // helpful tips
   successCriteria?: string; // what success looks like
   checkInTime?: string; // scheduled time
+  // Learning resources
+  resources?: {
+    primary: TaskResource | null;
+    supplementary: TaskResource[];
+  };
   // Agent 5 (Re-calibrator) feedback fields
   difficultyRating?: number; // 1-5 scale (1=easy, 5=very hard)
   actualDuration?: number; // actual minutes taken
   userComment?: string; // struggle notes or feedback
+  feedbackTags?: string[]; // quick feedback tags (e.g., 'perfect_pace', 'physical_pain', 'confusing')
 }
 
 interface WeekPerformance {
@@ -54,7 +61,14 @@ interface Roadmap {
   }>;
   startDate: string;
   endDate: string;
-  strategicPlan?: any; // AI-generated strategic plan
+  strategicPlan?: {
+    totalWeeks: number;
+    weekTemplates: Array<{
+      weekNumber: number;
+      focus: string;
+      description: string;
+    }>;
+  }; // AI-generated strategic plan
 }
 
 interface AppStore extends OnboardingState {
@@ -162,7 +176,8 @@ export const useStore = create<AppStore>()(
               true,
               task.difficultyRating,
               task.actualDuration,
-              task.userComment
+              task.userComment,
+              task.feedbackTags
             );
             console.log('✅ Task synced to Supabase');
           } catch (error) {
@@ -191,7 +206,7 @@ export const useStore = create<AppStore>()(
           if (state.user && newStreak > state.streak) {
             updateProfile(state.user.id, {
               persona_traits: {
-                ...(state.universalProfile as any),
+                ...(state.universalProfile as Record<string, unknown>),
                 streak: newStreak,
                 lastCheckIn: new Date().toISOString()
               }

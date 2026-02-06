@@ -24,20 +24,68 @@ For each stone:
    - impact: How each answer changes the curriculum
 
 Think about:
-- Resources available (equipment, location, money, time)
+- Resources available (equipment, location, money) - NOTE: Time commitment is already collected, don't ask again
 - Physical limitations or injuries
-- Prior experience
-- Motivation and goals (why they want this)
+- Prior experience - NOTE: General skill level is already collected, ask about SPECIFIC prior experience
+- Motivation and goals (why they want this) - NOTE: The goal itself is already collected, ask about specific sub-goals or motivations
 - Learning style preferences
 - Social context (alone vs. with others)
-- Current baseline (fitness, knowledge, skills)
+- Current baseline (fitness, knowledge, skills) - Be specific to the domain
+
+DO NOT ASK ABOUT:
+- Time commitment (already collected in chat)
+- General goal or purpose (already collected in chat)
+- Their name (already collected in chat)
+- General skill level (already collected in chat)
+- Timeline (already collected in chat)
 
 IMPORTANT:
 - Only ask questions that will SIGNIFICANTLY change the plan
 - Don't ask for nice-to-know info, only need-to-know
 - Make questions clear and answerable
-- Provide 2-4 options for multiple choice questions
+- PREFER multiple_choice questions with 2-4 options whenever possible
+- For sensitive topics (injuries, health, limitations), ALWAYS use multiple_choice with options like "None", "Minor", "Significant", etc.
+- Only use open_ended for truly free-form answers (e.g., specific goals, motivations)
+- Only use yes_no for simple binary decisions
 - Define specific impacts for each option
+
+EXAMPLE for injuries question (boxing):
+{
+  "stoneId": "pre_existing_injuries",
+  "stoneName": "Physical Limitations",
+  "importance": "critical",
+  "reasoning": "Injuries determine which techniques to avoid and require exercise modifications",
+  "question": {
+    "text": "Do you have any pre-existing injuries or conditions that could be affected by boxing training?",
+    "type": "multiple_choice",
+    "options": [
+      {
+        "value": "none",
+        "label": "No injuries or limitations",
+        "impact": {
+          "curriculum": "Full boxing curriculum with all techniques",
+          "modifications": "No special modifications needed"
+        }
+      },
+      {
+        "value": "minor",
+        "label": "Minor issues (occasional joint pain, old injuries)",
+        "impact": {
+          "curriculum": "Add extra warm-up time, lighter impact drills",
+          "modifications": "Focus on technique over power, add recovery days"
+        }
+      },
+      {
+        "value": "significant",
+        "label": "Significant limitations (shoulder, wrist, knee issues)",
+        "impact": {
+          "curriculum": "Heavy bag work reduced, focus on shadowboxing and technique",
+          "modifications": "Avoid certain punches, emphasize footwork and defense"
+        }
+      }
+    ]
+  }
+}
 
 Return ONLY valid JSON in this exact format:
 {
@@ -75,11 +123,19 @@ Goal: "${context.goal}"
 Timeline: ${context.timeline} days
 Daily Time: ${context.dailyTimeAvailable} minutes
 
+INFORMATION ALREADY COLLECTED (DO NOT ASK AGAIN):
+- The user's goal: "${context.goal}"
+- Timeline target: ${context.timeline} days
+- Daily time commitment: ${context.dailyTimeAvailable} minutes per day
+- General skill level (beginner/intermediate/advanced)
+- User's name and energy patterns
+
 Goal Analysis:
 ${JSON.stringify(goalAnalysis.goalAnalysis, null, 2)}
 
 Identify 5-8 building stones (critical questions) that will shape the curriculum.
-Focus on information that will create significantly different learning paths.
+Focus on GOAL-SPECIFIC information that will create significantly different learning paths.
+DO NOT ask about time, timeline, or general goal - these are already known.
 `;
 
   try {

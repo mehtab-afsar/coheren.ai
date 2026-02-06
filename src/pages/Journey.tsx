@@ -210,6 +210,7 @@ export default function Journey() {
               gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
               gap: tokens.spacing.lg
             }}>
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
               {roadmap.phases.map((phase: any, index: number) => (
                 <motion.div
                   key={index}
@@ -341,6 +342,7 @@ export default function Journey() {
                 </div>
 
                 {/* Days */}
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                 {week.days.map((day: any, dayIndex) => {
                   const milestone = milestones.find(m => m.day === day.dayNumber);
 
@@ -374,12 +376,12 @@ export default function Journey() {
                     >
                       {milestone ? (
                         <span style={{ fontSize: '16px' }}>{milestone.icon}</span>
-                      ) : day.isCompleted ? (
+                      ) : day?.isCompleted ? (
                         <CheckCircle2 size={14} />
-                      ) : day.isCurrent ? (
+                      ) : day?.isCurrent ? (
                         <Circle size={14} fill="white" />
                       ) : (
-                        day.dayNumber
+                        day?.dayNumber
                       )}
 
                       {/* Milestone indicator */}

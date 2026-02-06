@@ -37,6 +37,7 @@ const questions = [
 export default function UniversalQuestions() {
   const { updateUniversalProfile, setStep } = useStore();
   const [currentQ, setCurrentQ] = useState(0);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [answers, setAnswers] = useState<Record<string, any>>({});
 
   const question = questions[currentQ];

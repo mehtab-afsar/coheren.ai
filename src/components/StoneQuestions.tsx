@@ -9,12 +9,24 @@ interface StoneQuestionsProps {
 
 export default function StoneQuestions({ stones, onComplete }: StoneQuestionsProps) {
   const [currentStoneIndex, setCurrentStoneIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, { answer: string; impact: any }>>({});
+  const [answers, setAnswers] = useState<Record<string, { answer: string | number; impact: Record<string, unknown> }>>({});
 
   const currentStone = stones[currentStoneIndex];
   const progress = ((currentStoneIndex + 1) / stones.length) * 100;
 
-  const handleAnswer = (optionValue: string, impact: any) => {
+  // Just update the answer without advancing (for text input)
+  const updateAnswer = (optionValue: string | number, impact: Record<string, unknown>) => {
+    setAnswers({
+      ...answers,
+      [currentStone.stoneId]: {
+        answer: optionValue,
+        impact
+      }
+    });
+  };
+
+  // Handle answer and auto-advance (for buttons)
+  const handleAnswer = (optionValue: string, impact: Record<string, unknown>) => {
     const newAnswers = {
       ...answers,
       [currentStone.stoneId]: {
@@ -30,6 +42,25 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
     } else {
       // All questions answered
       const stoneAnswers: StoneAnswer[] = Object.entries(newAnswers).map(([stoneId, data]) => ({
+        stoneId,
+        answer: data.answer,
+        impact: data.impact
+      }));
+      onComplete(stoneAnswers);
+    }
+  };
+
+  const handleNext = () => {
+    // Check if current question is answered
+    if (!answers[currentStone.stoneId]) {
+      return; // Don't advance if not answered
+    }
+
+    if (currentStoneIndex < stones.length - 1) {
+      setCurrentStoneIndex(currentStoneIndex + 1);
+    } else {
+      // All questions answered - complete
+      const stoneAnswers: StoneAnswer[] = Object.entries(answers).map(([stoneId, data]) => ({
         stoneId,
         answer: data.answer,
         impact: data.impact
@@ -178,13 +209,125 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
             )}
           </button>
         ))}
+
+        {/* Open-ended / Yes-No / Scale questions */}
+        {(currentStone.question.type === 'open_ended' ||
+          currentStone.question.type === 'yes_no' ||
+          currentStone.question.type === 'scale') && (
+          <div style={{ marginTop: tokens.spacing.md }}>
+            {currentStone.question.type === 'yes_no' && (
+              <div style={{ display: 'flex', gap: tokens.spacing.md }}>
+                <button
+                  onClick={() => handleAnswer('yes', { answer: 'yes' })}
+                  style={{
+                    flex: 1,
+                    borderRadius: tokens.borderRadius.lg,
+                    fontWeight: tokens.typography.weights.medium,
+                    padding: tokens.spacing.lg,
+                    backgroundColor: answers[currentStone.stoneId]?.answer === 'yes'
+                      ? 'rgba(67, 56, 202, 0.1)'
+                      : 'white',
+                    border: answers[currentStone.stoneId]?.answer === 'yes'
+                      ? `2px solid ${tokens.colors.primary}`
+                      : '2px solid #E2E8F0',
+                    color: tokens.colors.text.primary,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Yes
+                </button>
+                <button
+                  onClick={() => handleAnswer('no', { answer: 'no' })}
+                  style={{
+                    flex: 1,
+                    borderRadius: tokens.borderRadius.lg,
+                    fontWeight: tokens.typography.weights.medium,
+                    padding: tokens.spacing.lg,
+                    backgroundColor: answers[currentStone.stoneId]?.answer === 'no'
+                      ? 'rgba(67, 56, 202, 0.1)'
+                      : 'white',
+                    border: answers[currentStone.stoneId]?.answer === 'no'
+                      ? `2px solid ${tokens.colors.primary}`
+                      : '2px solid #E2E8F0',
+                    color: tokens.colors.text.primary,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  No
+                </button>
+              </div>
+            )}
+
+            {currentStone.question.type === 'open_ended' && (
+              <textarea
+                value={(answers[currentStone.stoneId]?.answer as string) || ''}
+                onChange={(e) => updateAnswer(e.target.value, { answer: e.target.value })}
+                placeholder="Type your answer here..."
+                style={{
+                  width: '100%',
+                  minHeight: '120px',
+                  borderRadius: tokens.borderRadius.lg,
+                  padding: tokens.spacing.lg,
+                  border: '2px solid #E2E8F0',
+                  fontSize: tokens.typography.sizes.base,
+                  fontFamily: 'inherit',
+                  resize: 'vertical',
+                  outline: 'none',
+                  transition: 'border-color 0.2s ease'
+                }}
+                onFocus={(e) => e.currentTarget.style.borderColor = tokens.colors.primary}
+                onBlur={(e) => e.currentTarget.style.borderColor = '#E2E8F0'}
+              />
+            )}
+
+            {currentStone.question.type === 'scale' && (
+              <div>
+                <input
+                  type="range"
+                  min="1"
+                  max="5"
+                  value={typeof answers[currentStone.stoneId]?.answer === 'number' ? answers[currentStone.stoneId].answer : 3}
+                  onChange={(e) => updateAnswer(Number(e.target.value), { score: Number(e.target.value) })}
+                  style={{
+                    width: '100%',
+                    marginBottom: tokens.spacing.md
+                  }}
+                />
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: tokens.typography.sizes.sm,
+                  color: tokens.colors.text.secondary
+                }}>
+                  <span>1</span>
+                  <span>2</span>
+                  <span>3</span>
+                  <span>4</span>
+                  <span>5</span>
+                </div>
+                <div style={{
+                  textAlign: 'center',
+                  marginTop: tokens.spacing.sm,
+                  fontSize: tokens.typography.sizes.base,
+                  fontWeight: tokens.typography.weights.medium,
+                  color: tokens.colors.text.primary
+                }}>
+                  Selected: {typeof answers[currentStone.stoneId]?.answer === 'number' ? answers[currentStone.stoneId].answer : 3}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Navigation */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
-        gap: tokens.spacing.md
+        gap: tokens.spacing.md,
+        alignItems: 'center'
       }}>
         <button
           onClick={handleBack}
@@ -211,6 +354,26 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
         }}>
           {answers[currentStone.stoneId] ? '✓ Answered' : 'Select an option above'}
         </div>
+
+        {/* Show Next button for open_ended and scale questions */}
+        {(currentStone.question.type === 'open_ended' || currentStone.question.type === 'scale') && (
+          <button
+            onClick={handleNext}
+            disabled={!answers[currentStone.stoneId]}
+            style={{
+              borderRadius: tokens.borderRadius.lg,
+              fontWeight: tokens.typography.weights.medium,
+              padding: `${tokens.spacing.md} ${tokens.spacing.xl}`,
+              backgroundColor: answers[currentStone.stoneId] ? tokens.colors.primary : '#E2E8F0',
+              border: 'none',
+              color: 'white',
+              opacity: answers[currentStone.stoneId] ? 1 : 0.5,
+              cursor: answers[currentStone.stoneId] ? 'pointer' : 'not-allowed'
+            }}
+          >
+            {currentStoneIndex === stones.length - 1 ? 'Complete' : 'Next'}
+          </button>
+        )}
       </div>
     </div>
   );

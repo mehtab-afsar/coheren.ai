@@ -15,6 +15,7 @@ import type {
   Roadmap,
   StoneAnswer
 } from '../types/agents';
+import type { Task } from '../store/useStore';
 
 const groq = new Groq({
   apiKey: import.meta.env.VITE_GROQ_API_KEY,
@@ -266,9 +267,9 @@ export function shouldTriggerCheckpoint(currentDay: number, checkpointInterval: 
 /**
  * Helper: Convert CompletedTaskFeedback from your Task interface
  */
-export function convertToFeedback(tasks: any[]): CompletedTaskFeedback[] {
+export function convertToFeedback(tasks: Task[]): CompletedTaskFeedback[] {
   return tasks.map(task => ({
-    dayNumber: task.day || task.dayNumber,
+    dayNumber: task.day || task.dayNumber || 1,
     title: task.title,
     difficultyRating: task.difficultyRating || 3, // default to medium if not set
     completionTime: task.actualDuration || task.duration,

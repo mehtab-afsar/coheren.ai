@@ -6,7 +6,6 @@ import { tokens, text, button } from '../design-system';
 import { generateInitialTasks } from '../utils/taskGenerator';
 import { detectCategory } from '../utils/categoryDetection';
 import { retrieveKnowledge, type UserContext } from '../rag';
-import { getOrCreateUser, createJourney, generateDayTasks } from '../api/client';
 import type { GoalCategory } from '../types';
 import LoadingAnimation from '../components/LoadingAnimation';
 
@@ -166,7 +165,8 @@ export default function ChatOnboarding() {
       collectedData.category &&
       collectedData.name &&
       collectedData.skillLevel &&
-      collectedData.timeline
+      collectedData.timeline &&
+      collectedData.dailyTime
     );
 
     // Trigger agent-based onboarding if all conditions met
@@ -313,31 +313,70 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
       setMessages((prev) => [...prev, aiMessage]);
       setIsTyping(false);
 
-      // Check if AI says plan is ready - the useEffect will handle triggering when data is ready
+      // Check if AI says plan is ready AND all required data is collected
       const hasPersonalized = aiResponse.toLowerCase().includes('personalized');
       const hasPlan = aiResponse.toLowerCase().includes('plan') || aiResponse.toLowerCase().includes('strategic');
 
-      if (hasPersonalized && hasPlan) {
-        setAiMentionedPlan(true);
+      // Delay the check to allow React state to update from extractDataFromInput
+      setTimeout(() => {
+        // IMPORTANT: Only trigger if we have all required data
+        const hasRequiredData = !!(
+          collectedData.goal &&
+          collectedData.category &&
+          collectedData.name &&
+          collectedData.skillLevel &&
+          collectedData.timeline &&
+          collectedData.dailyTime
+        );
 
-        // Direct trigger with delay to allow state to settle
-        setTimeout(() => {
-          setPlanGenerationTriggered(prev => {
-            if (!prev) {
-              generateStrategicPlan();
-              return true;
-            }
-            return prev;
+        if (hasPersonalized && hasPlan && hasRequiredData) {
+          console.log('✅ AI mentioned plan AND we have all required data - triggering agent pipeline');
+          setAiMentionedPlan(true);
+
+          // Direct trigger with delay to allow state to settle
+          setTimeout(() => {
+            setPlanGenerationTriggered(prev => {
+              if (!prev) {
+                runAnalysisAndGetStones(); // Use NEW agent-based system
+                return true;
+              }
+              return prev;
+            });
+          }, 1500);
+        } else if (hasPersonalized && hasPlan && !hasRequiredData) {
+          console.log('⚠️ AI mentioned plan but missing data:', {
+            goal: !!collectedData.goal,
+            category: !!collectedData.category,
+            name: !!collectedData.name,
+            skillLevel: !!collectedData.skillLevel,
+            timeline: !!collectedData.timeline,
+            dailyTime: !!collectedData.dailyTime
           });
-        }, 1500);
+        }
+      }, 100); // Small delay to allow state to update
+
+    } catch (error: unknown) {
+      // Handle Groq API errors with proper user feedback
+      console.error('❌ Groq API Error:', error);
+
+      let errorMessage = "I'm having trouble connecting. Please try again.";
+
+      // Check for rate limit error with type guards
+      const err = error as { error?: { message?: string }; message?: string };
+      if (err?.error?.message?.includes('Rate limit reached')) {
+        const match = err.error.message.match(/Please try again in (\d+m\d+\.?\d*s)/);
+        const waitTime = match ? match[1] : '10 minutes';
+        errorMessage = `⚠️ I've hit my daily API limit. Please wait ${waitTime} and try again, or contact support to upgrade the API plan.`;
+      } else if (err?.message?.includes('rate_limit')) {
+        errorMessage = "⚠️ API rate limit reached. Please wait a few minutes and try again.";
+      } else if (err?.message?.includes('network') || err?.message?.includes('fetch')) {
+        errorMessage = "⚠️ Network error. Please check your connection and try again.";
       }
 
-    } catch {
-      // Handle Groq API error silently
       const fallbackMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'ai',
-        content: "I'm here to help! What would you like to achieve?",
+        content: errorMessage,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, fallbackMessage]);
@@ -427,20 +466,36 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
     // Extract timeline and milestones
     if (!collectedData.timeline) {
       // Match various timeline formats:
-      // - "3 months", "6 weeks", "2 years"
+      // - "3 months", "6 weeks", "2 years", "30 days"
       // - "by 2027", "by June", "by December"
       // - Just a year: "2025", "2027"
+      // - Just a number if previous message asked about timeline
       const timelineMatch = input.match(
-        /(\d+)\s*(week|month|year|day)s?|(?:in|within|over|for|by)\s+(\d+)\s*(week|month|year|day)?s?|(?:by\s+)?(\d{4})|by\s+(\w+)/i
+        /(\d+)\s*(week|month|year|day)s?|(?:in|within|over|for|by)\s+(\d+)\s*(week|month|year|day)?s?|(?:by\s+)?(\d{4})|by\s+(\w+)|next\s+(week|month|year)/i
       );
 
       if (timelineMatch) {
         const target = timelineMatch[0];
+        console.log('✅ Timeline extracted:', target);
         setCollectedData(prev => ({ ...prev, timeline: { target, milestones: [] } }));
       } else if (/^\d{4}$/.test(input.trim())) {
         // Just a year like "2027"
         const year = input.trim();
+        console.log('✅ Timeline extracted (year):', year);
         setCollectedData(prev => ({ ...prev, timeline: { target: `by ${year}`, milestones: [] } }));
+      } else if (/^\d+$/.test(input.trim())) {
+        // Just a number - check if previous message asked about timeline
+        const lastAIMessage = messages.filter(m => m.role === 'ai').pop();
+        if (lastAIMessage && (
+          lastAIMessage.content.toLowerCase().includes('how long') ||
+          lastAIMessage.content.toLowerCase().includes('timeline') ||
+          lastAIMessage.content.toLowerCase().includes('when') ||
+          lastAIMessage.content.toLowerCase().includes('how many')
+        )) {
+          const number = input.trim();
+          console.log('✅ Timeline extracted (number only):', number, 'days');
+          setCollectedData(prev => ({ ...prev, timeline: { target: `${number} days`, milestones: [] } }));
+        }
       }
 
       // Extract milestones like "run 5k", "read 6 books", "finish 10 chapters"
@@ -471,18 +526,63 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
       }
     }
 
-    // Extract daily time
-    if (!collectedData.dailyTime && (lower.includes('minute') || lower.includes('hour') || lower.includes('hr') || /\d+\s*min/i.test(input))) {
-      const timeMatch = input.match(/(\d+)\s*(minute|min|hour|hr)s?/i);
-      if (timeMatch) {
-        setCollectedData(prev => ({ ...prev, dailyTime: timeMatch[0] }));
+    // Extract daily time - very flexible
+    if (!collectedData.dailyTime) {
+      // IMPORTANT: Skip if input is about timeline (month/week/year/day)
+      const isTimelineInput = /\b(month|week|year|day)s?\b/i.test(input);
+
+      if (!isTimelineInput) {
+        console.log('🔍 Checking for daily time in:', input);
+
+        // Try to match various time patterns including "half hour", "an hour", ranges, etc.
+        const timeMatch = input.match(/(\d+)\s*(minute|min|hour|hr)s?|(\d+)\s*-\s*(\d+)\s*(minute|min|hour|hr)s?|half\s*(an?)?\s*hour|an?\s*hour/i);
+
+        if (timeMatch) {
+          let timeStr = timeMatch[0];
+          // Convert "half hour" or "half an hour" to "30 minutes"
+          if (timeStr.toLowerCase().includes('half')) {
+            timeStr = '30 minutes';
+          } else if (timeStr.toLowerCase().match(/^an?\s*hour/i)) {
+            timeStr = '1 hour';
+          }
+          console.log('✅ Daily time extracted:', timeStr);
+          setCollectedData(prev => ({ ...prev, dailyTime: timeStr }));
+        } else if (/\d+/.test(input)) {
+          // Contains a number - check if context suggests it's about daily time (not timeline)
+          const lastAIMessage = messages.filter(m => m.role === 'ai').pop();
+          const askedAboutTime = lastAIMessage && (
+            lastAIMessage.content.toLowerCase().includes('how much time') ||
+            lastAIMessage.content.toLowerCase().includes('daily') ||
+            lastAIMessage.content.toLowerCase().includes('per day') ||
+            lastAIMessage.content.toLowerCase().includes('each day') ||
+            lastAIMessage.content.toLowerCase().includes('commit')
+          );
+
+          if (askedAboutTime) {
+            const numberMatch = input.match(/\d+/);
+            if (numberMatch) {
+              const number = numberMatch[0];
+              console.log('✅ Daily time extracted (contextual):', number, 'minutes');
+              setCollectedData(prev => ({ ...prev, dailyTime: `${number} minutes` }));
+            }
+          }
+        }
+      } else {
+        console.log('⏭️ Skipping daily time extraction (input is about timeline)');
       }
     }
   };
 
   // New function: Run Agent 1 & 2 to get stone questions
   const runAnalysisAndGetStones = async () => {
+    console.log('🎯 runAnalysisAndGetStones called');
+    console.log('   Goal:', collectedData.goal);
+    console.log('   Category:', collectedData.category);
+
     if (!collectedData.goal || !collectedData.category) {
+      console.error('❌ Missing required data - cannot run agents');
+      console.error('   Goal:', collectedData.goal);
+      console.error('   Category:', collectedData.category);
       return;
     }
 
@@ -495,6 +595,10 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
         : 3;
       const timelineDays = durationInMonths * 30;
 
+      console.log('📊 Running agents with parameters:');
+      console.log('   Timeline:', timelineDays, 'days');
+      console.log('   Daily time:', dailyMinutes, 'minutes');
+
       // Run Agent 1 & 2
       const { goalAnalysis: analysis, stones: identifiedStones } = await runOnboardingAgents(
         collectedData.goal,
@@ -502,16 +606,35 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
         dailyMinutes
       );
 
+      console.log('✅ Agents completed successfully');
       setGoalAnalysis(analysis);
       setStones(identifiedStones.requiredStones);
+
+      // Debug: Log stones to see their structure
+      console.log('🧱 Generated Building Stones:', identifiedStones.requiredStones.length);
+      identifiedStones.requiredStones.forEach((stone, i) => {
+        console.log(`   Stone ${i+1}:`, {
+          id: stone.stoneId,
+          question: stone.question.text,
+          type: stone.question.type,
+          hasOptions: !!stone.question.options,
+          optionsCount: stone.question.options?.length || 0
+        });
+      });
+
+      console.log('🔄 Switching to stone questions phase');
       setOnboardingPhase('stones');
       setIsTyping(false);
 
     } catch (error) {
-      console.error('Error running onboarding agents:', error);
+      console.error('❌ Error running onboarding agents:', error);
+      if (error instanceof Error) {
+        console.error('   Error message:', error.message);
+        console.error('   Error stack:', error.stack);
+      }
       setIsTyping(false);
-      // Fallback to old system if agents fail
-      generateStrategicPlan();
+      // Show error to user
+      alert('Error analyzing your goal. Please try again or contact support.');
     }
   };
 
@@ -548,13 +671,21 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
     }, 300);
 
     try {
+      console.log('🚀 Starting complete roadmap generation...');
+      console.log('   Timeline:', timelineDays, 'days');
+      console.log('   Daily time:', dailyMinutes, 'minutes');
+
       // Run Agent 3 & 4 to generate roadmap and first task
       const { roadmap: agentRoadmap, firstTask } = await generateCompleteRoadmap(
         collectedData.goal,
         timelineDays,
         dailyMinutes,
-        answers
+        answers,
+        collectedData.category || undefined, // Pass category for resource matching
+        collectedData.skillLevel || 'beginner' // Pass skill level for resource matching
       );
+
+      console.log('✅ Roadmap and first task generated');
 
       // Convert agent roadmap to our existing format
       const roadmap = {
@@ -610,7 +741,8 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
         dayNumber: 1,
         steps: firstTask.task.steps.map(step => step.instruction),
         tips: firstTask.task.tips,
-        successCriteria: firstTask.task.successCriteria.primary
+        successCriteria: firstTask.task.successCriteria.primary,
+        resources: firstTask.task.resources // Include matched resources
       }];
 
       setTasks(initialTasks);
@@ -619,8 +751,13 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
       const user = useStore.getState().user;
       if (user) {
         console.log('📤 Syncing roadmap to Supabase...');
+        console.log('   User ID:', user.id);
+        console.log('   Goal:', collectedData.goal);
+        console.log('   Category:', collectedData.category);
+        console.log('   Tasks to save:', initialTasks.length);
+
         try {
-          await syncCompleteRoadmap(
+          const result = await syncCompleteRoadmap(
             user.id,
             collectedData.goal,
             `Generated via AI multi-agent system for ${collectedData.category}`,
@@ -629,14 +766,27 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
             agentRoadmap,
             initialTasks
           );
-          console.log('✅ Roadmap synced to Supabase successfully!');
+
+          if (result.success) {
+            console.log('✅ Roadmap synced to Supabase successfully!');
+            console.log('   Goal ID:', result.goal?.id);
+            console.log('   Roadmap ID:', result.roadmap?.id);
+          } else {
+            console.error('❌ Roadmap sync failed:', result.error);
+            throw result.error; // Re-throw to catch block
+          }
         } catch (error) {
           console.error('❌ Failed to sync roadmap to Supabase:', error);
-          // Don't block user flow if sync fails
+          // Show error to user but don't block flow
+          alert('Warning: Could not save to database. You can continue but data may be lost on refresh.');
         }
+      } else {
+        console.warn('⚠️ User not authenticated - skipping Supabase sync');
       }
 
-      // Backend sync
+      // Backend sync - DISABLED (using Supabase directly)
+      // All data is now saved via syncCompleteRoadmap() above
+      /*
       try {
         await getOrCreateUser(collectedData.name);
         const backendJourney = await createJourney({
@@ -659,6 +809,7 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
       } catch {
         // Backend sync failed, but local data is still valid
       }
+      */
 
       setGenerationProgress(100);
       clearInterval(progressInterval);
@@ -866,7 +1017,7 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
       });
 
       // Create roadmap with AI-generated phases
-      const phases = strategicPlan.weekTemplates.slice(0, 4).map((week: any, idx: number) => ({
+      const phases = strategicPlan.weekTemplates.slice(0, 4).map((week: { focus: string; description: string }, idx: number) => ({
         title: week.focus,
         weeks: idx === 0 ? '1-' + Math.ceil(strategicPlan.totalWeeks / 4) :
                idx === 1 ? Math.ceil(strategicPlan.totalWeeks / 4 + 1) + '-' + Math.ceil(strategicPlan.totalWeeks / 2) :
@@ -894,7 +1045,9 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
       const initialTasks = generateInitialTasks(roadmap, checkInTime || '07:00');
       setTasks(initialTasks);
 
-      // === SYNC TO BACKEND ===
+      // === SYNC TO BACKEND - DISABLED ===
+      // Using Supabase directly instead of separate backend
+      /*
       try {
         // Auto-create user with name from conversation
         await getOrCreateUser(collectedData.name);
@@ -922,6 +1075,7 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
       } catch {
         // Backend sync failed, but local data is still valid - app works offline
       }
+      */
       // === END BACKEND SYNC ===
 
       // Complete progress bar
@@ -972,7 +1126,9 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
       const initialTasks = generateInitialTasks(fallbackRoadmap, checkInTime || '07:00');
       setTasks(initialTasks);
 
-      // === SYNC FALLBACK TO BACKEND ===
+      // === SYNC FALLBACK TO BACKEND - DISABLED ===
+      // Using Supabase directly instead
+      /*
       try {
         await getOrCreateUser(collectedData.name);
         const dailyMinutes = parseDailyTimeToMinutes(collectedData.dailyTime);
@@ -997,6 +1153,7 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
       } catch {
         // Backend sync failed for fallback - app works offline
       }
+      */
       // === END FALLBACK BACKEND SYNC ===
 
       setTimeout(() => setStep(2), 800);

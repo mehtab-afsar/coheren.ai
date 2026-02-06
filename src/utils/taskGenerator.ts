@@ -341,7 +341,28 @@ export function generateTasksForDay(
  * Generate tasks from AI-generated strategic plan
  * Exported for use in store
  */
-export function generateTasksFromAIPlan(roadmap: any, day: number, checkInTime: string): Task[] {
+export function generateTasksFromAIPlan(
+  roadmap: {
+    category: GoalCategory;
+    strategicPlan?: {
+      weekTemplates: Array<{
+        weekNumber: number;
+        dailyTasks?: Array<{
+          dayOfWeek?: number;
+          title?: string;
+          description?: string;
+          type?: string;
+          duration?: number;
+          practice?: { title: string; description: string; duration: number };
+          learning?: { title: string; description: string; duration: number };
+          reflection?: { title: string; description: string; duration: number };
+        }>;
+      }>;
+    };
+  },
+  day: number,
+  checkInTime: string
+): Task[] {
   if (!roadmap.strategicPlan?.weekTemplates) {
     return generateTasksForDay(roadmap.category, day, checkInTime);
   }
@@ -351,7 +372,7 @@ export function generateTasksFromAIPlan(roadmap: any, day: number, checkInTime: 
 
   // Find the week template
   const weekTemplate = roadmap.strategicPlan.weekTemplates.find(
-    (w: any) => w.weekNumber === weekNumber
+    (w) => w.weekNumber === weekNumber
   ) || roadmap.strategicPlan.weekTemplates[0];
 
   if (!weekTemplate?.dailyTasks) {
@@ -360,7 +381,7 @@ export function generateTasksFromAIPlan(roadmap: any, day: number, checkInTime: 
 
   // Find the day's tasks
   const dayTasks = weekTemplate.dailyTasks.find(
-    (d: any) => d.dayOfWeek === dayOfWeek
+    (d) => d.dayOfWeek === dayOfWeek
   ) || weekTemplate.dailyTasks[0];
 
   // Convert AI plan format to Task format
@@ -412,7 +433,24 @@ export function generateTasksFromAIPlan(roadmap: any, day: number, checkInTime: 
   return tasks;
 }
 
-export function generateInitialTasks(roadmap: any, checkInTime: string): Task[] {
+export function generateInitialTasks(
+  roadmap: {
+    category: GoalCategory;
+    duration: number;
+    strategicPlan?: {
+      weekTemplates: Array<{
+        weekNumber: number;
+        dailyTasks?: Array<{
+          dayOfWeek?: number;
+          practice?: { title: string; description: string; duration: number };
+          learning?: { title: string; description: string; duration: number };
+          reflection?: { title: string; description: string; duration: number };
+        }>;
+      }>;
+    };
+  } | null,
+  checkInTime: string
+): Task[] {
   if (!roadmap) return [];
 
   // Try to use AI-generated plan first, fall back to templates if not available

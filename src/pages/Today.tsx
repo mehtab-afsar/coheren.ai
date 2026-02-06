@@ -1,22 +1,22 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, RefreshCw, Clock, Target, Sparkles, Star } from 'lucide-react';
+import { CheckCircle2, RefreshCw, Clock, Target, Sparkles } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { tokens } from '../design-system';
+import ResourceCard from '../components/ResourceCard';
+import TaskFeedbackModal, { type TaskFeedback } from '../components/TaskFeedbackModal';
+import { saveTaskFeedback } from '../lib/database';
 
 export default function Today() {
   const tasks = useStore((state) => state.tasks);
   const completeTask = useStore((state) => state.completeTask);
   const skipTask = useStore((state) => state.skipTask);
+  const user = useStore((state) => state.user);
+  const currentGoal = useStore((state) => state.currentGoal);
 
   const [showRecalibrateOptions, setShowRecalibrateOptions] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
-
-  // Feedback state
-  const [difficultyRating, setDifficultyRating] = useState<number>(3);
-  const [actualMinutes, setActualMinutes] = useState<number>(0);
-  const [userComment, setUserComment] = useState<string>('');
 
   // Get today's task (first incomplete task)
   const todayTask = tasks.find(t => !t.completed && !t.skipped);
@@ -73,22 +73,40 @@ export default function Today() {
   }
 
   const handleComplete = () => {
-    // Initialize feedback with defaults
-    setActualMinutes(todayTask.duration); // default to planned time
-    setDifficultyRating(3); // default to medium
-    setUserComment('');
     setShowFeedbackModal(true);
   };
 
-  const handleSubmitFeedback = async () => {
+  const handleSubmitFeedback = async (feedback: TaskFeedback) => {
     setIsCompleting(true);
 
-    // Update task with feedback before completing
-    const taskIndex = tasks.findIndex(t => t.id === todayTask.id);
-    if (taskIndex !== -1) {
-      tasks[taskIndex].difficultyRating = difficultyRating;
-      tasks[taskIndex].actualDuration = actualMinutes;
-      tasks[taskIndex].userComment = userComment || undefined;
+    // Save to Supabase task_feedback table (if authenticated)
+    if (user && currentGoal) {
+      try {
+        // Note: currentGoal should have an 'id' field from the database
+        // If it doesn't exist yet, this will log a warning
+        const goalId = (currentGoal as { id?: string }).id;
+
+        if (goalId) {
+          await saveTaskFeedback(
+            user.id,
+            todayTask.id,
+            goalId,
+            {
+              difficultyScore: feedback.difficultyRating,
+              actualDurationMins: feedback.actualDuration,
+              feedbackTags: feedback.feedbackTags,
+              userComment: feedback.userComment,
+              completionStatus: 'completed'
+            }
+          );
+          console.log('✅ Task feedback saved to task_feedback table');
+        } else {
+          console.warn('⚠️ No goal_id available - feedback saved to daily_tasks only');
+        }
+      } catch (error) {
+        console.error('❌ Failed to save task feedback:', error);
+        // Don't block task completion if feedback save fails
+      }
     }
 
     await new Promise(resolve => setTimeout(resolve, 600));
@@ -97,8 +115,9 @@ export default function Today() {
     setIsCompleting(false);
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleSkip = (_reason: string) => {
-    // TODO: Pass reason to skipTask when backend supports it
+    // TODO: Use reason parameter when backend supports it
     skipTask(todayTask.id);
     setShowRecalibrateOptions(false);
   };
@@ -356,6 +375,22 @@ export default function Today() {
               </div>
             )}
 
+            {/* Learning Resources */}
+            {todayTask.resources && (
+              <ResourceCard
+                primary={todayTask.resources.primary}
+                supplementary={todayTask.resources.supplementary || []}
+                onRateHelpful={(resource) => {
+                  console.log('👍 Resource rated helpful:', resource.title);
+                  // TODO: Track helpful resources in Supabase
+                }}
+                onRateNotHelpful={(resource) => {
+                  console.log('👎 Resource rated not helpful:', resource.title);
+                  // TODO: Track unhelpful resources for improvement
+                }}
+              />
+            )}
+
             {/* Action Buttons */}
             <div style={{
               display: 'flex',
@@ -511,242 +546,14 @@ export default function Today() {
           )}
         </AnimatePresence>
 
-        {/* Feedback Modal */}
-        <AnimatePresence>
-          {showFeedbackModal && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: tokens.spacing.xl,
-                zIndex: 1000
-              }}
-              onClick={() => !isCompleting && setShowFeedbackModal(false)}
-            >
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                onClick={(e) => e.stopPropagation()}
-                style={{
-                  backgroundColor: 'white',
-                  borderRadius: tokens.borderRadius.xl,
-                  boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
-                  padding: tokens.spacing['2xl'],
-                  maxWidth: '500px',
-                  width: '100%'
-                }}
-              >
-                <h3 style={{
-                  fontSize: tokens.typography.sizes['2xl'],
-                  fontWeight: tokens.typography.weights.semibold,
-                  color: tokens.colors.text.primary,
-                  marginBottom: tokens.spacing.sm
-                }}>
-                  How did it go?
-                </h3>
-                <p style={{
-                  fontSize: tokens.typography.sizes.sm,
-                  color: tokens.colors.text.secondary,
-                  marginBottom: tokens.spacing.xl
-                }}>
-                  Your feedback helps me personalize your journey
-                </p>
-
-                {/* Difficulty Rating */}
-                <div style={{ marginBottom: tokens.spacing.xl }}>
-                  <label style={{
-                    display: 'block',
-                    fontSize: tokens.typography.sizes.sm,
-                    fontWeight: tokens.typography.weights.medium,
-                    color: tokens.colors.text.primary,
-                    marginBottom: tokens.spacing.sm
-                  }}>
-                    How difficult was this task?
-                  </label>
-                  <div style={{
-                    display: 'flex',
-                    gap: tokens.spacing.sm,
-                    justifyContent: 'center'
-                  }}>
-                    {[1, 2, 3, 4, 5].map((rating) => (
-                      <motion.button
-                        key={rating}
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => setDifficultyRating(rating)}
-                        style={{
-                          width: '48px',
-                          height: '48px',
-                          border: 'none',
-                          background: 'none',
-                          cursor: 'pointer',
-                          padding: 0
-                        }}
-                      >
-                        <Star
-                          size={36}
-                          fill={rating <= difficultyRating ? '#F59E0B' : 'none'}
-                          stroke={rating <= difficultyRating ? '#F59E0B' : '#D1D5DB'}
-                          strokeWidth={2}
-                        />
-                      </motion.button>
-                    ))}
-                  </div>
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    marginTop: tokens.spacing.xs,
-                    fontSize: tokens.typography.sizes.xs,
-                    color: tokens.colors.text.tertiary
-                  }}>
-                    <span>Easy</span>
-                    <span>Very Hard</span>
-                  </div>
-                </div>
-
-                {/* Time Taken */}
-                <div style={{ marginBottom: tokens.spacing.xl }}>
-                  <label style={{
-                    display: 'block',
-                    fontSize: tokens.typography.sizes.sm,
-                    fontWeight: tokens.typography.weights.medium,
-                    color: tokens.colors.text.primary,
-                    marginBottom: tokens.spacing.sm
-                  }}>
-                    How long did it actually take?
-                  </label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm }}>
-                    <input
-                      type="number"
-                      value={actualMinutes}
-                      onChange={(e) => setActualMinutes(parseInt(e.target.value) || 0)}
-                      min="0"
-                      max="300"
-                      style={{
-                        flex: 1,
-                        padding: tokens.spacing.md,
-                        border: `2px solid ${tokens.colors.border}`,
-                        borderRadius: tokens.borderRadius.md,
-                        fontSize: tokens.typography.sizes.base,
-                        color: tokens.colors.text.primary
-                      }}
-                    />
-                    <span style={{
-                      fontSize: tokens.typography.sizes.sm,
-                      color: tokens.colors.text.secondary
-                    }}>
-                      minutes
-                    </span>
-                  </div>
-                </div>
-
-                {/* Optional Comment */}
-                <div style={{ marginBottom: tokens.spacing.xl }}>
-                  <label style={{
-                    display: 'block',
-                    fontSize: tokens.typography.sizes.sm,
-                    fontWeight: tokens.typography.weights.medium,
-                    color: tokens.colors.text.primary,
-                    marginBottom: tokens.spacing.sm
-                  }}>
-                    Anything you struggled with? (Optional)
-                  </label>
-                  <textarea
-                    value={userComment}
-                    onChange={(e) => setUserComment(e.target.value)}
-                    placeholder="e.g., Found the F-chord transition difficult..."
-                    rows={3}
-                    style={{
-                      width: '100%',
-                      padding: tokens.spacing.md,
-                      border: `2px solid ${tokens.colors.border}`,
-                      borderRadius: tokens.borderRadius.md,
-                      fontSize: tokens.typography.sizes.base,
-                      color: tokens.colors.text.primary,
-                      fontFamily: 'inherit',
-                      resize: 'vertical'
-                    }}
-                  />
-                </div>
-
-                {/* Submit Buttons */}
-                <div style={{
-                  display: 'flex',
-                  gap: tokens.spacing.md
-                }}>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleSubmitFeedback}
-                    disabled={isCompleting}
-                    style={{
-                      flex: 1,
-                      padding: `${tokens.spacing.md} ${tokens.spacing.xl}`,
-                      backgroundColor: tokens.colors.primary,
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: tokens.borderRadius.lg,
-                      fontSize: tokens.typography.sizes.base,
-                      fontWeight: tokens.typography.weights.semibold,
-                      cursor: isCompleting ? 'not-allowed' : 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: tokens.spacing.sm,
-                      opacity: isCompleting ? 0.7 : 1
-                    }}
-                  >
-                    {isCompleting ? (
-                      <>
-                        <motion.div
-                          animate={{ rotate: 360 }}
-                          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                        >
-                          <RefreshCw size={18} />
-                        </motion.div>
-                        Completing...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 size={18} />
-                        Complete Task
-                      </>
-                    )}
-                  </motion.button>
-
-                  {!isCompleting && (
-                    <button
-                      onClick={() => setShowFeedbackModal(false)}
-                      style={{
-                        padding: `${tokens.spacing.md} ${tokens.spacing.lg}`,
-                        backgroundColor: 'white',
-                        color: tokens.colors.text.secondary,
-                        border: `2px solid ${tokens.colors.border}`,
-                        borderRadius: tokens.borderRadius.lg,
-                        fontSize: tokens.typography.sizes.base,
-                        fontWeight: tokens.typography.weights.medium,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  )}
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Task Feedback Modal */}
+        <TaskFeedbackModal
+          isOpen={showFeedbackModal}
+          taskTitle={todayTask.title}
+          estimatedMinutes={todayTask.duration}
+          onSubmit={handleSubmitFeedback}
+          onClose={() => !isCompleting && setShowFeedbackModal(false)}
+        />
       </div>
     </div>
   );

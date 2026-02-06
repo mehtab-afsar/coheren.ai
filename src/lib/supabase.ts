@@ -6,7 +6,7 @@
  * VITE_SUPABASE_ANON_KEY=your_anon_key
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type Session } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -33,7 +33,7 @@ export interface Profile {
   full_name: string | null;
   location: string | null;
   bio: string | null;
-  persona_traits: Record<string, any> | null;
+  persona_traits: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
@@ -43,7 +43,7 @@ export interface UserGoal {
   user_id: string;
   title: string;
   description: string | null;
-  goal_analysis: Record<string, any> | null;
+  goal_analysis: Record<string, unknown> | null;
   status: 'active' | 'completed' | 'paused';
   created_at: string;
   updated_at: string;
@@ -54,7 +54,7 @@ export interface GoalStone {
   goal_id: string;
   question: string;
   answer: string;
-  impact_data: Record<string, any> | null;
+  impact_data: Record<string, unknown> | null;
   priority: 'critical' | 'high' | 'medium' | 'low';
   created_at: string;
 }
@@ -62,8 +62,8 @@ export interface GoalStone {
 export interface Roadmap {
   id: string;
   goal_id: string;
-  phases: Record<string, any>;
-  config: Record<string, any> | null;
+  phases: Record<string, unknown>;
+  config: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -72,7 +72,7 @@ export interface DailyTaskRecord {
   roadmap_id: string;
   day_number: number;
   title: string;
-  content: Record<string, any>;
+  content: Record<string, unknown>;
   is_completed: boolean;
   difficulty_rating: number | null;
   actual_duration: number | null;
@@ -85,12 +85,31 @@ export interface DailyTaskRecord {
 
 // Auth helper functions
 export const getCurrentUser = async () => {
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error) {
-    console.error('Error getting user:', error);
+  try {
+    // First check if there's an active session
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      return null; // No session, user not logged in
+    }
+
+    // If session exists, get the user
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error) {
+      // Only log actual errors, not "session missing" errors
+      if (error.message !== 'Auth session missing!') {
+        console.error('Error getting user:', error);
+      }
+      return null;
+    }
+    return user;
+  } catch (error) {
+    // Silently handle session missing errors
+    const err = error as { message?: string };
+    if (err.message !== 'Auth session missing!') {
+      console.error('Error in getCurrentUser:', error);
+    }
     return null;
   }
-  return user;
 };
 
 export const signUp = async (email: string, password: string, metadata?: { full_name?: string }) => {
@@ -101,6 +120,21 @@ export const signUp = async (email: string, password: string, metadata?: { full_
       data: metadata
     }
   });
+
+  // Create profile in profiles table after successful signup
+  if (!error && data.user) {
+    try {
+      // Dynamically import to avoid circular dependency
+      const { createProfile } = await import('./database');
+      await createProfile(data.user.id, metadata?.full_name);
+      console.log('✅ Profile created for user:', data.user.id);
+    } catch (profileError) {
+      console.error('❌ Failed to create profile:', profileError);
+      // Don't fail the signup if profile creation fails
+      // Profile can be created later or via database trigger
+    }
+  }
+
   return { data, error };
 };
 
@@ -117,6 +151,6 @@ export const signOut = async () => {
   return { error };
 };
 
-export const onAuthStateChange = (callback: (event: string, session: any) => void) => {
+export const onAuthStateChange = (callback: (event: string, session: Session | null) => void) => {
   return supabase.auth.onAuthStateChange(callback);
 };

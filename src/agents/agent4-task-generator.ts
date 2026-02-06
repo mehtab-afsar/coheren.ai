@@ -1,5 +1,6 @@
 import Groq from 'groq-sdk';
 import type { Agent3Output, DailyTask, StoneAnswer } from '../types/agents';
+import { matchTaskToResources } from '../lib/resourceMatcher';
 
 const groq = new Groq({
   apiKey: import.meta.env.VITE_GROQ_API_KEY,
@@ -81,7 +82,9 @@ export async function generateTask(
   roadmap: Agent3Output,
   stoneAnswers: StoneAnswer[],
   dailyTimeAvailable: number,
-  previousTasksContext?: string
+  previousTasksContext?: string,
+  category?: string,
+  skillLevel?: 'beginner' | 'intermediate' | 'advanced'
 ): Promise<DailyTask> {
   // Determine which phase and week this day belongs to
   const totalDays = roadmap.roadmap.totalDays;
@@ -153,6 +156,36 @@ Make it feel like a personal coach wrote this task specifically for this user.
     }
 
     const result = JSON.parse(response) as DailyTask;
+
+    // Match resources to this task
+    if (category) {
+      try {
+        console.log(`🔍 Matching resources for: "${result.task.title}"`);
+        const matchedResources = await matchTaskToResources(
+          result.task.title,
+          result.task.description,
+          category,
+          skillLevel || 'beginner'
+        );
+
+        // Add resources to task
+        result.task.resources = {
+          primary: matchedResources.primary,
+          supplementary: matchedResources.supplementary
+        };
+
+        console.log(`✅ Resources matched:`,
+          matchedResources.primary ? `${matchedResources.primary.title} (${matchedResources.matchMethod})` : 'none');
+      } catch (error) {
+        console.error('Resource matching failed:', error);
+        // Don't block task generation if resource matching fails
+        result.task.resources = {
+          primary: null,
+          supplementary: []
+        };
+      }
+    }
+
     return result;
 
   } catch (error) {

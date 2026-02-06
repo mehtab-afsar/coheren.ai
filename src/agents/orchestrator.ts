@@ -19,6 +19,8 @@ import type {
   DailyTask,
   Roadmap
 } from '../types/agents';
+import type { Task } from '../store/useStore';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
  * Run Agents 1 and 2: Analyze goal and identify required stones
@@ -102,7 +104,9 @@ export async function generateCompleteRoadmap(
   goal: string,
   timeline: number,
   dailyTime: number,
-  stoneAnswers: StoneAnswer[]
+  stoneAnswers: StoneAnswer[],
+  category?: string, // For resource matching
+  skillLevel?: 'beginner' | 'intermediate' | 'advanced' // For resource matching
 ): Promise<{
   goalAnalysis: Agent1Output;
   roadmap: Agent3Output;
@@ -123,12 +127,15 @@ export async function generateCompleteRoadmap(
   // Step 3: Build curriculum with stone answers
   const roadmap = await buildCurriculum(context, goalAnalysis, stoneAnswers);
 
-  // Step 4: Generate first day's task
+  // Step 4: Generate first day's task (with resources!)
   const firstTask = await generateTask(
     1,
     roadmap,
     stoneAnswers,
-    dailyTime
+    dailyTime,
+    undefined, // previousTasksContext
+    category, // Pass category for resource matching
+    skillLevel || 'beginner' // Pass skill level for resource matching
   );
 
   console.log('✅ Roadmap generation complete!');
@@ -181,7 +188,7 @@ export async function runCheckpointRecalibration(
   dailyTime: number,
   roadmap: Roadmap,
   stoneAnswers: StoneAnswer[],
-  completedTasks: any[], // Tasks from store
+  completedTasks: Task[], // Tasks from store
   currentDay: number
 ): Promise<Agent5Output> {
   console.log(`🔄 Agent 5: Running checkpoint analysis for Day ${currentDay}...`);
@@ -289,7 +296,9 @@ Generate tasks that reflect these adjustments.
 /**
  * Complete checkpoint workflow:
  * 1. Analyze performance
- * 2. Generate adapted sprint tasks
+ * 2. Delete future tasks (CRITICAL to avoid duplicates)
+ * 3. Generate adapted sprint tasks
+ * 4. Save to Supabase
  */
 export async function handleCheckpoint(
   goal: string,
@@ -297,8 +306,13 @@ export async function handleCheckpoint(
   dailyTime: number,
   roadmap: Roadmap,
   stoneAnswers: StoneAnswer[],
-  completedTasks: any[],
-  currentDay: number
+  completedTasks: Task[],
+  currentDay: number,
+  options?: {
+    userId?: string;
+    goalId?: string;
+    supabase?: SupabaseClient; // Pass Supabase client if available
+  }
 ): Promise<{
   analysis: Agent5Output;
   adaptedTasks: DailyTask[];
@@ -316,7 +330,27 @@ export async function handleCheckpoint(
     currentDay
   );
 
-  // Step 2: Generate adapted sprint tasks
+  // Step 2: CRITICAL - Delete future tasks to avoid duplicates
+  if (options?.supabase && options?.goalId) {
+    console.log(`🗑️ Deleting future tasks (Day ${currentDay + 1} onwards)...`);
+    try {
+      const { error } = await options.supabase
+        .from('daily_tasks')
+        .delete()
+        .gt('day_number', currentDay)
+        .eq('goal_id', options.goalId);
+
+      if (error) {
+        console.error('Failed to delete future tasks:', error);
+      } else {
+        console.log('✅ Future tasks cleared');
+      }
+    } catch (error) {
+      console.error('Error deleting future tasks:', error);
+    }
+  }
+
+  // Step 3: Generate adapted sprint tasks
   const roadmapOutput: Agent3Output = { roadmap };
   const adaptedTasks = await generateAdaptedSprint(
     analysis,
@@ -324,6 +358,27 @@ export async function handleCheckpoint(
     stoneAnswers,
     dailyTime
   );
+
+  // Step 4: Save checkpoint result to Supabase (optional)
+  if (options?.supabase && options?.userId) {
+    try {
+      await options.supabase.from('checkpoints').insert({
+        user_id: options.userId,
+        goal_id: options.goalId,
+        checkpoint_day: currentDay,
+        overall_mastery: analysis.checkpointAnalysis.overallMastery,
+        struggling_areas: analysis.checkpointAnalysis.strugglingAreas,
+        mastering_areas: analysis.checkpointAnalysis.masteringAreas,
+        pace_adjustment: analysis.checkpointAnalysis.paceAdjustment,
+        recommendations: analysis.checkpointAnalysis.recommendations,
+        next_sprint_focus: analysis.checkpointAnalysis.nextSprintFocus,
+        personalized_message: analysis.recalibratedSprint.personalizedMessage
+      });
+      console.log('✅ Checkpoint saved to Supabase');
+    } catch (error) {
+      console.error('Failed to save checkpoint:', error);
+    }
+  }
 
   console.log('✅ Checkpoint workflow complete!');
 

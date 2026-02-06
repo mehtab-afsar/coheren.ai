@@ -1,5 +1,11 @@
 // Push notification utility for CONSIST
 
+declare global {
+  interface Window {
+    __consistNotificationTimeout?: ReturnType<typeof setTimeout>;
+  }
+}
+
 export interface NotificationPermissionState {
   granted: boolean;
   denied: boolean;
@@ -120,7 +126,7 @@ export function scheduleDailyCheckIn(checkInTime: string): void {
 
     // Store timeout ID for cleanup
     if (typeof window !== 'undefined') {
-      (window as any).__consistNotificationTimeout = timeoutId;
+      window.__consistNotificationTimeout = timeoutId;
     }
   };
 
@@ -131,9 +137,9 @@ export function scheduleDailyCheckIn(checkInTime: string): void {
  * Clear all scheduled notifications
  */
 export function clearScheduledNotifications(): void {
-  if (typeof window !== 'undefined' && (window as any).__consistNotificationTimeout) {
-    clearTimeout((window as any).__consistNotificationTimeout);
-    delete (window as any).__consistNotificationTimeout;
+  if (typeof window !== 'undefined' && window.__consistNotificationTimeout) {
+    clearTimeout(window.__consistNotificationTimeout);
+    delete window.__consistNotificationTimeout;
   }
 }
 

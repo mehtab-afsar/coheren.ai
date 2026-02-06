@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Lock, LogIn, UserPlus } from 'lucide-react';
-import { signIn, signUp, supabase } from '../lib/supabase';
+import { signIn, signUp } from '../lib/supabase';
 import { tokens } from '../design-system';
 
 interface LoginProps {
@@ -55,26 +55,6 @@ export default function Login({ onSuccess }: LoginProps) {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin
-        }
-      });
-
-      if (error) {
-        setError(error.message);
-        setLoading(false);
-      }
-      // Loading state will persist until redirect happens
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to sign in with Google');
-      setLoading(false);
-    }
-  };
 
   return (
     <div style={{
@@ -170,7 +150,9 @@ export default function Login({ onSuccess }: LoginProps) {
           </motion.div>
         )}
 
-        {/* Google Sign In */}
+        {/* Google Sign In - Disabled for local development */}
+        {/* Uncomment after configuring Google OAuth in Supabase */}
+        {/*
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
@@ -205,7 +187,6 @@ export default function Login({ onSuccess }: LoginProps) {
           {isSignUp ? 'Sign up with Google' : 'Sign in with Google'}
         </motion.button>
 
-        {/* Divider */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -229,6 +210,7 @@ export default function Login({ onSuccess }: LoginProps) {
             backgroundColor: tokens.colors.border
           }} />
         </div>
+        */}
 
         {/* Form */}
         <form onSubmit={handleSubmit}>

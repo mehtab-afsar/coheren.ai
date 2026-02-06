@@ -5,12 +5,19 @@ import { tokens, text, button, card, progress as progressStyles, hoverHandlers }
 import { PageLayout } from '../components/layout';
 
 // Simple roadmap generator based on category and user data
-const generateRoadmap = (goal: any, universalProfile: any) => {
+const generateRoadmap = (
+  goal: { category: string; specificGoal: string },
+  universalProfile: Record<string, unknown>
+) => {
   const category = goal.category;
   const specificGoal = goal.specificGoal;
 
   // Base templates for each category
-  const roadmapTemplates: Record<string, any> = {
+  const roadmapTemplates: Record<string, {
+    duration: number;
+    dailyTime: string;
+    phases: Array<{ title: string; weeks: string; description: string }>;
+  }> = {
     Fitness: {
       duration: 6, // months
       dailyTime: '30-45 min',
@@ -104,7 +111,16 @@ const generateRoadmap = (goal: any, universalProfile: any) => {
 export default function RoadmapGeneration() {
   const { universalProfile, currentGoal, setStep } = useStore();
   const [loading, setLoading] = useState(true);
-  const [roadmap, setRoadmap] = useState<any>(null);
+  const [roadmap, setRoadmap] = useState<{
+    title: string;
+    category: string;
+    duration: number;
+    dailyTime: string;
+    recommendedTime: string;
+    phases: Array<{ title: string; weeks: string; description: string }>;
+    startDate: string;
+    endDate: string;
+  } | null>(null);
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
@@ -125,7 +141,10 @@ export default function RoadmapGeneration() {
       if (currentStep >= steps.length) {
         clearInterval(interval);
         // Generate the roadmap
-        const generatedRoadmap = generateRoadmap(currentGoal, universalProfile);
+        const generatedRoadmap = generateRoadmap(
+          currentGoal as { category: string; specificGoal: string },
+          universalProfile
+        );
         setRoadmap(generatedRoadmap);
         setTimeout(() => setLoading(false), 500);
       }
@@ -137,7 +156,7 @@ export default function RoadmapGeneration() {
   const handleContinue = () => {
     // Save roadmap to store
     if (roadmap) {
-      useStore.getState().setRoadmap(roadmap);
+      useStore.getState().setRoadmap(roadmap as unknown as NonNullable<ReturnType<typeof useStore.getState>['roadmap']>);
     }
     setStep(6); // Move to daily check-in setup
   };
@@ -191,6 +210,10 @@ export default function RoadmapGeneration() {
         </div>
       </PageLayout>
     );
+  }
+
+  if (!roadmap) {
+    return null;
   }
 
   return (
@@ -310,7 +333,7 @@ export default function RoadmapGeneration() {
           flexDirection: 'column' as const,
           gap: tokens.spacing.lg
         }}>
-          {roadmap.phases.map((phase: any, index: number) => (
+          {roadmap.phases.map((phase, index: number) => (
             <div key={index} style={{
               display: 'flex',
               gap: tokens.spacing.lg

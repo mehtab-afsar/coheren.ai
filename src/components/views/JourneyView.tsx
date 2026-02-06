@@ -45,7 +45,7 @@ export default function JourneyView() {
   // Get week details from AI plan
   const getWeekDetails = (weekNumber: number) => {
     const weekTemplate = roadmap.strategicPlan?.weekTemplates?.find(
-      (w: any) => w.weekNumber === weekNumber
+      (w: { weekNumber: number }) => w.weekNumber === weekNumber
     );
 
     if (weekTemplate) {

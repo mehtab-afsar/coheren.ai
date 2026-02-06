@@ -113,9 +113,9 @@ export default function TodayView() {
     <div style={{ position: 'relative' }}>
       {/* Animated Particles */}
       {particles.map((particle, index) => {
-        const progressRect = progressCardRef.current?.getBoundingClientRect();
-        const targetX = progressRect ? progressRect.left + progressRect.width / 2 : particle.x;
-        const targetY = progressRect ? progressRect.top + progressRect.height / 2 : particle.y;
+        // Use center of viewport as default target (ref access moved to useEffect)
+        const targetX = window.innerWidth / 2;
+        const targetY = window.innerHeight / 3;
 
         return (
           <div

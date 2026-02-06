@@ -5,7 +5,7 @@
  */
 
 import { supabase } from './supabase';
-import type { Agent1Output, Agent3Output, StoneAnswer } from '../agents';
+import type { Agent1Output, Agent3Output, StoneAnswer } from '../types/agents';
 
 // ============================================
 // GOAL OPERATIONS
@@ -17,24 +17,47 @@ export async function createGoal(
   description: string,
   goalAnalysis: Agent1Output
 ) {
-  const { data, error } = await supabase
-    .from('user_goals')
-    .insert({
+  console.log('🔍 createGoal called with:', { userId, title, description: description?.substring(0, 50) });
+
+  try {
+    const goalData = {
       user_id: userId,
       title,
       description,
       goal_analysis: goalAnalysis,
       status: 'active'
-    })
-    .select()
-    .single();
+    };
 
-  if (error) {
-    console.error('Error creating goal:', error);
-    throw error;
+    console.log('📤 Inserting goal data...');
+
+    // Add timeout to prevent hanging
+    const insertPromise = supabase
+      .from('user_goals')
+      .insert(goalData)
+      .select()
+      .single();
+
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Database insert timeout after 10 seconds')), 10000);
+    });
+
+    const { data, error } = await Promise.race([insertPromise, timeoutPromise]) as Awaited<typeof insertPromise>;
+
+    if (error) {
+      console.error('❌ Error creating goal:', error);
+      console.error('   Code:', error.code);
+      console.error('   Message:', error.message);
+      console.error('   Details:', error.details);
+      console.error('   Hint:', error.hint);
+      throw error;
+    }
+
+    console.log('✅ Goal created successfully:', data);
+    return data;
+  } catch (err) {
+    console.error('❌ Exception in createGoal:', err);
+    throw err;
   }
-
-  return data;
 }
 
 export async function getActiveGoal(userId: string) {
@@ -122,7 +145,7 @@ export async function getRoadmapByGoalId(goalId: string) {
 // TASK OPERATIONS
 // ============================================
 
-export async function saveTasks(roadmapId: string, tasks: any[]) {
+export async function saveTasks(roadmapId: string, tasks: Array<Record<string, unknown>>) {
   const tasksToInsert = tasks.map(task => ({
     roadmap_id: roadmapId,
     day_number: task.day || task.dayNumber,
@@ -173,9 +196,10 @@ export async function updateTaskCompletion(
   completed: boolean,
   difficultyRating?: number,
   actualDuration?: number,
-  userComment?: string
+  userComment?: string,
+  feedbackTags?: string[]
 ) {
-  const updates: any = {
+  const updates: Record<string, unknown> = {
     is_completed: completed,
     completed_at: completed ? new Date().toISOString() : null
   };
@@ -183,6 +207,7 @@ export async function updateTaskCompletion(
   if (difficultyRating) updates.difficulty_rating = difficultyRating;
   if (actualDuration) updates.actual_duration = actualDuration;
   if (userComment) updates.user_comment = userComment;
+  if (feedbackTags && feedbackTags.length > 0) updates.feedback_tags = feedbackTags;
 
   const { data, error } = await supabase
     .from('daily_tasks')
@@ -225,11 +250,35 @@ export async function updateTaskSkip(
 // PROFILE/STREAK OPERATIONS
 // ============================================
 
+export async function createProfile(
+  userId: string,
+  fullName?: string
+) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .insert({
+      id: userId,
+      full_name: fullName || null,
+      location: null,
+      bio: null,
+      persona_traits: {}
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating profile:', error);
+    throw error;
+  }
+
+  return data;
+}
+
 export async function updateProfile(userId: string, updates: {
   full_name?: string;
   location?: string;
   bio?: string;
-  persona_traits?: Record<string, any>;
+  persona_traits?: Record<string, unknown>;
 }) {
   const { data, error } = await supabase
     .from('profiles')
@@ -297,6 +346,94 @@ export async function calculateStreak(roadmapId: string): Promise<number> {
   }
 
   return streak;
+}
+
+// ============================================
+// TASK FEEDBACK OPERATIONS
+// ============================================
+
+export async function saveTaskFeedback(
+  userId: string,
+  taskId: string,
+  goalId: string,
+  feedback: {
+    difficultyScore: number;
+    actualDurationMins?: number;
+    feedbackTags?: string[];
+    userComment?: string;
+    completionStatus?: 'completed' | 'skipped' | 'modified';
+  }
+) {
+  // Check if feedback already exists for this task (upsert logic)
+  const { data: existing } = await supabase
+    .from('task_feedback')
+    .select('id')
+    .eq('task_id', taskId)
+    .eq('user_id', userId)
+    .single();
+
+  const feedbackData = {
+    user_id: userId,
+    task_id: taskId,
+    goal_id: goalId,
+    difficulty_score: feedback.difficultyScore,
+    actual_duration_mins: feedback.actualDurationMins,
+    feedback_tags: feedback.feedbackTags || [],
+    user_comment: feedback.userComment,
+    completion_status: feedback.completionStatus || 'completed'
+  };
+
+  let data, error;
+
+  if (existing) {
+    // Update existing feedback
+    const result = await supabase
+      .from('task_feedback')
+      .update(feedbackData)
+      .eq('id', existing.id)
+      .select()
+      .single();
+    data = result.data;
+    error = result.error;
+  } else {
+    // Insert new feedback
+    const result = await supabase
+      .from('task_feedback')
+      .insert(feedbackData)
+      .select()
+      .single();
+    data = result.data;
+    error = result.error;
+  }
+
+  if (error) {
+    console.error('Error saving task feedback:', error);
+    throw error;
+  }
+
+  return data;
+}
+
+export async function getRecentFeedback(
+  goalId: string,
+  days: number = 14
+) {
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - days);
+
+  const { data, error } = await supabase
+    .from('task_feedback')
+    .select('*')
+    .eq('goal_id', goalId)
+    .gte('created_at', cutoffDate.toISOString())
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching recent feedback:', error);
+    return [];
+  }
+
+  return data || [];
 }
 
 // ============================================
@@ -369,20 +506,29 @@ export async function syncCompleteRoadmap(
   goalAnalysis: Agent1Output,
   stoneAnswers: StoneAnswer[],
   roadmap: Agent3Output,
-  tasks: any[]
+  tasks: Array<Record<string, unknown>>
 ) {
   try {
+    console.log('📝 Step 1/4: Creating goal...');
     // 1. Create goal
     const goal = await createGoal(userId, goalTitle, goalDescription, goalAnalysis);
+    console.log('✅ Step 1/4: Goal created:', goal.id);
 
+    console.log('📝 Step 2/4: Saving stones...');
     // 2. Save stones
     await saveStones(goal.id, stoneAnswers);
+    console.log('✅ Step 2/4: Stones saved');
 
+    console.log('📝 Step 3/4: Creating roadmap...');
     // 3. Create roadmap
     const roadmapRecord = await createRoadmap(goal.id, roadmap);
+    console.log('✅ Step 3/4: Roadmap created:', roadmapRecord.id);
 
+    console.log('📝 Step 4/4: Saving tasks...');
+    console.log('   Tasks to save:', tasks.length);
     // 4. Save tasks
     await saveTasks(roadmapRecord.id, tasks);
+    console.log('✅ Step 4/4: Tasks saved');
 
     return {
       goal,
@@ -390,7 +536,7 @@ export async function syncCompleteRoadmap(
       success: true
     };
   } catch (error) {
-    console.error('Error syncing roadmap:', error);
+    console.error('❌ Error syncing roadmap:', error);
     return {
       success: false,
       error

@@ -13,7 +13,6 @@ function App() {
   const user = useStore((state) => state.user);
   const setUser = useStore((state) => state.setUser);
   const checkAuth = useStore((state) => state.checkAuth);
-  const roadmap = useStore((state) => state.roadmap);
 
   const [showLogin, setShowLogin] = useState(false);
   const [authInitialized, setAuthInitialized] = useState(false);
@@ -24,7 +23,7 @@ function App() {
     const timeoutId = setTimeout(() => {
       console.warn('Auth check timed out, continuing without auth');
       setAuthInitialized(true);
-    }, 3000); // 3 second timeout
+    }, 5000); // 5 second timeout (increased from 3s)
 
     checkAuth()
       .then(() => {
@@ -40,6 +39,12 @@ function App() {
     // Listen for auth state changes
     const { data: { subscription } } = onAuthStateChange(async (event, session) => {
       console.log('Auth event:', event);
+
+      // Clear timeout when auth state changes - we know auth is working
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        setAuthInitialized(true);
+      }
       if (session?.user) {
         setUser(session.user);
 
@@ -50,34 +55,32 @@ function App() {
             .select('*, roadmaps(*)')
             .eq('user_id', session.user.id)
             .eq('status', 'active')
-            .single();
+            .maybeSingle(); // Use maybeSingle() instead of single() to handle no results
 
           if (error) {
             console.warn('Could not fetch goals:', error.message);
           }
 
           if (goals && goals.roadmaps) {
-            // User has an active goal/roadmap - go to dashboard
-            // TODO: Load roadmap and tasks from Supabase
-            if (step === 0 || step === 1) {
-              useStore.setState({ step: 2 });
-            }
-          } else if (roadmap) {
-            // User has local roadmap - go to dashboard
+            // User has an active goal in database - go to dashboard
+            console.log('✅ User has goal in database, going to dashboard');
             if (step === 0 || step === 1) {
               useStore.setState({ step: 2 });
             }
           } else {
-            // User has no roadmap - go to onboarding
-            if (step === 0) {
+            // User has no goal in database - go to onboarding
+            // (Even if they have local data from a previous session)
+            console.log('📝 No goal found in database, showing onboarding');
+            if (step === 0 || step === 2) {
               useStore.setState({ step: 1 });
             }
           }
         } catch (err) {
           console.error('Error checking user goals:', err);
-          // Continue to landing page on error
-          if (step === 0 && roadmap) {
-            useStore.setState({ step: 2 });
+          // On error, show onboarding to be safe
+          console.log('⚠️ Database check failed, showing onboarding');
+          if (step === 0) {
+            useStore.setState({ step: 1 });
           }
         }
       } else {

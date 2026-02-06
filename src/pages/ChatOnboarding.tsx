@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Sparkles } from 'lucide-react';
-import Groq from 'groq-sdk';
 import { useStore } from '../store/useStore';
+import { callGroqWithFallback, callGroqEconomy } from '../lib/groq-client';
 import { tokens, text, button } from '../design-system';
 import { generateInitialTasks } from '../utils/taskGenerator';
 import { detectCategory } from '../utils/categoryDetection';
@@ -15,17 +15,15 @@ import type { BuildingStone, StoneAnswer, Agent1Output } from '../agents';
 import StoneQuestions from '../components/StoneQuestions';
 import { syncCompleteRoadmap } from '../lib/database';
 
-// Initialize Groq client
-const groq = new Groq({
-  apiKey: import.meta.env.VITE_GROQ_API_KEY,
-  dangerouslyAllowBrowser: true,
-});
+// Groq client now imported from groq-client.ts with auto-fallback
 
 // Helper function to parse daily time commitment to minutes
-function parseDailyTimeToMinutes(dailyTime: string): number {
+function parseDailyTimeToMinutes(dailyTime: string | any): number {
   if (!dailyTime) return 30; // Default 30 minutes
 
-  const lower = dailyTime.toLowerCase();
+  // Ensure dailyTime is a string
+  const timeString = typeof dailyTime === 'string' ? dailyTime : String(dailyTime);
+  const lower = timeString.toLowerCase();
 
   // Match patterns like "2 hr", "2 hours", "120 min", "120 minutes", "1.5 hours"
   const hourMatch = lower.match(/(\d+\.?\d*)\s*(hour|hr)s?/);
@@ -41,7 +39,7 @@ function parseDailyTimeToMinutes(dailyTime: string): number {
   }
 
   // Just a number - assume minutes
-  const justNumber = dailyTime.match(/^(\d+)$/);
+  const justNumber = timeString.match(/^(\d+)$/);
   if (justNumber) {
     return parseInt(justNumber[1]);
   }
@@ -96,7 +94,6 @@ export default function ChatOnboarding() {
   ]);
   const [userInput, setUserInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [planGenerationTriggered, setPlanGenerationTriggered] = useState(false);
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -150,41 +147,38 @@ export default function ChatOnboarding() {
 
   // Keep focus on input unless plan generation is triggered
   useEffect(() => {
-    if (!planGenerationTriggered && !isGeneratingPlan) {
+    if (onboardingPhase === 'conversation' && !isGeneratingPlan) {
       inputRef.current?.focus();
     }
-  }, [planGenerationTriggered, isGeneratingPlan]);
+  }, [onboardingPhase, isGeneratingPlan]);
 
-  // Watch for all required data being collected and AI mentioning plan
-  const [aiMentionedPlan, setAiMentionedPlan] = useState(false);
-
+  // The "Bulletproof" Trigger (No setTimeout) - State-Driven
   useEffect(() => {
-    // Check if we have ALL required data
-    const hasAllData = !!(
+    // Define what "Ready" looks like
+    const isReady = !!(
       collectedData.goal &&
-      collectedData.category &&
       collectedData.name &&
       collectedData.skillLevel &&
-      collectedData.timeline &&
-      collectedData.dailyTime
+      collectedData.dailyTime &&
+      collectedData.timeline
     );
 
-    // Trigger agent-based onboarding if all conditions met
-    if (hasAllData && aiMentionedPlan && !isGeneratingPlan && !planGenerationTriggered && onboardingPhase === 'conversation') {
-      setPlanGenerationTriggered(true);
-      setTimeout(() => {
-        runAnalysisAndGetStones(); // Use new agent system
-      }, 1000);
+    // If data is ready, and we aren't already generating, START.
+    if (isReady && onboardingPhase === 'conversation' && !isGeneratingPlan) {
+      console.log("🚀 Data complete. Moving to Stone Questions...");
+
+      // Move state IMMEDIATELY to prevent double-trigger
+      setOnboardingPhase('stones');
+      runAnalysisAndGetStones();
     }
-  }, [collectedData, aiMentionedPlan, isGeneratingPlan, planGenerationTriggered, onboardingPhase]);
+  }, [collectedData, onboardingPhase, isGeneratingPlan]);
 
   const handleSend = async () => {
     if (!userInput.trim()) return;
 
-    // If plan generation is triggered, immediately call generateStrategicPlan instead of continuing chat
-    if (planGenerationTriggered) {
+    // If we've moved past conversation phase, don't process new input
+    if (onboardingPhase !== 'conversation') {
       setUserInput(''); // Clear input
-      generateStrategicPlan();
       return;
     }
 
@@ -201,30 +195,86 @@ export default function ChatOnboarding() {
     setIsTyping(true);
 
     try {
-      // Extract data from user input
-      extractDataFromInput(currentInput);
-
-      // Build conversation for Groq
-      const conversationHistory = messages.map(m => ({
+      // --- STEP 1: THE SHADOW EXTRACTOR (Replaces Regex) ---
+      // Build conversation history for context
+      const extractionHistory = messages.map(m => ({
         role: m.role === 'ai' ? 'assistant' as const : 'user' as const,
         content: m.content
       }));
 
-      // Build category-specific context
-      const categoryContext = collectedData.category
-        ? `
-DETECTED CATEGORY: ${collectedData.category}
+      // We use a small, fast model to extract data into JSON with FULL context
+      const extractCompletion = await callGroqEconomy({
+        messages: [
+          {
+            role: 'system',
+            content: `You are a data extraction bot. Analyze the FULL conversation and return ONLY a JSON object.
 
-Category-specific guidance:
-${collectedData.category === 'Fitness' ? '- Ask about current fitness level, specific sport/activity, injuries/limitations, training location' :
-  collectedData.category === 'Learning' ? '- Ask about why they want to learn this, prior experience, target proficiency level, specific subject/language' :
-  collectedData.category === 'Exam' ? '- Ask about exam date, previous attempts, realistic study hours per day' :
-  collectedData.category === 'Habit' ? '- Ask about previous attempts, specific target frequency/duration, obstacles they face' :
-  collectedData.category === 'Hobby' ? '- Ask about beginner/experienced, available equipment/tools, goal (fun vs mastery)' :
-  collectedData.category === 'Creative' ? '- Ask about specific project, completion timeline, prior creative experience' :
-  '- Ask contextual follow-up questions based on their goal'}
-`
-        : '';
+Extract these fields based on conversation context:
+- name: The person's name (e.g., "I'm John", "My name is Sarah", "Call me Alex")
+- goal: What they want to achieve (e.g., "learn boxing", "get fit", "prepare for UPSC")
+- skillLevel: Their experience level - must be one of: "beginner", "intermediate", or "advanced"
+- category: Type of goal - one of: "Fitness", "Learning", "Exam", "Habit", "Creative", "Hobby"
+- timeline: When they want to achieve it (e.g., "3 months", "by 2027", "6 weeks")
+- dailyTime: How much time per day (e.g., "30 minutes", "1 hour", "2 hours")
+- energyPattern: Peak energy time - one of: "morning", "afternoon", "evening", "night"
+
+CRITICAL RULES:
+1. Use conversation context to understand what each response refers to
+2. If the AI asked "What's your goal?" and user says "boxing", extract goal: "boxing" (NOT name!)
+3. If the AI asked "What's your name?" and user says "John", extract name: "John" (NOT goal!)
+4. If a field is already collected (Current Data shows it), keep it null unless user is correcting it
+5. Return ONLY the JSON object, no other text
+
+Current Data Already Collected: ${JSON.stringify(collectedData)}`
+          },
+          ...extractionHistory,
+          { role: 'user', content: currentInput }
+        ],
+        response_format: { type: "json_object" }
+      });
+
+      const newData = JSON.parse(extractCompletion.choices[0]?.message?.content || '{}');
+
+      // Clean Merge: Only update fields if the AI actually found something new and non-null
+      setCollectedData(prev => {
+        const merged = { ...prev };
+
+        // Only update fields if the AI actually found something new and non-null
+        if (newData.name) merged.name = newData.name;
+        if (newData.goal) merged.goal = newData.goal;
+        if (newData.skillLevel) merged.skillLevel = newData.skillLevel;
+        if (newData.timeline) merged.timeline = newData.timeline;
+        if (newData.dailyTime) merged.dailyTime = newData.dailyTime;
+        if (newData.category) merged.category = newData.category;
+        if (newData.energyPattern) merged.energyPattern = newData.energyPattern;
+
+        // Final safety check: if category is still missing, try detection
+        if (!merged.category && merged.goal) {
+          merged.category = detectCategory(merged.goal);
+        }
+
+        // Beautiful debug table showing exactly what we have
+        console.log('🔍 Shadow Extractor found:', newData);
+        console.table({
+          'Collected So Far': {
+            Goal: merged.goal || '❌ missing',
+            Name: merged.name || '❌ missing',
+            'Skill Level': merged.skillLevel || '❌ missing',
+            Timeline: merged.timeline || '❌ missing',
+            'Daily Time': merged.dailyTime || '❌ missing',
+            Category: merged.category || '❌ missing',
+            'Energy Pattern': merged.energyPattern || '❌ missing'
+          }
+        });
+
+        return merged;
+      });
+
+      // --- STEP 2: THE CONVERSATIONAL RESPONSE ---
+      const conversationHistory = messages.map(m => ({
+        role: m.role === 'ai' ? 'assistant' as const : 'user' as const,
+        content: m.content
+      }));
 
       // Build RAG context for science-backed coaching
       const userContext: UserContext = {
@@ -235,71 +285,61 @@ ${collectedData.category === 'Fitness' ? '- Ask about current fitness level, spe
       };
       const scientificKnowledge = retrieveKnowledge(userContext, 'new-goal');
 
-      const systemPrompt = `You are Coheren, an enthusiastic AI goal coach who genuinely cares about helping people achieve their dreams. You're supportive, motivating, and conversational.
-
-${scientificKnowledge}
+      // Create the base system prompt with cleaner coaching style
+      const systemPrompt = `You are Coheren, an enthusiastic AI goal coach. Your mission is to help the user define their dream and prepare them for a personalized strategic roadmap.${scientificKnowledge}
 
 ---
+CORE GOAL:
+Guide the user through a warm, natural conversation to understand their:
+1. Goal & Name
+2. Skill Level (beginner to advanced)
+3. Timeline & Daily Time Commitment
+4. Energy Patterns (when they are most productive)
 
-${collectedData.goal ? `\nUser's goal: "${collectedData.goal}"` : '\nSTART by asking: "What would you like to achieve?" if they greet you or say something casual.'}
-${categoryContext}
-
-Your task: Extract these details through natural, engaging conversation:
-1. Their goal (what they want to achieve) - MUST be substantive, not just "hey" or "hello"
-2. Skill level (beginner / intermediate / advanced)
-3. Specific sub-goals or focus areas
-4. Timeline and milestones (when they want to achieve it, intermediate checkpoints)
-5. Their name
-6. Energy pattern (morning / afternoon / evening / night)
-7. Daily time commitment
-
-What we have so far:
-- Goal: ${collectedData.goal || 'not yet'}
-- Category: ${collectedData.category || 'not detected yet'}
-- Skill level: ${collectedData.skillLevel || 'not yet'}
-- Sub-goals: ${collectedData.subGoals.length > 0 ? collectedData.subGoals.join(', ') : 'not yet'}
-- Timeline: ${collectedData.timeline ? collectedData.timeline.target : 'not yet'}
-- Milestones: ${collectedData.timeline?.milestones.length ? collectedData.timeline.milestones.join('; ') : 'not yet'}
-- Name: ${collectedData.name || 'not yet'}
-- Energy: ${collectedData.energyPattern || 'not yet'}
-- Daily time: ${collectedData.dailyTime || 'not yet'}
-
-PERSONALITY & TONE (Based on Self-Determination Theory):
-- Support AUTONOMY: Give choices, avoid controlling language ("you must"), say "you might consider"
-- Build COMPETENCE: Celebrate progress, start achievable, express confidence in them
-- Foster RELATEDNESS: Be warm, show genuine care, use their name
-- Be enthusiastic (use phrases like "That's awesome!", "Love it!", "I'm excited for you!")
-- Mirror their communication style - if they're casual, be casual; if formal, be professional
-
-SCIENCE-BACKED COACHING TIPS:
-- For beginners: Mention the "Two-Minute Rule" - start so small you can't fail
-- For timelines: Habits take ~66 days on average to form, set realistic expectations
-- For energy patterns: Match challenging tasks to peak energy times
-- Use "habit stacking": "After [existing habit], you'll [new habit]"
+COACHING STYLE (Self-Determination Theory):
+- AUTONOMY: Offer suggestions, not commands. Use "You might try" instead of "You must."
+- COMPETENCE: Celebrate their ambition. If they say "I want to learn Boxing," respond with "That's a powerful skill to build! I love the focus on discipline."
+- RELATEDNESS: Use their name once extracted. Be a supportive partner, not a robotic script.
 
 CONVERSATION RULES:
-- Keep responses SHORT (1-2 sentences max, sometimes just a quick question)
-- If user greets you without stating a goal, ask "What would you like to achieve?"
-- React positively to their answers ("Nice!", "That's a great goal!", "I love your ambition!")
-- Ask intelligent, category-specific follow-up questions ONLY after you know the category
-- Only ask about ONE missing piece of information at a time
-- Build on their previous answers naturally
-- When you have ALL details (goal with category, skill level, sub-goals, timeline, name, energy, daily time), say exactly: "Perfect! Let me create your personalized strategic plan now..." then STOP - do not continue the conversation
-- Don't repeat yourself or ask the same question twice
+- Keep responses SHORT (1-3 sentences). People hate walls of text in chat.
+- Ask ONLY ONE question at a time. Do not overwhelm them.
+- If they are vague, ask intelligent follow-up questions (e.g., if the goal is "Fitness," ask "Are we looking at weight loss, strength, or maybe a specific sport like Boxing?").
+- Use "Habit Stacking" advice: Suggest attaching their new goal to an existing routine.
 
-CRITICAL: When you say "Perfect! Let me create your personalized strategic plan now..." you MUST STOP immediately. Do NOT add any other text, explanation, or continuation after that exact phrase.`;
+TRANSITION LOGIC:
+Once you feel you have a solid grasp of their goal, timeline, and lifestyle, simply wrap up the thought and tell them you're ready to build the plan.
+(Example: "That gives me everything I need, ${collectedData.name || '[Name]'}! I'm putting the pieces together for your roadmap now...")
 
+IMPORTANT:
+The system will automatically detect when the data is complete and transition to the next phase. You do not need to use any specific 'magic words' or commands. Just be a helpful coach until the screen changes.`;
 
-      const completion = await groq.chat.completions.create({
+      // --- STEP 3: AI WHISPERING (Dynamic Guidance) ---
+      // Identify what's still missing
+      const missingFields = [];
+      if (!collectedData.name) missingFields.push("their name");
+      if (!collectedData.skillLevel) missingFields.push("their experience/skill level");
+      if (!collectedData.dailyTime) missingFields.push("how much time they can commit daily");
+      if (!collectedData.energyPattern) missingFields.push("their peak energy time (morning/evening/etc)");
+      if (!collectedData.timeline) missingFields.push("their target timeline or deadline");
+
+      // Create the "Whisper"
+      const whisper = missingFields.length > 0
+        ? `\n\n(SYSTEM WHISPER: You still need to find out: ${missingFields.join(', ')}. Please ask about ONE of these naturally in your next response.)`
+        : `\n\n(SYSTEM WHISPER: You have all the data! Wrap up the conversation warmly and let them know the plan is ready.)`;
+
+      console.log('💬 AI Whisper:', whisper.trim());
+
+      // Inject the whisper into the system prompt - use standard tier with fallback
+      const completion = await callGroqWithFallback({
         messages: [
-          { role: 'system', content: systemPrompt },
+          { role: 'system', content: systemPrompt + whisper },
           ...conversationHistory,
           { role: 'user', content: currentInput }
         ],
-        model: 'llama-3.3-70b-versatile',
         temperature: 0.7,
         max_tokens: 150,
-      });
+      }, 'standard'); // Use standard tier for conversational AI with auto-fallback
 
       const aiResponse = completion.choices[0]?.message?.content || "Tell me more!";
 
@@ -313,47 +353,7 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
       setMessages((prev) => [...prev, aiMessage]);
       setIsTyping(false);
 
-      // Check if AI says plan is ready AND all required data is collected
-      const hasPersonalized = aiResponse.toLowerCase().includes('personalized');
-      const hasPlan = aiResponse.toLowerCase().includes('plan') || aiResponse.toLowerCase().includes('strategic');
-
-      // Delay the check to allow React state to update from extractDataFromInput
-      setTimeout(() => {
-        // IMPORTANT: Only trigger if we have all required data
-        const hasRequiredData = !!(
-          collectedData.goal &&
-          collectedData.category &&
-          collectedData.name &&
-          collectedData.skillLevel &&
-          collectedData.timeline &&
-          collectedData.dailyTime
-        );
-
-        if (hasPersonalized && hasPlan && hasRequiredData) {
-          console.log('✅ AI mentioned plan AND we have all required data - triggering agent pipeline');
-          setAiMentionedPlan(true);
-
-          // Direct trigger with delay to allow state to settle
-          setTimeout(() => {
-            setPlanGenerationTriggered(prev => {
-              if (!prev) {
-                runAnalysisAndGetStones(); // Use NEW agent-based system
-                return true;
-              }
-              return prev;
-            });
-          }, 1500);
-        } else if (hasPersonalized && hasPlan && !hasRequiredData) {
-          console.log('⚠️ AI mentioned plan but missing data:', {
-            goal: !!collectedData.goal,
-            category: !!collectedData.category,
-            name: !!collectedData.name,
-            skillLevel: !!collectedData.skillLevel,
-            timeline: !!collectedData.timeline,
-            dailyTime: !!collectedData.dailyTime
-          });
-        }
-      }, 100); // Small delay to allow state to update
+      // No more "Perfect!" string checking - state-driven trigger will handle it
 
     } catch (error: unknown) {
       // Handle Groq API errors with proper user feedback
@@ -384,194 +384,7 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
     }
   };
 
-  const extractDataFromInput = (input: string) => {
-    const lower = input.toLowerCase();
-
-    // Extract name first (before goal, as name can be in early messages)
-    let nameExtracted = false;
-    if (!collectedData.name) {
-      // Match "I'm X", "my name is X", "call me X", or just a standalone name
-      const nameMatch = input.match(/(?:i'?m|my name is|call me)\s+([a-z]+)/i);
-      if (nameMatch) {
-        setCollectedData(prev => ({ ...prev, name: nameMatch[1] }));
-        nameExtracted = true;
-      }
-
-      // If AI just asked "what's your name" and user responds with just a name
-      if (!nameExtracted && input.trim().length > 2 && input.trim().length < 20 && /^[a-z\s]+$/i.test(input.trim())) {
-        // Check if previous AI message asked about name
-        const lastAIMessage = messages.filter(m => m.role === 'ai').pop();
-        if (lastAIMessage && lastAIMessage.content.toLowerCase().includes('name')) {
-          setCollectedData(prev => ({ ...prev, name: input.trim() }));
-          nameExtracted = true;
-        }
-      }
-    }
-
-    // Extract goal - but NOT from greetings, introductions, or very short messages
-    if (!collectedData.goal) {
-      const isGreeting = /^(hi|hey|hello|yo|sup|what's up|hola|howdy|greetings)\.?$/i.test(input.trim());
-      const isQuestion = /^(what|how|who|when|where|why)\s/i.test(input.trim());
-      const isTooShort = input.trim().length < 4; // Reduced from 8 to allow "upsc", "jee" etc.
-      const isIntroduction = nameExtracted; // Don't use intro message as goal
-
-      // Only extract goal if it's substantive content (not greeting, not question, not intro, long enough)
-      if (!isGreeting && !isQuestion && !isTooShort && !isIntroduction) {
-        const category = detectCategory(input);
-        setCollectedData(prev => ({ ...prev, goal: input, category }));
-      }
-    }
-
-    // Extract skill level
-    if (!collectedData.skillLevel) {
-      // Be flexible with typos and variations
-      if (lower.includes('beginner') || lower.includes('beginer') || lower.includes('begin') ||
-          lower.includes('never') || lower.includes('starting fresh') || lower.includes('complete novice') ||
-          lower.includes('just start') || lower.includes('from scratch')) {
-        setCollectedData(prev => ({ ...prev, skillLevel: 'beginner' }));
-      } else if (lower.includes('intermediate') || lower.includes('intermediat') ||
-                 lower.includes('some experience') || lower.includes('used to') ||
-                 lower.includes('done before') || lower.includes('tried')) {
-        setCollectedData(prev => ({ ...prev, skillLevel: 'intermediate' }));
-      } else if (lower.includes('advanced') || lower.includes('advanc') ||
-                 lower.includes('experienced') || lower.includes('expert') ||
-                 lower.includes('good at') || lower.includes('pro')) {
-        setCollectedData(prev => ({ ...prev, skillLevel: 'advanced' }));
-      }
-    }
-
-    // Extract sub-goals (look for specific mentions based on category)
-    if (collectedData.category && collectedData.subGoals.length === 0) {
-      const subGoalPatterns: Record<string, RegExp[]> = {
-        'Fitness': [/(?:specific|focus on)\s+(\w+)/i, /(cardio|strength|flexibility|endurance)/i],
-        'Learning': [/learn\s+(\w+)/i, /(spanish|python|guitar|cooking)/i],
-        'Habit': [/(reading|meditation|journaling|exercise)\s+habit/i],
-        'Creative': [/(book|novel|app|website|podcast|blog)/i],
-        'Exam': [/(upsc|gmat|sat|gre|certification)/i],
-        'Hobby': [/(photography|cooking|painting|gardening)/i]
-      };
-
-      const patterns = subGoalPatterns[collectedData.category] || [];
-      patterns.forEach(pattern => {
-        const match = input.match(pattern);
-        if (match && match[1]) {
-          setCollectedData(prev => ({
-            ...prev,
-            subGoals: [...new Set([...prev.subGoals, match[1].toLowerCase()])]
-          }));
-        }
-      });
-    }
-
-    // Extract timeline and milestones
-    if (!collectedData.timeline) {
-      // Match various timeline formats:
-      // - "3 months", "6 weeks", "2 years", "30 days"
-      // - "by 2027", "by June", "by December"
-      // - Just a year: "2025", "2027"
-      // - Just a number if previous message asked about timeline
-      const timelineMatch = input.match(
-        /(\d+)\s*(week|month|year|day)s?|(?:in|within|over|for|by)\s+(\d+)\s*(week|month|year|day)?s?|(?:by\s+)?(\d{4})|by\s+(\w+)|next\s+(week|month|year)/i
-      );
-
-      if (timelineMatch) {
-        const target = timelineMatch[0];
-        console.log('✅ Timeline extracted:', target);
-        setCollectedData(prev => ({ ...prev, timeline: { target, milestones: [] } }));
-      } else if (/^\d{4}$/.test(input.trim())) {
-        // Just a year like "2027"
-        const year = input.trim();
-        console.log('✅ Timeline extracted (year):', year);
-        setCollectedData(prev => ({ ...prev, timeline: { target: `by ${year}`, milestones: [] } }));
-      } else if (/^\d+$/.test(input.trim())) {
-        // Just a number - check if previous message asked about timeline
-        const lastAIMessage = messages.filter(m => m.role === 'ai').pop();
-        if (lastAIMessage && (
-          lastAIMessage.content.toLowerCase().includes('how long') ||
-          lastAIMessage.content.toLowerCase().includes('timeline') ||
-          lastAIMessage.content.toLowerCase().includes('when') ||
-          lastAIMessage.content.toLowerCase().includes('how many')
-        )) {
-          const number = input.trim();
-          console.log('✅ Timeline extracted (number only):', number, 'days');
-          setCollectedData(prev => ({ ...prev, timeline: { target: `${number} days`, milestones: [] } }));
-        }
-      }
-
-      // Extract milestones like "run 5k", "read 6 books", "finish 10 chapters"
-      const milestoneMatch = input.match(/(\d+)\s+(book|chapter|km|mile|page|hour|level|lesson)s?/gi);
-      if (milestoneMatch && collectedData.timeline) {
-        setCollectedData(prev => ({
-          ...prev,
-          timeline: prev.timeline
-            ? { ...prev.timeline, milestones: [...prev.timeline.milestones, ...milestoneMatch] }
-            : { target: '', milestones: milestoneMatch }
-        }));
-      }
-    }
-
-    // Extract energy pattern
-    if (!collectedData.energyPattern) {
-      if (lower.includes('morning')) setCollectedData(prev => ({ ...prev, energyPattern: 'morning' }));
-      else if (lower.includes('afternoon')) setCollectedData(prev => ({ ...prev, energyPattern: 'afternoon' }));
-      else if (lower.includes('evening')) setCollectedData(prev => ({ ...prev, energyPattern: 'evening' }));
-      else if (lower.includes('night')) setCollectedData(prev => ({ ...prev, energyPattern: 'night' }));
-    }
-
-    // Extract wake time
-    if (!collectedData.wakeTime) {
-      const timeMatch = input.match(/(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
-      if (timeMatch) {
-        setCollectedData(prev => ({ ...prev, wakeTime: timeMatch[1] }));
-      }
-    }
-
-    // Extract daily time - very flexible
-    if (!collectedData.dailyTime) {
-      // IMPORTANT: Skip if input is about timeline (month/week/year/day)
-      const isTimelineInput = /\b(month|week|year|day)s?\b/i.test(input);
-
-      if (!isTimelineInput) {
-        console.log('🔍 Checking for daily time in:', input);
-
-        // Try to match various time patterns including "half hour", "an hour", ranges, etc.
-        const timeMatch = input.match(/(\d+)\s*(minute|min|hour|hr)s?|(\d+)\s*-\s*(\d+)\s*(minute|min|hour|hr)s?|half\s*(an?)?\s*hour|an?\s*hour/i);
-
-        if (timeMatch) {
-          let timeStr = timeMatch[0];
-          // Convert "half hour" or "half an hour" to "30 minutes"
-          if (timeStr.toLowerCase().includes('half')) {
-            timeStr = '30 minutes';
-          } else if (timeStr.toLowerCase().match(/^an?\s*hour/i)) {
-            timeStr = '1 hour';
-          }
-          console.log('✅ Daily time extracted:', timeStr);
-          setCollectedData(prev => ({ ...prev, dailyTime: timeStr }));
-        } else if (/\d+/.test(input)) {
-          // Contains a number - check if context suggests it's about daily time (not timeline)
-          const lastAIMessage = messages.filter(m => m.role === 'ai').pop();
-          const askedAboutTime = lastAIMessage && (
-            lastAIMessage.content.toLowerCase().includes('how much time') ||
-            lastAIMessage.content.toLowerCase().includes('daily') ||
-            lastAIMessage.content.toLowerCase().includes('per day') ||
-            lastAIMessage.content.toLowerCase().includes('each day') ||
-            lastAIMessage.content.toLowerCase().includes('commit')
-          );
-
-          if (askedAboutTime) {
-            const numberMatch = input.match(/\d+/);
-            if (numberMatch) {
-              const number = numberMatch[0];
-              console.log('✅ Daily time extracted (contextual):', number, 'minutes');
-              setCollectedData(prev => ({ ...prev, dailyTime: `${number} minutes` }));
-            }
-          }
-        }
-      } else {
-        console.log('⏭️ Skipping daily time extraction (input is about timeline)');
-      }
-    }
-  };
+  // Old regex-based extraction function removed - replaced by Shadow Extractor (AI-based)
 
   // New function: Run Agent 1 & 2 to get stone questions
   const runAnalysisAndGetStones = async () => {
@@ -589,6 +402,13 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
     setIsTyping(true);
 
     try {
+      // Debug: Log what we received from Shadow Extractor
+      console.log('🔍 Collected data before parsing:', {
+        dailyTime: collectedData.dailyTime,
+        dailyTimeType: typeof collectedData.dailyTime,
+        timeline: collectedData.timeline
+      });
+
       const dailyMinutes = parseDailyTimeToMinutes(collectedData.dailyTime);
       const durationInMonths = collectedData.timeline?.target
         ? calculateDurationInMonths(collectedData.timeline.target)
@@ -745,41 +565,52 @@ CRITICAL: When you say "Perfect! Let me create your personalized strategic plan 
         resources: firstTask.task.resources // Include matched resources
       }];
 
+      // Debug: Log task resources at generation time
+      console.log('📦 Generated Task Resources:', {
+        taskTitle: firstTask.task.title,
+        hasResources: !!firstTask.task.resources,
+        primary: firstTask.task.resources?.primary,
+        supplementaryCount: firstTask.task.resources?.supplementary?.length || 0,
+        fullResources: firstTask.task.resources
+      });
+
       setTasks(initialTasks);
 
       // Sync to Supabase if user is authenticated
       const user = useStore.getState().user;
       if (user) {
-        console.log('📤 Syncing roadmap to Supabase...');
+        console.log('📤 Attempting Supabase sync in background...');
         console.log('   User ID:', user.id);
         console.log('   Goal:', collectedData.goal);
         console.log('   Category:', collectedData.category);
         console.log('   Tasks to save:', initialTasks.length);
 
-        try {
-          const result = await syncCompleteRoadmap(
-            user.id,
-            collectedData.goal,
-            `Generated via AI multi-agent system for ${collectedData.category}`,
-            goalAnalysis,
-            answers,
-            agentRoadmap,
-            initialTasks
-          );
-
-          if (result.success) {
+        // Optimistic Navigation: Sync in background, don't block UI
+        syncCompleteRoadmap(
+          user.id,
+          collectedData.goal,
+          `Generated via AI multi-agent system for ${collectedData.category}`,
+          goalAnalysis,
+          answers,
+          agentRoadmap,
+          initialTasks
+        ).then(result => {
+          if (result.success && 'isLocalOnly' in result && result.isLocalOnly) {
+            console.info('💡 App running in Local Mode. Progress saved to browser memory only.');
+            // Show subtle toast instead of blocking alert
+            const toast = document.createElement('div');
+            toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#F59E0B;color:white;padding:12px 20px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:10000;font-size:14px;';
+            toast.textContent = '💡 Running in offline mode - progress saved locally';
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+          } else if (result.success) {
             console.log('✅ Roadmap synced to Supabase successfully!');
-            console.log('   Goal ID:', result.goal?.id);
-            console.log('   Roadmap ID:', result.roadmap?.id);
-          } else {
-            console.error('❌ Roadmap sync failed:', result.error);
-            throw result.error; // Re-throw to catch block
+            if ('goal' in result) console.log('   Goal ID:', result.goal?.id);
+            if ('roadmap' in result) console.log('   Roadmap ID:', result.roadmap?.id);
           }
-        } catch (error) {
-          console.error('❌ Failed to sync roadmap to Supabase:', error);
-          // Show error to user but don't block flow
-          alert('Warning: Could not save to database. You can continue but data may be lost on refresh.');
-        }
+        }).catch(error => {
+          console.warn('⚠️ Background sync encountered an issue:', error);
+        });
       } else {
         console.warn('⚠️ User not authenticated - skipping Supabase sync');
       }
@@ -955,12 +786,11 @@ CRITICAL: Each day's tasks should total approximately ${dailyMinutes} minutes. U
 
 Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 easy for ${collectedData.skillLevel} level. Make all tasks specific to ${category} and the goal "${collectedData.goal}".`;
 
-      const completion = await groq.chat.completions.create({
+      const completion = await callGroqWithFallback({
         messages: [{ role: 'user', content: planPrompt }],
-        model: 'llama-3.3-70b-versatile',
         temperature: 0.7,
         max_tokens: 4000,
-      });
+      }, 'economy'); // Use economy model for fallback strategic plan
 
       const responseText = completion.choices[0]?.message?.content || '';
 
@@ -1554,8 +1384,8 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
               value={userInput}
               onChange={(e) => setUserInput(e.target.value)}
               onKeyDown={handleKeyPress}
-              placeholder={planGenerationTriggered ? "Generating your plan..." : "Type your message..."}
-              disabled={isTyping || planGenerationTriggered}
+              placeholder={onboardingPhase !== 'conversation' ? "Generating your plan..." : "Type your message..."}
+              disabled={isTyping || onboardingPhase !== 'conversation'}
               autoFocus
               style={{
                 flex: 1,
@@ -1579,7 +1409,7 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
             />
             <button
               onClick={handleSend}
-              disabled={!userInput.trim() || isTyping || planGenerationTriggered}
+              disabled={!userInput.trim() || isTyping || onboardingPhase !== 'conversation'}
               onMouseEnter={(e) => {
                 if (!e.currentTarget.disabled) {
                   e.currentTarget.style.transform = `scale(${tokens.colors.state.hoverScale})`;

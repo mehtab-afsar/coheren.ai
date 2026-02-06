@@ -21,6 +21,17 @@ export default function Today() {
   // Get today's task (first incomplete task)
   const todayTask = tasks.find(t => !t.completed && !t.skipped);
 
+  // Debug: Log task structure to see if resources exist
+  if (todayTask) {
+    console.log('📋 Today\'s Task:', {
+      title: todayTask.title,
+      hasResources: !!todayTask.resources,
+      resources: todayTask.resources,
+      primary: todayTask.resources?.primary,
+      supplementary: todayTask.resources?.supplementary
+    });
+  }
+
   if (!todayTask) {
     return (
       <div style={{

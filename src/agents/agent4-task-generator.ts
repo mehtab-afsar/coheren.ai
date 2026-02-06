@@ -1,11 +1,6 @@
-import Groq from 'groq-sdk';
 import type { Agent3Output, DailyTask, StoneAnswer } from '../types/agents';
 import { matchTaskToResources } from '../lib/resourceMatcher';
-
-const groq = new Groq({
-  apiKey: import.meta.env.VITE_GROQ_API_KEY,
-  dangerouslyAllowBrowser: true
-});
+import { callGroqWithFallback } from '../lib/groq-client';
 
 const AGENT4_SYSTEM_PROMPT = `You are a Daily Task Instruction Expert.
 
@@ -133,7 +128,8 @@ Make it feel like a personal coach wrote this task specifically for this user.
 `;
 
   try {
-    const completion = await groq.chat.completions.create({
+    // Use economy model (8b) for task generation - faster and higher rate limits
+    const completion = await callGroqWithFallback({
       messages: [
         {
           role: 'system',
@@ -144,11 +140,10 @@ Make it feel like a personal coach wrote this task specifically for this user.
           content: userPrompt
         }
       ],
-      model: 'llama-3.3-70b-versatile',
       temperature: 0.6,
       max_tokens: 3000,
       response_format: { type: 'json_object' }
-    });
+    }, 'economy'); // Start with 8b model to avoid rate limits
 
     const response = completion.choices[0]?.message?.content;
     if (!response) {

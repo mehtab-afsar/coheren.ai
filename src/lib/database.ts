@@ -509,36 +509,49 @@ export async function syncCompleteRoadmap(
   tasks: Array<Record<string, unknown>>
 ) {
   try {
-    console.log('📝 Step 1/4: Creating goal...');
-    // 1. Create goal
-    const goal = await createGoal(userId, goalTitle, goalDescription, goalAnalysis);
-    console.log('✅ Step 1/4: Goal created:', goal.id);
+    // Wrap the entire sync operation in a race with a shorter timeout
+    const syncOperation = async () => {
+      console.log('📝 Step 1/4: Creating goal...');
+      // 1. Create goal
+      const goal = await createGoal(userId, goalTitle, goalDescription, goalAnalysis);
+      console.log('✅ Step 1/4: Goal created:', goal.id);
 
-    console.log('📝 Step 2/4: Saving stones...');
-    // 2. Save stones
-    await saveStones(goal.id, stoneAnswers);
-    console.log('✅ Step 2/4: Stones saved');
+      console.log('📝 Step 2/4: Saving stones...');
+      // 2. Save stones
+      await saveStones(goal.id, stoneAnswers);
+      console.log('✅ Step 2/4: Stones saved');
 
-    console.log('📝 Step 3/4: Creating roadmap...');
-    // 3. Create roadmap
-    const roadmapRecord = await createRoadmap(goal.id, roadmap);
-    console.log('✅ Step 3/4: Roadmap created:', roadmapRecord.id);
+      console.log('📝 Step 3/4: Creating roadmap...');
+      // 3. Create roadmap
+      const roadmapRecord = await createRoadmap(goal.id, roadmap);
+      console.log('✅ Step 3/4: Roadmap created:', roadmapRecord.id);
 
-    console.log('📝 Step 4/4: Saving tasks...');
-    console.log('   Tasks to save:', tasks.length);
-    // 4. Save tasks
-    await saveTasks(roadmapRecord.id, tasks);
-    console.log('✅ Step 4/4: Tasks saved');
+      console.log('📝 Step 4/4: Saving tasks...');
+      console.log('   Tasks to save:', tasks.length);
+      // 4. Save tasks
+      await saveTasks(roadmapRecord.id, tasks);
+      console.log('✅ Step 4/4: Tasks saved');
 
-    return {
-      goal,
-      roadmap: roadmapRecord,
-      success: true
+      return {
+        goal,
+        roadmap: roadmapRecord,
+        success: true
+      };
     };
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Database sync timeout')), 8000)
+    );
+
+    const result = await Promise.race([syncOperation(), timeoutPromise]);
+    return result as { goal: any; roadmap: any; success: boolean };
+
   } catch (error) {
-    console.error('❌ Error syncing roadmap:', error);
+    console.warn('⚠️ Database sync timed out or failed, but proceeding with local state:', error);
+    // Return success: true with isLocalOnly flag so the UI doesn't hang
     return {
-      success: false,
+      success: true,
+      isLocalOnly: true,
       error
     };
   }

@@ -30,10 +30,16 @@ interface ResourceCardProps {
   onRateNotHelpful?: (resource: TaskResource) => void;
 }
 
-// Extract YouTube video ID from URL
+// Extract YouTube video ID from URL - Bulletproof version
 function getYouTubeId(url: string): string | null {
-  const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&?/]+)/);
-  return match ? match[1] : null;
+  if (!url) return null;
+
+  // Handle multiple YouTube URL formats
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+  const match = url.match(regExp);
+
+  // Validate the ID is 11 characters (YouTube standard)
+  return (match && match[2].length === 11) ? match[2] : null;
 }
 
 export default function ResourceCard({

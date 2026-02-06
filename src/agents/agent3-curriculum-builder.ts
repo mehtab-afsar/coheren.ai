@@ -1,10 +1,5 @@
-import Groq from 'groq-sdk';
 import type { Agent1Output, Agent3Output, AgentContext, StoneAnswer } from '../types/agents';
-
-const groq = new Groq({
-  apiKey: import.meta.env.VITE_GROQ_API_KEY,
-  dangerouslyAllowBrowser: true
-});
+import { callGroqWithFallback } from '../lib/groq-client';
 
 const AGENT3_SYSTEM_PROMPT = `You are a Curriculum Architecture Expert.
 
@@ -114,7 +109,8 @@ Be specific about how stone answers modify the curriculum.
 `;
 
   try {
-    const completion = await groq.chat.completions.create({
+    // Use economy model (8b) for curriculum building - faster and higher rate limits
+    const completion = await callGroqWithFallback({
       messages: [
         {
           role: 'system',
@@ -125,11 +121,10 @@ Be specific about how stone answers modify the curriculum.
           content: userPrompt
         }
       ],
-      model: 'llama-3.3-70b-versatile',
       temperature: 0.5,
       max_tokens: 4000,
       response_format: { type: 'json_object' }
-    });
+    }, 'economy'); // Start with 8b model to avoid rate limits
 
     const response = completion.choices[0]?.message?.content;
     if (!response) {

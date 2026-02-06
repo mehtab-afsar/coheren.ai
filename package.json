@@ -8,14 +8,12 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-
     "db:reset": "supabase db reset",
     "db:verify": "chmod +x scripts/verify-db-data.sh && ./scripts/verify-db-data.sh",
     "db:tables": "docker exec supabase_db_consist psql -U postgres -d postgres -c \"SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;\"",
     "db:feedback": "docker exec supabase_db_consist psql -U postgres -d postgres -c \"SELECT difficulty_score, actual_duration_mins, feedback_tags, created_at FROM task_feedback ORDER BY created_at DESC LIMIT 10;\"",
     "db:status": "docker exec supabase_db_consist psql -U postgres -d postgres -c \"SELECT schemaname, tablename, pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size FROM pg_tables WHERE schemaname = 'public' ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;\"",
     "db:connect": "docker exec -it supabase_db_consist psql -U postgres -d postgres",
-
     "supabase:status": "supabase status",
     "supabase:stop": "supabase stop",
     "supabase:restart": "supabase restart",
@@ -26,7 +24,7 @@
     "clsx": "^2.1.1",
     "dexie": "^4.2.1",
     "embla-carousel-react": "^8.6.0",
-    "framer-motion": "^12.27.5",
+    "framer-motion": "^12.33.0",
     "groq-sdk": "^0.37.0",
     "lucide-react": "^0.562.0",
     "react": "^19.2.0",

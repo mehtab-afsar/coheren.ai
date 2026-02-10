@@ -1,10 +1,5 @@
-import Groq from 'groq-sdk';
 import type { Agent1Output, Agent2Output, AgentContext } from '../types/agents';
-
-const groq = new Groq({
-  apiKey: import.meta.env.VITE_GROQ_API_KEY,
-  dangerouslyAllowBrowser: true
-});
+import { callGroqWithFallback } from '../lib/groq-client';
 
 const AGENT2_SYSTEM_PROMPT = `You are an Information Requirements Expert.
 
@@ -139,7 +134,7 @@ DO NOT ask about time, timeline, or general goal - these are already known.
 `;
 
   try {
-    const completion = await groq.chat.completions.create({
+    const completion = await callGroqWithFallback({
       messages: [
         {
           role: 'system',
@@ -150,7 +145,6 @@ DO NOT ask about time, timeline, or general goal - these are already known.
           content: userPrompt
         }
       ],
-      model: 'llama-3.3-70b-versatile',
       temperature: 0.4,
       max_tokens: 3000,
       response_format: { type: 'json_object' }

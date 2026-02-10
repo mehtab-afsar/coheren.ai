@@ -166,6 +166,10 @@ export interface TaskResource {
   skillLevel?: 'beginner' | 'intermediate' | 'advanced' | 'all';
   topics?: string[];
   timestamps?: Record<string, string>;
+  // Time-boxed watching: specific segment to watch given daily time budget
+  watchFrom?: string;    // e.g. "0:05:00" — start of the relevant segment
+  watchTo?: string;      // e.g. "0:20:00" — end of the relevant segment
+  watchMinutes?: number; // planned watch time in minutes (e.g. 15)
 }
 
 export interface DailyTask {

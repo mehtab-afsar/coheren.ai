@@ -168,8 +168,10 @@ export const useStore = create<AppStore>()(
         const state = get();
         const task = state.tasks.find(t => t.id === taskId);
 
-        // Update in Supabase if user is authenticated
-        if (state.user && task) {
+        // Only sync to DB if taskId is a valid UUID
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(taskId);
+
+        if (state.user && task && isUUID) {
           try {
             await updateTaskCompletion(
               taskId,
@@ -220,8 +222,10 @@ export const useStore = create<AppStore>()(
       skipTask: async (taskId, reason) => {
         const state = get();
 
-        // Update in Supabase if user is authenticated and reason is provided
-        if (state.user && reason) {
+        // Only sync to DB if taskId is a valid UUID (rolling-curriculum tasks use "task-N-M" format)
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(taskId);
+
+        if (state.user && reason && isUUID) {
           try {
             await updateTaskSkip(taskId, reason);
             console.log('✅ Task skip synced to Supabase');
@@ -285,16 +289,11 @@ export const useStore = create<AppStore>()(
 
       canAdvanceDay: () => {
         const state = get();
-        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
-        // Check if all today's tasks are complete
+        // Only gate on task completion — allow multiple advances per calendar day
+        // so users can click through all days in a single session (testing + streaks)
         const todaysTasks = state.tasks.filter((t) => t.day === state.currentDay);
-        const allTasksComplete = todaysTasks.length > 0 && todaysTasks.every((t) => t.completed);
-
-        // Check if user hasn't already advanced today
-        const hasNotAdvancedToday = state.lastCheckInDate !== today;
-
-        return allTasksComplete && hasNotAdvancedToday;
+        return todaysTasks.length > 0 && todaysTasks.every((t) => t.completed);
       },
 
       advanceDay: () => {

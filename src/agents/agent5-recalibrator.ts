@@ -9,7 +9,7 @@
  * This agent makes the curriculum ADAPTIVE, not static.
  */
 
-import Groq from 'groq-sdk';
+import { callGroqWithFallback } from '../lib/groq-client';
 import type {
   AgentContext,
   Roadmap,
@@ -17,10 +17,7 @@ import type {
 } from '../types/agents';
 import type { Task } from '../store/useStore';
 
-const groq = new Groq({
-  apiKey: import.meta.env.VITE_GROQ_API_KEY,
-  dangerouslyAllowBrowser: true
-});
+// Groq client imported from groq-client.ts with auto-fallback
 
 interface CompletedTaskFeedback {
   dayNumber: number;
@@ -229,12 +226,11 @@ Analyze this performance data and determine:
 Return a detailed checkpoint analysis and a recalibrated sprint plan for the next 14 days.`;
 
   try {
-    const completion = await groq.chat.completions.create({
+    const completion = await callGroqWithFallback({
       messages: [
         { role: 'system', content: AGENT5_SYSTEM_PROMPT },
         { role: 'user', content: userPrompt }
       ],
-      model: 'llama-3.3-70b-versatile',
       temperature: 0.4, // Balance between analytical and creative adjustments
       max_tokens: 4000,
       response_format: { type: 'json_object' }

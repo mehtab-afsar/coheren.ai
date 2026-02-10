@@ -7,7 +7,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ExternalLink, Play, BookOpen, Wrench, FileText, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { ExternalLink, Play, BookOpen, Wrench, FileText, ThumbsUp, ThumbsDown, X } from 'lucide-react';
 import { tokens } from '../design-system';
 
 interface TaskResource {
@@ -21,6 +21,9 @@ interface TaskResource {
   description: string;
   why: string;
   timestamps?: Record<string, string>;
+  watchFrom?: string;    // e.g. "0:05:00"
+  watchTo?: string;      // e.g. "0:20:00"
+  watchMinutes?: number; // planned watch time in minutes
 }
 
 interface ResourceCardProps {
@@ -33,13 +36,18 @@ interface ResourceCardProps {
 // Extract YouTube video ID from URL - Bulletproof version
 function getYouTubeId(url: string): string | null {
   if (!url) return null;
-
-  // Handle multiple YouTube URL formats
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
   const match = url.match(regExp);
-
-  // Validate the ID is 11 characters (YouTube standard)
   return (match && match[2].length === 11) ? match[2] : null;
+}
+
+// Convert "H:MM:SS" or "M:SS" timestamp string to total seconds
+function timeToSeconds(t: string): number {
+  if (!t) return 0;
+  const parts = t.split(':').map(Number);
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return Number(parts[0]) || 0;
 }
 
 export default function ResourceCard({
@@ -51,10 +59,28 @@ export default function ResourceCard({
   const [showVideo, setShowVideo] = useState(false);
   const [helpfulVoted, setHelpfulVoted] = useState(false);
   const [notHelpfulVoted, setNotHelpfulVoted] = useState(false);
+  const [showReader, setShowReader] = useState(false);
+  const [readerUrl, setReaderUrl] = useState('');
 
   if (!primary) return null;
 
   const videoId = primary.type === 'video' ? getYouTubeId(primary.url) : null;
+
+  // Whether this video has a specific time window to show
+  const isTimeCropped = !!(primary.watchFrom && primary.watchTo);
+
+  // Build YouTube embed URL with optional start/end time
+  const embedUrl = videoId
+    ? (() => {
+        const params = new URLSearchParams();
+        if (primary.watchFrom) params.set('start', String(timeToSeconds(primary.watchFrom)));
+        if (primary.watchTo) params.set('end', String(timeToSeconds(primary.watchTo)));
+        // Autoplay when showing a cropped segment directly
+        if (isTimeCropped) params.set('autoplay', '1');
+        const qs = params.toString();
+        return `https://www.youtube.com/embed/${videoId}${qs ? `?${qs}` : ''}`;
+      })()
+    : null;
 
   const getResourceIcon = (type: string) => {
     switch (type) {
@@ -109,16 +135,41 @@ export default function ResourceCard({
         {/* Video Embed */}
         {primary.type === 'video' && videoId && (
           <div style={{ marginBottom: tokens.spacing.md }}>
-            {showVideo ? (
+            {isTimeCropped ? (
+              /* Time-cropped: show the clip directly, no click required */
               <div style={{
                 position: 'relative',
-                paddingBottom: '56.25%', // 16:9 aspect ratio
+                paddingBottom: '56.25%',
+                height: 0,
+                overflow: 'hidden',
+                borderRadius: tokens.borderRadius.xl,
+                boxShadow: tokens.shadows.md,
+              }}>
+                <iframe
+                  src={embedUrl ?? ''}
+                  title={primary.title}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    border: 'none'
+                  }}
+                />
+              </div>
+            ) : showVideo ? (
+              <div style={{
+                position: 'relative',
+                paddingBottom: '56.25%',
                 height: 0,
                 overflow: 'hidden',
                 borderRadius: tokens.borderRadius.xl
               }}>
                 <iframe
-                  src={`https://www.youtube.com/embed/${videoId}`}
+                  src={embedUrl ?? ''}
                   title={primary.title}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
@@ -151,16 +202,11 @@ export default function ResourceCard({
                   justifyContent: 'center'
                 }}
               >
-                {/* Thumbnail or placeholder */}
                 {primary.thumbnail ? (
                   <img
                     src={primary.thumbnail}
                     alt={primary.title}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover'
-                    }}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
                 ) : (
                   <div style={{
@@ -174,8 +220,6 @@ export default function ResourceCard({
                     <Play size={64} color="white" />
                   </div>
                 )}
-
-                {/* Play overlay */}
                 <div style={{
                   position: 'absolute',
                   top: '50%',
@@ -270,28 +314,54 @@ export default function ResourceCard({
             </div>
           )}
 
-          {/* External link */}
+          {/* Open resource — in-app reader for articles, external for tools */}
           {primary.type !== 'video' && (
-            <a
-              href={primary.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: tokens.spacing.xs,
-                padding: `${tokens.spacing.sm} ${tokens.spacing.md}`,
-                backgroundColor: tokens.colors.primary,
-                color: 'white',
-                borderRadius: tokens.borderRadius.lg,
-                fontSize: tokens.typography.sizes.sm,
-                fontWeight: tokens.typography.weights.medium,
-                textDecoration: 'none',
-                transition: 'all 0.2s'
-              }}
-            >
-              Open Resource <ExternalLink size={14} />
-            </a>
+            <div style={{ display: 'flex', gap: tokens.spacing.sm, flexWrap: 'wrap' }}>
+              {(primary.type === 'article' || primary.type === 'pdf') ? (
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => { setReaderUrl(primary.url); setShowReader(true); }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: tokens.spacing.xs,
+                    padding: `${tokens.spacing.sm} ${tokens.spacing.md}`,
+                    backgroundColor: tokens.colors.primary,
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: tokens.borderRadius.lg,
+                    fontSize: tokens.typography.sizes.sm,
+                    fontWeight: tokens.typography.weights.medium,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <BookOpen size={14} /> Read inside app
+                </motion.button>
+              ) : (
+                <a
+                  href={primary.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: tokens.spacing.xs,
+                    padding: `${tokens.spacing.sm} ${tokens.spacing.md}`,
+                    backgroundColor: tokens.colors.primary,
+                    color: 'white',
+                    borderRadius: tokens.borderRadius.lg,
+                    fontSize: tokens.typography.sizes.sm,
+                    fontWeight: tokens.typography.weights.medium,
+                    textDecoration: 'none',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  Open Resource <ExternalLink size={14} />
+                </a>
+              )}
+            </div>
           )}
         </div>
 
@@ -367,6 +437,151 @@ export default function ResourceCard({
           </motion.button>
         </div>
       </div>
+
+      {/* In-App Reader Overlay */}
+      {showReader && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            display: 'flex',
+          }}
+          onClick={() => setShowReader(false)}
+        >
+          {/* Backdrop */}
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(4px)',
+          }} />
+
+          {/* Panel */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'relative',
+              marginLeft: 'auto',
+              width: '65%',
+              maxWidth: '900px',
+              height: '100%',
+              backgroundColor: tokens.colors.surface,
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '-8px 0 40px rgba(0,0,0,0.2)',
+            }}
+          >
+            {/* Panel Header */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: `${tokens.spacing.md} ${tokens.spacing.xl}`,
+              borderBottom: `1px solid ${tokens.colors.border}`,
+              backgroundColor: tokens.colors.background,
+              flexShrink: 0,
+            }}>
+              <span style={{
+                fontSize: tokens.typography.sizes.sm,
+                fontWeight: tokens.typography.weights.medium,
+                color: tokens.colors.text.secondary,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: '70%',
+              }}>
+                {primary.title}
+              </span>
+              <div style={{ display: 'flex', gap: tokens.spacing.sm, alignItems: 'center', flexShrink: 0 }}>
+                <a
+                  href={readerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: tokens.spacing.xs,
+                    fontSize: tokens.typography.sizes.xs,
+                    color: tokens.colors.text.tertiary,
+                    textDecoration: 'none',
+                    padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`,
+                    borderRadius: tokens.borderRadius.sm,
+                    border: `1px solid ${tokens.colors.border}`,
+                  }}
+                >
+                  <ExternalLink size={12} />
+                  Open in browser
+                </a>
+                <button
+                  onClick={() => setShowReader(false)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '32px',
+                    height: '32px',
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    color: tokens.colors.text.secondary,
+                    borderRadius: tokens.borderRadius.sm,
+                  }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* iframe */}
+            <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+              <iframe
+                src={readerUrl}
+                title={primary.title}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                }}
+                sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+              />
+              {/* Fallback note — always visible at bottom in case iframe is blocked */}
+              <div style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                padding: `${tokens.spacing.sm} ${tokens.spacing.xl}`,
+                backgroundColor: tokens.colors.background + 'e0',
+                borderTop: `1px solid ${tokens.colors.borderLight}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: tokens.spacing.sm,
+                fontSize: tokens.typography.sizes.xs,
+                color: tokens.colors.text.tertiary,
+              }}>
+                Content not loading?
+                <a
+                  href={readerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    color: tokens.colors.primary,
+                    textDecoration: 'none',
+                    fontWeight: tokens.typography.weights.medium,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  Open in browser <ExternalLink size={11} />
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Supplementary Resources */}
       {supplementary.length > 0 && (

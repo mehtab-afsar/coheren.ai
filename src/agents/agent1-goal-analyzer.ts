@@ -1,10 +1,5 @@
-import Groq from 'groq-sdk';
 import type { Agent1Output, AgentContext } from '../types/agents';
-
-const groq = new Groq({
-  apiKey: import.meta.env.VITE_GROQ_API_KEY,
-  dangerouslyAllowBrowser: true
-});
+import { callGroqWithFallback } from '../lib/groq-client';
 
 const AGENT1_SYSTEM_PROMPT = `You are a Goal Classification Expert.
 
@@ -65,7 +60,7 @@ Provide a comprehensive analysis of this goal.
 `;
 
   try {
-    const completion = await groq.chat.completions.create({
+    const completion = await callGroqWithFallback({
       messages: [
         {
           role: 'system',
@@ -76,7 +71,6 @@ Provide a comprehensive analysis of this goal.
           content: userPrompt
         }
       ],
-      model: 'llama-3.3-70b-versatile',
       temperature: 0.3,
       max_tokens: 2000,
       response_format: { type: 'json_object' }

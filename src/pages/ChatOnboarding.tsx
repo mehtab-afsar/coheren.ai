@@ -18,7 +18,7 @@ import { syncCompleteRoadmap } from '../lib/database';
 // Groq client now imported from groq-client.ts with auto-fallback
 
 // Helper function to parse daily time commitment to minutes
-function parseDailyTimeToMinutes(dailyTime: string | any): number {
+function parseDailyTimeToMinutes(dailyTime: string | unknown): number {
   if (!dailyTime) return 30; // Default 30 minutes
 
   // Ensure dailyTime is a string
@@ -152,26 +152,8 @@ export default function ChatOnboarding() {
     }
   }, [onboardingPhase, isGeneratingPlan]);
 
-  // The "Bulletproof" Trigger (No setTimeout) - State-Driven
-  useEffect(() => {
-    // Define what "Ready" looks like
-    const isReady = !!(
-      collectedData.goal &&
-      collectedData.name &&
-      collectedData.skillLevel &&
-      collectedData.dailyTime &&
-      collectedData.timeline
-    );
-
-    // If data is ready, and we aren't already generating, START.
-    if (isReady && onboardingPhase === 'conversation' && !isGeneratingPlan) {
-      console.log("🚀 Data complete. Moving to Stone Questions...");
-
-      // Move state IMMEDIATELY to prevent double-trigger
-      setOnboardingPhase('stones');
-      runAnalysisAndGetStones();
-    }
-  }, [collectedData, onboardingPhase, isGeneratingPlan]);
+  // NOTE: The "Bulletproof" Trigger useEffect is placed AFTER runAnalysisAndGetStones
+  // to avoid the react-hooks/immutability "accessed before declared" lint error.
 
   const handleSend = async () => {
     if (!userInput.trim()) return;
@@ -458,6 +440,25 @@ The system will automatically detect when the data is complete and transition to
     }
   };
 
+  // The "Bulletproof" Trigger (No setTimeout) - State-Driven
+  // Placed here (after runAnalysisAndGetStones) to satisfy react-hooks/immutability rule
+  useEffect(() => {
+    const isReady = !!(
+      collectedData.goal &&
+      collectedData.name &&
+      collectedData.skillLevel &&
+      collectedData.dailyTime &&
+      collectedData.timeline
+    );
+
+    if (isReady && onboardingPhase === 'conversation' && !isGeneratingPlan) {
+      console.log("🚀 Data complete. Moving to Stone Questions...");
+      setOnboardingPhase('stones');
+      runAnalysisAndGetStones();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collectedData, onboardingPhase, isGeneratingPlan]);
+
   // Handler for stone questions completion
   const handleStoneQuestionsComplete = (answers: StoneAnswer[]) => {
     setOnboardingPhase('generating');
@@ -521,7 +522,7 @@ The system will automatically detect when the data is complete and transition to
           description: phase.primaryGoals.join('. ')
         })),
         startDate: new Date().toISOString().split('T')[0],
-        endDate: new Date(Date.now() + durationInMonths * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        endDate: new Date(new Date().getTime() + durationInMonths * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         agentRoadmap: agentRoadmap.roadmap // Store full agent roadmap
       };
 

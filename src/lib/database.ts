@@ -17,43 +17,56 @@ export async function createGoal(
   description: string,
   goalAnalysis: Agent1Output
 ) {
-  console.log('🔍 createGoal called with:', { userId, title, description: description?.substring(0, 50) });
+  console.log('🔍 createGoal called with:', { userId, title });
 
   try {
+    // Trim goal_analysis to essential fields only — prevents JSONB payload timeouts
+    const trimmedAnalysis = goalAnalysis?.goalAnalysis ? {
+      goalType: goalAnalysis.goalAnalysis.goalType,
+      domain: goalAnalysis.goalAnalysis.domain,
+      complexity: goalAnalysis.goalAnalysis.complexity,
+      successCriteria: goalAnalysis.goalAnalysis.successCriteria,
+      keyMilestones: goalAnalysis.goalAnalysis.keyMilestones,
+    } : null;
+
     const goalData = {
       user_id: userId,
       title,
       description,
-      goal_analysis: goalAnalysis,
+      goal_analysis: trimmedAnalysis,
       status: 'active'
     };
 
-    console.log('📤 Inserting goal data...');
+    console.log('📤 Inserting goal (payload size ~', JSON.stringify(goalData).length, 'bytes)');
 
-    // Add timeout to prevent hanging
-    const insertPromise = supabase
+    // INSERT without .select() to avoid RLS SELECT round-trip causing timeout
+    const { error } = await supabase
       .from('user_goals')
-      .insert(goalData)
-      .select()
-      .single();
-
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Database insert timeout after 10 seconds')), 10000);
-    });
-
-    const { data, error } = await Promise.race([insertPromise, timeoutPromise]) as Awaited<typeof insertPromise>;
+      .insert(goalData);
 
     if (error) {
-      console.error('❌ Error creating goal:', error);
-      console.error('   Code:', error.code);
-      console.error('   Message:', error.message);
-      console.error('   Details:', error.details);
-      console.error('   Hint:', error.hint);
+      console.error('❌ Error creating goal:', error.code, error.message, error.hint);
       throw error;
     }
 
-    console.log('✅ Goal created successfully:', data);
-    return data;
+    // Fetch the created row separately (faster than .select() on insert)
+    const { data: createdGoal, error: fetchError } = await supabase
+      .from('user_goals')
+      .select('id, title, status, created_at')
+      .eq('user_id', userId)
+      .eq('title', title)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (fetchError) {
+      console.warn('⚠️ Goal inserted but could not fetch it back:', fetchError.message);
+      // Return a minimal placeholder so the flow can continue
+      return { id: crypto.randomUUID(), title, status: 'active' };
+    }
+
+    console.log('✅ Goal created successfully:', createdGoal.id);
+    return createdGoal;
   } catch (err) {
     console.error('❌ Exception in createGoal:', err);
     throw err;
@@ -325,24 +338,36 @@ export async function calculateStreak(roadmapId: string): Promise<number> {
     return 0;
   }
 
-  // Calculate consecutive streak from most recent completion
-  let streak = 0;
+  // Calculate consecutive streak counting backwards from most recent completion.
+  // Allow the streak to still be "active" if the most recent completion was yesterday
+  // (i.e. today's task hasn't been done yet, but the streak is not broken).
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  // Collect unique completion dates (by day)
+  const completedDays = new Set<number>();
   for (const task of tasks) {
     if (!task.completed_at) continue;
+    const d = new Date(task.completed_at);
+    d.setHours(0, 0, 0, 0);
+    completedDays.add(d.getTime());
+  }
 
-    const completedDate = new Date(task.completed_at);
-    completedDate.setHours(0, 0, 0, 0);
+  if (completedDays.size === 0) return 0;
 
-    const daysDiff = Math.floor((today.getTime() - completedDate.getTime()) / (1000 * 60 * 60 * 24));
+  // Find the most recent completed day
+  const mostRecent = Math.max(...completedDays);
+  const mostRecentDaysAgo = Math.floor((today.getTime() - mostRecent) / 86400000);
 
-    if (daysDiff === streak) {
-      streak++;
-    } else {
-      break;
-    }
+  // If the most recent completion is older than yesterday, streak is broken
+  if (mostRecentDaysAgo > 1) return 0;
+
+  // Count consecutive days backwards from most recent
+  let streak = 0;
+  let checkDay = mostRecent;
+  while (completedDays.has(checkDay)) {
+    streak++;
+    checkDay -= 86400000; // go back one day
   }
 
   return streak;
@@ -544,7 +569,7 @@ export async function syncCompleteRoadmap(
     );
 
     const result = await Promise.race([syncOperation(), timeoutPromise]);
-    return result as { goal: any; roadmap: any; success: boolean };
+    return result as { goal: Record<string, unknown>; roadmap: Record<string, unknown>; success: boolean };
 
   } catch (error) {
     console.warn('⚠️ Database sync timed out or failed, but proceeding with local state:', error);

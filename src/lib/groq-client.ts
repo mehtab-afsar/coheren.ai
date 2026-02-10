@@ -24,14 +24,21 @@ const MODEL_TIERS = {
 
 type ModelTier = keyof typeof MODEL_TIERS;
 
+interface GroqError {
+  status?: number;
+  error?: { message?: string };
+  message?: string;
+}
+
 interface GroqCallParams {
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
   model?: string;
   temperature?: number;
   max_tokens?: number;
   response_format?: { type: 'json_object' };
-  [key: string]: any; // Allow additional Groq SDK parameters
 }
+
+type GroqCompletion = Groq.Chat.ChatCompletion;
 
 /**
  * Call Groq with automatic fallback and retry logic
@@ -40,12 +47,12 @@ export async function callGroqWithFallback(
   params: GroqCallParams,
   preferredTier: ModelTier = 'premium',
   retries = 3
-): Promise<any> {
+): Promise<GroqCompletion> {
   const modelTiers: ModelTier[] = ['premium', 'standard', 'economy'];
   const startIndex = modelTiers.indexOf(preferredTier);
   const tiersToTry = modelTiers.slice(startIndex);
 
-  let lastError: any;
+  let lastError: unknown;
 
   for (const tier of tiersToTry) {
     const model = MODEL_TIERS[tier];
@@ -64,11 +71,12 @@ export async function callGroqWithFallback(
 
       return result;
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       lastError = error;
 
       // If not a rate limit error, don't try fallback
-      if (error.status !== 429) {
+      const groqError = error as GroqError;
+      if (groqError.status !== 429) {
         throw error;
       }
 
@@ -85,15 +93,16 @@ export async function callGroqWithFallback(
  * Retry logic with exponential backoff
  */
 async function callWithRetry(
-  params: GroqCallParams,
+  params: GroqCallParams & { model: string },
   retries: number
-): Promise<any> {
+): Promise<GroqCompletion> {
   try {
-    return await groq.chat.completions.create(params as any);
-  } catch (error: any) {
-    if (error.status === 429 && retries > 0) {
+    return await groq.chat.completions.create(params);
+  } catch (error: unknown) {
+    const groqError = error as GroqError;
+    if (groqError.status === 429 && retries > 0) {
       // Extract wait time from error message (e.g., "Please try again in 2.5s")
-      const waitMatch = error.error?.message?.match(/(\d+\.?\d*)s/);
+      const waitMatch = groqError.error?.message?.match(/(\d+\.?\d*)s/);
       const waitSeconds = waitMatch ? parseFloat(waitMatch[1]) : 2;
 
       console.warn(`⏳ Rate limited. Retrying in ${waitSeconds}s... (${retries} retries left)`);

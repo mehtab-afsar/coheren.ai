@@ -304,7 +304,7 @@ export function generateTasksForDay(
   scheduledFor: string,
   adaptiveDifficultyMultiplier: number = 1.0
 ): Task[] {
-  const categoryTemplates = taskTemplatesByCategory[category] || taskTemplatesByCategory.Hobby;
+  const categoryTemplates = taskTemplatesByCategory[category] || taskTemplatesByCategory['Learning'];
 
   // Cycle through 7-day template, with progressive difficulty
   const dayIndex = ((day - 1) % 7);

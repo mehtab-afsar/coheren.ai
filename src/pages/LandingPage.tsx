@@ -66,6 +66,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
 
     const timer = setTimeout(type, 1000);
     return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleGetStarted = (customGoal?: string) => {

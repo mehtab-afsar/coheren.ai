@@ -1,11 +1,22 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
   server: {
     port: 3000,
+  },
+  resolve: {
+    alias: {
+      '@core': path.resolve(__dirname, 'src/core'),
+      '@features': path.resolve(__dirname, 'src/features'),
+      '@shared': path.resolve(__dirname, 'src/shared'),
+      '@lib': path.resolve(__dirname, 'src/lib'),
+      '@utils': path.resolve(__dirname, 'src/utils'),
+      '@types-app': path.resolve(__dirname, 'src/types'),
+    }
   },
   plugins: [
     react(),

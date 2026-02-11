@@ -4,7 +4,7 @@
  * Utilities for detecting checkpoints and preparing data for Agent 5
  */
 
-import type { CompletedTaskFeedback } from '../types/agents';
+import type { CompletedTaskFeedback } from '@types-app/agents';
 
 /**
  * Check if a given day is a checkpoint day

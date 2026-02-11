@@ -5,7 +5,7 @@
  */
 
 import { supabase } from './supabase';
-import type { Agent1Output, Agent3Output, StoneAnswer } from '../types/agents';
+import type { Agent1Output, Agent3Output, StoneAnswer } from '@types-app/agents';
 
 // ============================================
 // GOAL OPERATIONS

@@ -3,7 +3,7 @@ import { useStore, type Task } from '@core/store/useStore';
 import { getRecentFeedback } from '@lib/database';
 import { handleCheckpoint } from '@core/agents/orchestrator';
 import { isCheckpointDay } from '@lib/checkpointHelpers';
-import type { StoneAnswer } from '@types-app/agents';
+import type { Agent2ProfileOutput } from '@types-app/agents';
 
 interface CheckpointData {
   completedTasks: number;
@@ -95,8 +95,17 @@ export function useCheckpoint() {
         skipReason: undefined
       }));
 
-      // Get user's Stone answers (we'll need to fetch these or get from store)
-      const stoneAnswers: StoneAnswer[] = []; // TODO: Fetch from database if available
+      // Minimal stone profile — TODO: load real Agent2ProfileOutput from store/DB
+      const stoneProfile: Agent2ProfileOutput = {
+        stoneProfile: {
+          userArchetype: 'Unknown',
+          primaryStone: 'Inconsistency',
+          stones: [],
+          agent3Guidance: [],
+          agent5Note: '',
+          confidence: 0,
+        }
+      };
 
       // Run Agent 5 checkpoint analysis
       const result = await handleCheckpoint(
@@ -104,7 +113,7 @@ export function useCheckpoint() {
         90, // Default timeline
         30, // Default daily time
         (roadmap.strategicPlan || roadmap) as unknown as import('@types-app/agents').Roadmap,
-        stoneAnswers,
+        stoneProfile,
         taskFeedback as unknown as Task[],
         currentDay,
         {

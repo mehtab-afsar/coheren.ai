@@ -6,7 +6,7 @@
 
 // Individual Agents
 export { analyzeGoal } from './goal-analyzer';
-export { identifyStones } from './stone-identifier';
+export { identifyStones, extractStones } from './stone-identifier';
 export { buildCurriculum } from './curriculum-builder';
 export { generateTask } from './task-generator';
 export { recalibrateCurriculum, shouldTriggerCheckpoint, convertToFeedback } from './recalibrator';
@@ -28,12 +28,18 @@ export type {
   AgentContext,
   Agent1Output,
   Agent2Output,
+  Agent2ProfileOutput,
   Agent3Output,
   Agent5Input,
   Agent5Output,
   DailyTask,
   StoneAnswer,
   BuildingStone,
+  StoneProfile,
+  StoneType,
+  StoneCategory,
+  StoneSeverity,
+  Stone,
   Roadmap,
   CompletedTaskFeedback,
   CheckpointAnalysis,

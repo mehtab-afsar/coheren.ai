@@ -4,11 +4,63 @@
 // AGENT 1: GOAL ANALYZER TYPES
 // ============================================
 
+export type GoalDomain =
+  | 'Cognitive'
+  | 'Kinesthetic'
+  | 'Career'
+  | 'Financial'
+  | 'Creative'
+  | 'Health'
+  | 'Lifestyle'
+  | 'Hybrid';
+
+export type GoalHorizon = 'Short-term' | 'Mid-term' | 'Long-term';
+
+export type GoalIntensity = 'Low' | 'Moderate' | 'High' | 'Extreme';
+
+export type SMARTElement = 'specific' | 'measurable' | 'achievable' | 'relevant' | 'timeBound';
+
+export type RealismLevel = 'Realistic' | 'Optimistic' | 'Unrealistic' | 'Unknown';
+
+export interface SMARTStatus {
+  specific: boolean;
+  measurable: boolean;
+  achievable: boolean;
+  relevant: boolean;
+  timeBound: boolean;
+}
+
+export interface RealismChecks {
+  timeRealism: RealismLevel;
+  effortRealism: RealismLevel;
+}
+
 export interface GoalAnalysis {
-  rawGoal: string;
-  goalType: 'skill_acquisition' | 'habit_formation' | 'knowledge_learning' | 'creative_pursuit' | 'fitness' | 'other';
-  domain: string;
-  subDomain?: string;
+  // Core classification
+  goal: string;                   // Normalized goal statement
+  domain: GoalDomain;             // Primary domain
+  subDomains: string[];           // Sub-domains for Hybrid goals
+  category: string;               // Specific category within domain
+  horizon: GoalHorizon;           // Short=<3mo, Mid=3-12mo, Long=1yr+
+  intensity: GoalIntensity;       // Daily effort required
+
+  // Intelligence signals
+  clarityScore: number;           // 0–1: How well-defined is the goal
+  ambiguityScore: number;         // 0–1: How vague or contradictory
+  confidence: number;             // 0–1: Agent's confidence in this analysis
+
+  // SMART validation
+  smartStatus: SMARTStatus;
+  missingSMART: SMARTElement[];
+
+  // Realism assessment
+  realismChecks: RealismChecks;
+
+  // Extracted constraints and risks
+  constraintsDetected: string[];  // e.g. "working full-time", "no gym access"
+  risksDetected: string[];        // e.g. "burnout risk", "vague fantasy goal"
+
+  // Curriculum-building context (used by Agent 2 & 3)
   complexity: 'beginner' | 'intermediate' | 'advanced';
   learningTypes: ('physical' | 'cognitive' | 'creative' | 'social' | 'mental')[];
   typicalTimeline: {
@@ -29,6 +81,50 @@ export interface Agent1Output {
 // ============================================
 // AGENT 2: STONE IDENTIFIER TYPES
 // ============================================
+
+// --- Stone Taxonomy ---
+
+export type StoneCategory = 'Logistical' | 'Psychological' | 'Cognitive' | 'Behavioural';
+
+export type StoneType =
+  // Logistical
+  | 'TimeConstraint'
+  | 'ResourceGap'
+  | 'EnvironmentFriction'
+  // Psychological
+  | 'Inconsistency'
+  | 'FearOfFailure'
+  | 'Perfectionism'
+  | 'LowConfidence'
+  | 'UnrealisticExpectations'
+  // Cognitive
+  | 'FocusFragility'
+  | 'CognitiveFatigue'
+  | 'SkillGap'
+  // Behavioural
+  | 'ProcrastinationPattern'
+  | 'Overcommitment';
+
+export type StoneSeverity = 'Low' | 'Moderate' | 'High' | 'Critical';
+
+export interface Stone {
+  type: StoneType;
+  category: StoneCategory;
+  trigger: string;         // What specifically causes this stone e.g. "momentum drops at week 2"
+  severity: StoneSeverity;
+  riskImpact: number;      // 0–1: how damaging this stone is to goal success
+}
+
+export interface StoneProfile {
+  userArchetype: string;                // e.g. "Motivated but Volatility-Prone"
+  primaryStone: StoneType;
+  stones: Stone[];
+  agent3Guidance: string[];            // Instructions for curriculum builder
+  agent5Note: string;                  // Prediction for recalibrator (e.g. "expect dip at day 12")
+  confidence: number;                  // 0–1
+}
+
+// --- Question Phase (MODE 1 output — rendered in UI) ---
 
 export interface QuestionOption {
   value: string;
@@ -55,8 +151,14 @@ export interface BuildingStone {
   question: Question;
 }
 
+// MODE 1 output: questions to display in UI
 export interface Agent2Output {
   requiredStones: BuildingStone[];
+}
+
+// MODE 2 output: behavioral profile extracted from answers
+export interface Agent2ProfileOutput {
+  stoneProfile: StoneProfile;
 }
 
 export interface StoneAnswer {
@@ -73,9 +175,11 @@ export interface Phase {
   phaseNumber: number;
   phaseName: string;
   weeks: number[];
+  durationDays: number;          // Explicit day count for this phase
   primaryGoals: string[];
   focusAreas: Record<string, number>;
   keyMilestones: string[];
+  scienceRationale: string;      // Citation from RAG / pedagogical reason for this structure
   buildingOn?: string;
   adaptationRules?: {
     if_completing_easily?: string;
@@ -129,6 +233,8 @@ export interface Roadmap {
 
 export interface Agent3Output {
   roadmap: Roadmap;
+  domainPedagogy: string;        // The specific pedagogical framework applied (e.g. "Sports Periodization")
+  stoneModificationSummary: string; // How the stone profile changed the curriculum
 }
 
 // ============================================
@@ -254,7 +360,7 @@ export interface RecalibratedSprint {
 export interface Agent5Input {
   context: AgentContext;
   roadmap: Roadmap;
-  stoneAnswers: StoneAnswer[];
+  stoneProfile: Agent2ProfileOutput;
   completedTasks: CompletedTaskFeedback[];
   currentDay: number;
 }

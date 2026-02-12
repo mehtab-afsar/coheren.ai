@@ -4,7 +4,7 @@
  */
 
 import { analyzeGoal } from './goal-analyzer';
-import { identifyStones } from './stone-identifier';
+import { identifyStones, extractStones } from './stone-identifier';
 import { buildCurriculum } from './curriculum-builder';
 import { generateTask } from './task-generator';
 import { recalibrateCurriculum, convertToFeedback } from './recalibrator';
@@ -13,6 +13,7 @@ import type {
   AgentContext,
   Agent1Output,
   Agent2Output,
+  Agent2ProfileOutput,
   Agent3Output,
   Agent5Output,
   StoneAnswer,
@@ -53,14 +54,14 @@ export async function runOnboardingAgents(
 }
 
 /**
- * Run Agent 3: Build curriculum after collecting stone answers
+ * Run Agent 3: Build curriculum after extracting the stone profile
  */
 export async function runCurriculumBuilder(
   goal: string,
   timeline: number,
   dailyTime: number,
   goalAnalysis: Agent1Output,
-  stoneAnswers: StoneAnswer[]
+  stoneProfile: Agent2ProfileOutput
 ): Promise<Agent3Output> {
   const context: AgentContext = {
     userId: 'temp',
@@ -70,7 +71,7 @@ export async function runCurriculumBuilder(
   };
 
   console.log('🏛️ Agent 3: Building curriculum...');
-  const curriculum = await buildCurriculum(context, goalAnalysis, stoneAnswers);
+  const curriculum = await buildCurriculum(context, goalAnalysis, stoneProfile);
 
   return curriculum;
 }
@@ -81,7 +82,7 @@ export async function runCurriculumBuilder(
 export async function runTaskGenerator(
   dayNumber: number,
   roadmap: Agent3Output,
-  stoneAnswers: StoneAnswer[],
+  stoneProfile: Agent2ProfileOutput,
   dailyTimeAvailable: number,
   previousTasksContext?: string
 ): Promise<DailyTask> {
@@ -89,7 +90,7 @@ export async function runTaskGenerator(
   const task = await generateTask(
     dayNumber,
     roadmap,
-    stoneAnswers,
+    stoneProfile,
     dailyTimeAvailable,
     previousTasksContext
   );
@@ -124,18 +125,22 @@ export async function generateCompleteRoadmap(
 
   const goalAnalysis = await analyzeGoal(context);
 
-  // Step 3: Build curriculum with stone answers
-  const roadmap = await buildCurriculum(context, goalAnalysis, stoneAnswers);
+  // Extract stone profile from answers
+  console.log('🧱 Extracting stone profile from answers...');
+  const stoneProfile = await extractStones(context, goalAnalysis, stoneAnswers);
+
+  // Step 3: Build curriculum with stone profile
+  const roadmap = await buildCurriculum(context, goalAnalysis, stoneProfile);
 
   // Step 4: Generate first day's task (with resources!)
   const firstTask = await generateTask(
     1,
     roadmap,
-    stoneAnswers,
+    stoneProfile,
     dailyTime,
-    undefined, // previousTasksContext
-    category, // Pass category for resource matching
-    skillLevel || 'beginner' // Pass skill level for resource matching
+    undefined,          // previousTasksContext
+    category,           // Pass category for resource matching
+    skillLevel || 'beginner'
   );
 
   console.log('✅ Roadmap generation complete!');
@@ -154,7 +159,7 @@ export async function generateTaskBatch(
   startDay: number,
   endDay: number,
   roadmap: Agent3Output,
-  stoneAnswers: StoneAnswer[],
+  stoneProfile: Agent2ProfileOutput,
   dailyTimeAvailable: number
 ): Promise<DailyTask[]> {
   console.log(`📋 Generating tasks for days ${startDay} to ${endDay}...`);
@@ -165,7 +170,7 @@ export async function generateTaskBatch(
     const task = await generateTask(
       day,
       roadmap,
-      stoneAnswers,
+      stoneProfile,
       dailyTimeAvailable
     );
     tasks.push(task);
@@ -187,7 +192,7 @@ export async function runCheckpointRecalibration(
   timeline: number,
   dailyTime: number,
   roadmap: Roadmap,
-  stoneAnswers: StoneAnswer[],
+  stoneProfile: Agent2ProfileOutput,
   completedTasks: Task[], // Tasks from store
   currentDay: number
 ): Promise<Agent5Output> {
@@ -206,7 +211,7 @@ export async function runCheckpointRecalibration(
   const recalibration = await recalibrateCurriculum({
     context,
     roadmap,
-    stoneAnswers,
+    stoneProfile,
     completedTasks: taskFeedback,
     currentDay
   });
@@ -225,7 +230,7 @@ export async function runCheckpointRecalibration(
 export async function generateAdaptedSprint(
   recalibration: Agent5Output,
   roadmap: Agent3Output,
-  stoneAnswers: StoneAnswer[],
+  stoneProfile: Agent2ProfileOutput,
   dailyTimeAvailable: number
 ): Promise<DailyTask[]> {
   const { startDay, endDay } = recalibration.recalibratedSprint;
@@ -264,21 +269,19 @@ Generate tasks that reflect these adjustments.
     const isReviewDay = recalibration.recalibratedSprint.pedagogicalChanges.reviewDaysAdded.includes(day);
 
     if (isRestDay || isReviewDay) {
-      // Generate lighter task
       const lightTask = await generateTask(
         day,
         roadmap,
-        stoneAnswers,
-        dailyTimeAvailable * 0.5, // 50% time for rest/review days
+        stoneProfile,
+        Math.floor(dailyTimeAvailable * 0.5),
         modificationsContext + `\nThis is a ${isRestDay ? 'REST' : 'REVIEW'} day - keep it light and restorative.`
       );
       tasks.push(lightTask);
     } else {
-      // Generate regular adapted task
       const task = await generateTask(
         day,
         roadmap,
-        stoneAnswers,
+        stoneProfile,
         dailyTimeAvailable,
         modificationsContext
       );
@@ -305,13 +308,13 @@ export async function handleCheckpoint(
   timeline: number,
   dailyTime: number,
   roadmap: Roadmap,
-  stoneAnswers: StoneAnswer[],
+  stoneProfile: Agent2ProfileOutput,
   completedTasks: Task[],
   currentDay: number,
   options?: {
     userId?: string;
     goalId?: string;
-    supabase?: SupabaseClient; // Pass Supabase client if available
+    supabase?: SupabaseClient;
   }
 ): Promise<{
   analysis: Agent5Output;
@@ -325,7 +328,7 @@ export async function handleCheckpoint(
     timeline,
     dailyTime,
     roadmap,
-    stoneAnswers,
+    stoneProfile,
     completedTasks,
     currentDay
   );
@@ -351,11 +354,11 @@ export async function handleCheckpoint(
   }
 
   // Step 3: Generate adapted sprint tasks
-  const roadmapOutput: Agent3Output = { roadmap };
+  const roadmapOutput: Agent3Output = { roadmap, domainPedagogy: '', stoneModificationSummary: '' };
   const adaptedTasks = await generateAdaptedSprint(
     analysis,
     roadmapOutput,
-    stoneAnswers,
+    stoneProfile,
     dailyTime
   );
 

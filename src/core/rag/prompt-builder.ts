@@ -3,7 +3,7 @@
  * Builds science-backed prompts for Groq AI coaching
  */
 
-import { retrieveKnowledge, type UserContext } from './knowledge-base';
+import { retrieveKnowledgeWithFallback, type UserContext } from './knowledge-base';
 
 // Coaching personas based on user state
 export const COACHING_PERSONAS = {
@@ -34,13 +34,17 @@ interface PromptOptions {
 }
 
 /**
- * Build a complete system prompt with science-backed knowledge
+ * Build a complete system prompt with science-backed knowledge.
+ * Async: attempts semantic retrieval (pgvector) before falling back to static.
  */
-export function buildScienceBackedPrompt(options: PromptOptions): string {
+export async function buildScienceBackedPrompt(options: PromptOptions): Promise<string> {
   const { userContext, scenario, persona = 'encouraging', additionalInstructions } = options;
 
-  // Retrieve relevant scientific knowledge
-  const scientificContext = retrieveKnowledge(userContext, scenario === 'daily-checkin' ? 'general' : scenario);
+  // Retrieve relevant scientific knowledge (semantic if Jina key present, static fallback)
+  const scientificContext = await retrieveKnowledgeWithFallback(
+    userContext,
+    scenario === 'daily-checkin' ? 'general' : scenario
+  );
 
   // Select persona based on scenario
   let selectedPersona = persona;
@@ -152,41 +156,39 @@ function getScenarioInstructions(scenario: string): string {
 /**
  * Quick prompt for specific situations
  */
-export function getQuickPrompt(
+export async function getQuickPrompt(
   situation: 'missed-day' | 'completed-task' | 'streak-milestone' | 'low-energy',
   context: UserContext
-): string {
-  const prompts: Record<string, string> = {
-    'missed-day': buildScienceBackedPrompt({
+): Promise<string> {
+  const situationMap: Record<string, Parameters<typeof buildScienceBackedPrompt>[0]> = {
+    'missed-day': {
       userContext: context,
       scenario: 'struggling',
       persona: 'compassionate',
-      additionalInstructions: 'User missed yesterday. Be supportive, normalize it, help them restart today.'
-    }),
-
-    'completed-task': buildScienceBackedPrompt({
+      additionalInstructions: 'User missed yesterday. Be supportive, normalize it, help them restart today.',
+    },
+    'completed-task': {
       userContext: context,
       scenario: 'celebration',
       persona: 'encouraging',
-      additionalInstructions: 'User just completed a task. Brief celebration message (1-2 sentences).'
-    }),
-
-    'streak-milestone': buildScienceBackedPrompt({
+      additionalInstructions: 'User just completed a task. Brief celebration message (1-2 sentences).',
+    },
+    'streak-milestone': {
       userContext: context,
       scenario: 'celebration',
       persona: 'scientific',
-      additionalInstructions: `User hit a streak milestone of ${context.streak} days! Celebrate and explain the neural progress.`
-    }),
-
-    'low-energy': buildScienceBackedPrompt({
+      additionalInstructions: `User hit a streak milestone of ${context.streak} days! Celebrate and explain the neural progress.`,
+    },
+    'low-energy': {
       userContext: context,
       scenario: 'struggling',
       persona: 'compassionate',
-      additionalInstructions: 'User is feeling low energy. Suggest tiny version of habit, validate the struggle.'
-    })
+      additionalInstructions: 'User is feeling low energy. Suggest tiny version of habit, validate the struggle.',
+    },
   };
 
-  return prompts[situation] || prompts['completed-task'];
+  const opts = situationMap[situation] ?? situationMap['completed-task'];
+  return buildScienceBackedPrompt(opts);
 }
 
 /**

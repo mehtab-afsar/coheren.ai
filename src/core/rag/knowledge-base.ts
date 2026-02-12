@@ -347,3 +347,40 @@ export function getFullKnowledgeContext(): string {
   );
   return formatKnowledgeForPrompt(coreChunks);
 }
+
+// ─── Async semantic retrieval with static fallback ────────────────────────────
+// Import is deferred to avoid circular deps at module init time
+import { retrieveKnowledgeSemantic } from './semantic-retriever';
+
+/**
+ * Primary retrieval entry point for agents and prompt builders.
+ *
+ * Semantic path: embed the query via Jina AI → cosine search in Supabase pgvector
+ * Fallback path: static keyword scoring (always available, zero latency)
+ *
+ * The fallback fires automatically when:
+ *   - VITE_JINA_API_KEY is not set
+ *   - knowledge_chunks table is empty (before first ingestion)
+ *   - Supabase returns no matches above the similarity threshold
+ *   - Any network error occurs
+ */
+export async function retrieveKnowledgeWithFallback(
+  context: UserContext,
+  scenario?: 'new-goal' | 'struggling' | 'celebration' | 'weekly-review' | 'general'
+): Promise<string> {
+  // Build a compact query string from context + scenario for the embedding
+  const parts: string[] = [];
+  if (scenario && scenario !== 'general') parts.push(scenario.replace(/-/g, ' '));
+  if (context.goal)           parts.push(context.goal);
+  if (context.currentStruggle) parts.push(context.currentStruggle);
+  if (context.skillLevel)     parts.push(context.skillLevel);
+  const query = parts.join('. ');
+
+  if (query.trim()) {
+    const semantic = await retrieveKnowledgeSemantic({ query });
+    if (semantic) return semantic;
+  }
+
+  // Static fallback — always works
+  return retrieveKnowledge(context, scenario);
+}

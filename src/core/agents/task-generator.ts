@@ -1,190 +1,453 @@
-import type { Agent3Output, DailyTask, StoneAnswer } from '@types-app/agents';
-import { matchTaskToResources } from '@lib/resourceMatcher';
+/**
+ * Agent 4: Task Generator
+ *
+ * Responsibilities:
+ *   - Translate the current phase theme into ONE specific, step-by-step daily task
+ *   - Apply stone-aware delivery rules (Starter Steps, Permission to Fail, time-boxing, etc.)
+ *   - Inject RAG science context as expert coaching cues
+ *   - Enrich each task with a Cinema Mode resource block (video + timestamp + coaching cue)
+ *   - Output a validated DailyTask consumed directly by the Dashboard TodayView
+ *
+ * Model: economy (8b) by default — task generation runs daily; cost matters.
+ *        Falls back to standard on rate limit or bad JSON.
+ * Temperature: 0.5 — enough creativity for varied daily tasks, structured enough for JSON.
+ */
+
+import type {
+  Agent2ProfileOutput,
+  Agent3Output,
+  DailyTask,
+  Phase,
+  StoneType,
+  TaskStep,
+} from '@types-app/agents';
 import { callGroqWithFallback } from '@lib/groq-client';
+import { matchTaskToResources } from '@lib/resourceMatcher';
+import { retrieveKnowledgeSemantic } from '@core/rag/semantic-retriever';
 
-const AGENT4_SYSTEM_PROMPT = `You are a Daily Task Instruction Expert.
+// ─── Stone Delivery Rules ─────────────────────────────────────────────────────
+// Each stone type changes HOW the task is delivered, not what it teaches.
 
-Your job is to create ONE specific, actionable task for a given day in a learning curriculum.
+const STONE_DELIVERY_RULES: Partial<Record<StoneType, string>> = {
+  TimeConstraint: `
+DELIVERY RULE — TimeConstraint:
+- estimatedMinutes must be ≤ dailyTimeAvailable.
+- Break each step into 15–20 min micro-blocks with explicit timers: "Set a 15-min timer."
+- Prefer depth over breadth — one skill done well beats three skills rushed.`,
 
-Each task must be:
-1. **Clear and Specific**: No vague instructions like "practice guitar" - instead "Practice G-C-D chord transitions for 15 minutes"
-2. **Completable in Allocated Time**: Must fit within the user's daily time budget
-3. **Progressive**: Build on previous days naturally
-4. **Structured**: Include step-by-step instructions
-5. **Motivating**: Include context (why this matters) and success criteria
+  ProcrastinationPattern: `
+DELIVERY RULE — ProcrastinationPattern:
+- Step 1 is ALWAYS a "Starter Step": ≤2 min, zero setup, trivially easy (e.g., "Open your IDE and create a new file." / "Put on your boxing gloves and stand in front of the mirror.").
+- Place the hardest / most effortful step at position 2 (after the starter).
+- Add an implementation intention as the final tip: "If I feel stuck, I will [specific tiny action]."`,
 
-Required Components:
-- **Title**: Action-oriented, clear (e.g., "Master the Boxing Stance")
-- **Description**: One sentence overview
-- **Estimated Minutes**: Realistic time estimate
-- **Steps**: Detailed, numbered instructions with durations
-  - Each step should have: stepNumber, instruction, duration
-  - Can include: details, resource (video/article), practice instructions
-- **Tips**: 3-5 practical tips for success
-- **Success Criteria**: How to know you did it right (primary + bonus)
-- **Why This Matters**: Context and motivation (2-3 sentences)
-- **Common Mistakes**: What to avoid (optional)
-- **Building On**: What previous days/skills this connects to (optional)
-- **Next Up**: Preview of tomorrow (optional)
-- **Adaptations Applied**: How stone answers modified this task
+  Inconsistency: `
+DELIVERY RULE — Inconsistency:
+- Step 1 is a "Starter Step": the only goal is to begin (e.g., "Put on your shoes and stand at your desk.").
+- Final tip must be a "Never Miss Twice" reminder: "If you skip today, the only rule is: do step 1 tomorrow no matter what."
+- Keep the task completable in 60% of the time budget so "partial done" still counts.`,
 
-Pedagogical Principles:
-- **Specificity**: Exact numbers, durations, repetitions
-- **Scaffolding**: Reference what they've learned
-- **Feedback**: Include self-check moments
-- **Motivation**: Connect to bigger goal
+  FearOfFailure: `
+DELIVERY RULE — FearOfFailure:
+- Frame the task as an experiment: title starts with "Experiment:" (e.g., "Experiment: Lead Jab Mechanics").
+- Replace pass/fail success criteria with observation-based criteria (e.g., "You're done when you've tried the drill 10 times and noticed what feels awkward — there's no wrong answer.").
+- Add a "Permission to Fail" tip: "Today's only job is to do the reps. Quality is irrelevant. Your nervous system is learning even when it feels wrong."`,
 
-Return ONLY valid JSON in this exact format:
+  Perfectionism: `
+DELIVERY RULE — Perfectionism:
+- Add an explicit time-box to every step (e.g., "Spend exactly 10 min — stop when the timer rings, even if it feels unfinished.").
+- Add a "Permission to Fail" tip: "Your draft doesn't need to be good. It needs to exist. A rough version you finish beats a perfect version you never start."
+- If domain is Creative, label the task as a "ROUGH DRAFT TASK" in the title.
+- Success criteria must focus on completion, never quality.`,
+
+  Overcommitment: `
+DELIVERY RULE — Overcommitment:
+- Hard cap: estimatedMinutes must not exceed Math.floor(dailyTimeAvailable × 0.85).
+- Add a visible "STOP HERE" marker after the core exercise step: "If you've reached this point — you're done. Resist the urge to add more."
+- Final tip: "The goal is sustainable momentum, not maximum output. Stop when planned."`,
+
+  SkillGap: `
+DELIVERY RULE — SkillGap:
+- Step 1 is a 2-min prerequisite check: "Quick check: can you do [prerequisite]? If not, do [micro-resource] first."
+- Use plain, directive language — no jargon. Every technical term must be explained in parentheses.
+- Add a "Building Blocks" reference listing 1–2 previously mastered skills this task relies on.`,
+
+  CognitiveFatigue: `
+DELIVERY RULE — CognitiveFatigue:
+- Maximum 3 steps per task. If more are needed, split into "Core" and "Optional Extension."
+- Insert a mandatory 5-min break after step 2: "5-min break — stand up, get water, do not check your phone."
+- Use bold headers for each step. Short paragraphs only (2–3 sentences max).`,
+
+  FocusFragility: `
+DELIVERY RULE — FocusFragility:
+- Single-focus task only. Remove all optional, supplementary, or bonus sections.
+- Task title must name exactly ONE action (e.g., "Practice the Lead Jab" not "Lead Jab + Defense Drill").
+- Add an environment-prep step: "Before starting: phone on silent, close all browser tabs, set a 25-min timer."`,
+
+  LowConfidence: `
+DELIVERY RULE — LowConfidence:
+- Success criteria must be very easy to achieve — the user should feel certain they can do it.
+- Add a "You Already Know This" connection: reference a skill from a previous day that this builds on.
+- whyThisMatters must emphasize identity growth: "Every rep is a vote for the person you're becoming."`,
+
+  UnrealisticExpectations: `
+DELIVERY RULE — UnrealisticExpectations:
+- Add a calibration note in the description: "At this stage, [realistic expectation]. That is completely normal and expected."
+- successCriteria.primary must include a realistic benchmark (e.g., "You're on track if you can do this at 60% of full speed.").`,
+};
+
+// ─── Domain Delivery Contexts ─────────────────────────────────────────────────
+
+const DOMAIN_DELIVERY_CONTEXT: Record<string, string> = {
+  Kinesthetic: `Domain: Physical/Motor Skill
+- Every step must include body cues (e.g., "Lead shoulder forward. Chin tucked. Pivot off the ball of your foot.").
+- Add a safety / warm-up reminder in the first or second step.
+- Use imperative verbs: STAND, THROW, STEP, ROTATE. Not "try to" or "attempt."
+- Cinema Mode coaching_cue must point to a specific body part or movement at a timestamp.`,
+
+  Cognitive: `Domain: Knowledge/Study
+- Emphasize active recall over passive reading. Include self-testing moments (e.g., "Close the guide and write the answer from memory.").
+- Use Pomodoro framing: "25 minutes focused → 5 min break."
+- coaching_cue should reference a concept, diagram, or example demonstrated in the video.`,
+
+  Creative: `Domain: Creative Production
+- Separate the "generative" steps (write, draw, draft) from "analytical" steps (review, edit).
+- Never ask the user to edit and create in the same task.
+- coaching_cue should highlight a creative principle or "how the expert approached the blank page."`,
+
+  Career: `Domain: Career Development
+- Tasks should produce a tangible artifact (e.g., a commit, a LinkedIn post, a sent email).
+- Steps should have a "Proof of Work" end state (e.g., "Screenshot your output for your portfolio.").
+- coaching_cue should highlight a professional principle or specific workflow tactic.`,
+
+  Financial: `Domain: Financial Learning
+- Include a "Real Money Check" note: label each step as simulation or real action. Never directive about actual investments.
+- coaching_cue should highlight a key risk/reward concept or mental model.`,
+
+  Health: `Domain: Health & Wellness
+- Include a check-in in step 1: "Rate your energy 1–5 right now. If ≤2, replace this with the recovery alternative."
+- Safety note required if any physical risk exists.
+- coaching_cue should highlight form, breathing, or a wellness principle.`,
+
+  Lifestyle: `Domain: Lifestyle / Habit Building
+- Anchor each step to an existing routine (e.g., "After your morning coffee, do step 2.").
+- Include an environment-design tip: "Remove one friction point before starting."
+- coaching_cue should highlight the habit formation principle the video demonstrates.`,
+};
+
+// ─── Phase Resolution ─────────────────────────────────────────────────────────
+// Uses durationDays accumulation — the old weeks[] arithmetic was fragile.
+
+function resolvePhaseForDay(
+  phases: Phase[],
+  dayNumber: number,
+): { phase: Phase; week: number; dayInPhase: number } {
+  let accumulated = 0;
+
+  for (const phase of phases) {
+    const duration   = phase.durationDays ?? Math.round(phase.weeks.length * 7);
+    const phaseStart = accumulated + 1;
+    const phaseEnd   = accumulated + duration;
+
+    if (dayNumber >= phaseStart && dayNumber <= phaseEnd) {
+      const dayInPhase = dayNumber - accumulated;
+      const week       = Math.ceil(dayInPhase / 7);
+      return { phase, week, dayInPhase };
+    }
+
+    accumulated += duration;
+  }
+
+  // Overflow: clamp to last phase
+  const last      = phases[phases.length - 1];
+  const totalDays = phases.reduce((s, p) => s + (p.durationDays ?? 7), 0);
+  const dayInPhase = dayNumber - (totalDays - (last.durationDays ?? 7));
+  return { phase: last, week: Math.ceil(Math.max(dayInPhase, 1) / 7), dayInPhase: Math.max(dayInPhase, 1) };
+}
+
+// ─── Prompt Builders ──────────────────────────────────────────────────────────
+
+function buildSystemPrompt(
+  domain: string,
+  stones: StoneType[],
+  dailyTimeAvailable: number,
+): string {
+  const domainCtx  = DOMAIN_DELIVERY_CONTEXT[domain] ?? '';
+  const stoneRules = stones
+    .map(s => STONE_DELIVERY_RULES[s] ?? '')
+    .filter(Boolean)
+    .join('\n');
+
+  return `You are Agent 4: Daily Task Generator for Coheren AI.
+
+Your job: Generate ONE specific, step-by-step task for today's curriculum day.
+
+${domainCtx ? `── DOMAIN CONTEXT ──\n${domainCtx}\n` : ''}
+── STONE-AWARE DELIVERY RULES ──
+${stoneRules || 'No special delivery adjustments required.'}
+
+── GLOBAL RULES ──
+1. estimatedMinutes ≤ ${dailyTimeAvailable}. Never exceed the daily time budget.
+2. Steps must be specific and actionable — no vague instructions ("practice X" → "do 3×10 reps of X with a 90-second rest").
+3. Every step has a duration (e.g., "10 minutes", "2 sets of 8 reps").
+4. Include a Cinema Mode resource: specific YouTube search URL, expected channel, watch window (watchFrom/watchTo), and coaching cues (focusPoints).
+5. successCriteria.primary must be completion-based — not "do it perfectly" but "do it the specified number of times."
+6. whyThisMatters connects to the original goal, not just the phase theme.
+
+Return ONLY valid JSON in this exact schema:
 {
-  "day": number,
-  "phase": number,
-  "week": number,
+  "day": <number>,
+  "phase": <number>,
+  "week": <number>,
   "task": {
-    "title": "Action-Oriented Title",
-    "description": "Brief overview",
-    "estimatedMinutes": number,
+    "title": "<action-oriented, specific>",
+    "description": "<one sentence>",
+    "estimatedMinutes": <number>,
     "steps": [
       {
         "stepNumber": 1,
-        "instruction": "What to do",
-        "duration": "X minutes",
-        "details": "More info or array of details",
+        "instruction": "<imperative verb + specific action>",
+        "duration": "<time or rep count>",
+        "details": "<optional extra context>",
         "resource": {
-          "type": "video|article|audio|practice",
-          "url": "URL or identifier",
-          "timestamp": "specific part to watch",
-          "focusPoints": ["point 1", "point 2"]
+          "type": "video",
+          "url": "<YouTube search URL>",
+          "timestamp": "<e.g. 1:30–4:00>",
+          "focusPoints": ["<coaching cue 1>", "<coaching cue 2>"]
         }
       }
     ],
-    "tips": ["tip 1", "tip 2"],
+    "tips": ["<tip 1>", "<tip 2>", "<tip 3>"],
     "successCriteria": {
-      "primary": "Main success measure",
-      "bonus": "Extra achievement"
+      "primary": "<completion-based>",
+      "bonus": "<optional stretch goal>"
     },
-    "whyThisMatters": "Motivation and context",
-    "commonMistakes": ["mistake 1", "mistake 2"],
-    "buildingOn": ["Day X: skill", "Day Y: concept"],
-    "nextUp": "Preview of tomorrow",
+    "whyThisMatters": "<2 sentences connecting to original goal>",
+    "commonMistakes": ["<mistake 1>", "<mistake 2>"],
+    "buildingOn": ["<Day X: skill>"],
+    "nextUp": "<one sentence preview of tomorrow>",
     "adaptations_applied": {
-      "stone_id": "how this affected the task"
+      "<StoneType>": "<how this stone changed this specific task>"
+    },
+    "resources": {
+      "primary": {
+        "type": "video",
+        "title": "<descriptive video title>",
+        "url": "<https://youtube.com/results?search_query=encoded+query>",
+        "platform": "YouTube",
+        "channel": "<best channel for this domain/topic>",
+        "duration": "<total video length>",
+        "description": "<what this video teaches>",
+        "why": "<why this specific resource for this specific step>",
+        "watchFrom": "<MM:SS>",
+        "watchTo": "<MM:SS>",
+        "watchMinutes": <number>
+      },
+      "supplementary": []
     }
   }
 }`;
+}
+
+function buildUserPrompt(
+  dayNumber: number,
+  goalLine: string,
+  timeline: number,
+  dailyTimeAvailable: number,
+  phase: Phase,
+  week: number,
+  dayInPhase: number,
+  stoneProfile: Agent2ProfileOutput,
+  ragContext: string,
+  previousTasksContext?: string,
+): string {
+  const sp = stoneProfile.stoneProfile;
+  return `
+ORIGINAL GOAL: "${goalLine}"
+TIMELINE: ${timeline} days | DAILY TIME: ${dailyTimeAvailable} min
+
+TODAY: Day ${dayNumber} | Phase ${phase.phaseNumber} ("${phase.phaseName}") | Week ${week} | Day ${dayInPhase} of Phase
+
+PHASE CONTEXT:
+- Primary Goals: ${phase.primaryGoals.join('; ')}
+- Key Milestones: ${phase.keyMilestones.slice(0, 3).join('; ')}
+- Science Rationale: ${phase.scienceRationale}
+- Focus Areas: ${JSON.stringify(phase.focusAreas)}
+${phase.adaptationRules ? `- If completing easily: ${phase.adaptationRules.if_completing_easily}` : ''}
+${phase.adaptationRules ? `- If struggling: ${phase.adaptationRules.if_struggling}` : ''}
+
+USER BEHAVIORAL PROFILE:
+- Archetype: ${sp.userArchetype}
+- Primary Stone: ${sp.primaryStone}
+- Active Stones: ${sp.stones.map(s => `${s.type} [${s.severity}]`).join(', ')}
+- Agent Guidance: ${sp.agent3Guidance.join(' | ')}
+
+${ragContext ? `EXPERT SCIENCE CONTEXT (use for coaching cues and whyThisMatters):
+${ragContext}
+
+` : ''}${previousTasksContext ? `RECENT TASK HISTORY (for progression continuity):
+${previousTasksContext}
+
+` : ''}Generate Day ${dayNumber}'s task. Apply ALL delivery rules for the detected stones listed above.
+`.trim();
+}
+
+// ─── Validate & Normalize ─────────────────────────────────────────────────────
+
+function validateAndNormalize(
+  raw: unknown,
+  dayNumber: number,
+  phaseNumber: number,
+  week: number,
+  dailyTimeAvailable: number,
+): DailyTask {
+  const parsed = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
+  const task   = (typeof parsed.task === 'object' && parsed.task !== null
+    ? parsed.task : {}) as Record<string, unknown>;
+
+  // Steps
+  const rawSteps = Array.isArray(task.steps) ? task.steps : [];
+  const steps: TaskStep[] = rawSteps.map((s: unknown, i: number) => {
+    const st = (typeof s === 'object' && s !== null ? s : {}) as Record<string, unknown>;
+    return {
+      stepNumber:  typeof st.stepNumber  === 'number' ? st.stepNumber : i + 1,
+      instruction: typeof st.instruction === 'string' ? st.instruction : `Step ${i + 1}`,
+      duration:    typeof st.duration    === 'string' ? st.duration    : '5 minutes',
+      details:     st.details ?? undefined,
+      resource:    st.resource ?? undefined,
+      practice:    st.practice ?? undefined,
+    } as TaskStep;
+  });
+
+  if (steps.length === 0) {
+    steps.push({ stepNumber: 1, instruction: 'Complete today\'s practice.', duration: `${dailyTimeAvailable} minutes` });
+  }
+
+  // Clamp estimatedMinutes
+  const rawMin = typeof task.estimatedMinutes === 'number' ? task.estimatedMinutes : dailyTimeAvailable;
+  const estimatedMinutes = Math.min(rawMin, dailyTimeAvailable);
+
+  // Tips
+  const tips = Array.isArray(task.tips)
+    ? task.tips.filter((t): t is string => typeof t === 'string')
+    : ['Focus on consistency over perfection today.'];
+
+  // Resources
+  const rawResources = (typeof task.resources === 'object' && task.resources !== null
+    ? task.resources : {}) as Record<string, unknown>;
+  const resources = {
+    primary:       rawResources.primary ?? null,
+    supplementary: Array.isArray(rawResources.supplementary) ? rawResources.supplementary : [],
+  };
+
+  // successCriteria
+  const sc = (typeof task.successCriteria === 'object' && task.successCriteria !== null
+    ? task.successCriteria : {}) as Record<string, unknown>;
+
+  return {
+    day:   typeof parsed.day   === 'number' ? parsed.day   : dayNumber,
+    phase: typeof parsed.phase === 'number' ? parsed.phase : phaseNumber,
+    week:  typeof parsed.week  === 'number' ? parsed.week  : week,
+    task: {
+      title:           typeof task.title       === 'string' ? task.title       : 'Today\'s Practice',
+      description:     typeof task.description === 'string' ? task.description : '',
+      estimatedMinutes,
+      steps,
+      tips,
+      successCriteria: {
+        primary: typeof sc.primary === 'string' ? sc.primary : 'Complete all steps.',
+        bonus:   typeof sc.bonus   === 'string' ? sc.bonus   : undefined,
+      },
+      whyThisMatters:      typeof task.whyThisMatters  === 'string'   ? task.whyThisMatters as string : '',
+      commonMistakes:      Array.isArray(task.commonMistakes)         ? task.commonMistakes as string[] : undefined,
+      buildingOn:          Array.isArray(task.buildingOn)             ? task.buildingOn as string[] : undefined,
+      nextUp:              typeof task.nextUp            === 'string'  ? task.nextUp as string : undefined,
+      adaptations_applied: (typeof task.adaptations_applied === 'object' && task.adaptations_applied !== null)
+        ? task.adaptations_applied as Record<string, string> : undefined,
+      resources: resources as DailyTask['task']['resources'],
+    },
+  };
+}
+
+// ─── Main Export ──────────────────────────────────────────────────────────────
 
 export async function generateTask(
   dayNumber: number,
   roadmap: Agent3Output,
-  stoneAnswers: StoneAnswer[],
+  stoneProfile: Agent2ProfileOutput,
   dailyTimeAvailable: number,
   previousTasksContext?: string,
   category?: string,
-  skillLevel?: 'beginner' | 'intermediate' | 'advanced'
+  skillLevel?: 'beginner' | 'intermediate' | 'advanced',
+  ragContext?: string,
 ): Promise<DailyTask> {
-  // Determine which phase and week this day belongs to
-  const totalDays = roadmap.roadmap.totalDays;
-  const phases = roadmap.roadmap.phases;
+  const phases                       = roadmap.roadmap.phases;
+  const { phase, week, dayInPhase }  = resolvePhaseForDay(phases, dayNumber);
+  const detectedStones               = stoneProfile.stoneProfile.stones.map(s => s.type as StoneType);
 
-  let currentPhase = phases[0];
-  let currentWeek = 1;
+  // Infer domain from domainPedagogy string (e.g. "Sports Periodization" → "Kinesthetic")
+  const pedagogy = roadmap.domainPedagogy?.toLowerCase() ?? '';
+  let domain = 'Lifestyle';
+  if (pedagogy.includes('spaced repetition') || pedagogy.includes('interleaving')) domain = 'Cognitive';
+  else if (pedagogy.includes('periodization'))                                      domain = 'Kinesthetic';
+  else if (pedagogy.includes('build') && pedagogy.includes('convert'))             domain = 'Career';
+  else if (pedagogy.includes('divergent') || pedagogy.includes('convergent'))      domain = 'Creative';
+  else if (pedagogy.includes('behavioral activation'))                             domain = 'Health';
+  else if (pedagogy.includes('keystone') || pedagogy.includes('identity'))        domain = 'Lifestyle';
+  else if (pedagogy.includes('knowledge laddering'))                               domain = 'Financial';
 
-  for (const phase of phases) {
-    const phaseStartDay = phase.weeks[0] * 7 - 6;
-    const phaseEndDay = phase.weeks[phase.weeks.length - 1] * 7;
+  // Goal line from phase context
+  const goalLine = phase.primaryGoals?.[0] ?? 'achieve the goal';
 
-    if (dayNumber >= phaseStartDay && dayNumber <= phaseEndDay) {
-      currentPhase = phase;
-      currentWeek = Math.ceil(dayNumber / 7);
-      break;
-    }
+  // Auto-fetch RAG if not provided
+  let science = ragContext ?? '';
+  if (!science) {
+    const query = `${phase.phaseName} ${stoneProfile.stoneProfile.primaryStone} daily practice habit coaching`;
+    science = await retrieveKnowledgeSemantic({ query, matchCount: 2 });
   }
 
-  const userPrompt = `
-Generate a specific, actionable task for Day ${dayNumber} of the curriculum.
+  const systemPrompt = buildSystemPrompt(domain, detectedStones, dailyTimeAvailable);
+  const userPrompt   = buildUserPrompt(
+    dayNumber, goalLine, roadmap.roadmap.totalDays, dailyTimeAvailable,
+    phase, week, dayInPhase, stoneProfile, science, previousTasksContext,
+  );
 
-Curriculum Context:
-${JSON.stringify(roadmap.roadmap, null, 2)}
-
-Current Phase: ${currentPhase.phaseName} (Phase ${currentPhase.phaseNumber})
-Current Week: ${currentWeek}
-Day: ${dayNumber} of ${totalDays}
-
-User Context:
-${JSON.stringify(stoneAnswers, null, 2)}
-
-Daily Time Budget: ${dailyTimeAvailable} minutes
-
-${previousTasksContext ? `Recent Tasks Context:\n${previousTasksContext}` : ''}
-
-Create a task that:
-1. Aligns with Phase ${currentPhase.phaseNumber}'s goals: ${currentPhase.primaryGoals.join(', ')}
-2. Fits within ${dailyTimeAvailable} minutes
-3. Is specific and actionable (not vague)
-4. Builds naturally on previous days
-5. Adapts based on user's stone answers
-6. Includes clear steps, tips, and success criteria
-
-Make it feel like a personal coach wrote this task specifically for this user.
-`;
-
-  try {
-    // Use economy model (8b) for task generation - faster and higher rate limits
-    const completion = await callGroqWithFallback({
+  const completion = await callGroqWithFallback(
+    {
       messages: [
-        {
-          role: 'system',
-          content: AGENT4_SYSTEM_PROMPT
-        },
-        {
-          role: 'user',
-          content: userPrompt
-        }
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userPrompt   },
       ],
-      temperature: 0.6,
-      max_tokens: 3000,
-      response_format: { type: 'json_object' }
-    }, 'economy'); // Start with 8b model to avoid rate limits
+      temperature:     0.5,
+      max_tokens:      2500,
+      response_format: { type: 'json_object' },
+    },
+    'economy',
+  );
 
-    const response = completion.choices[0]?.message?.content;
-    if (!response) {
-      throw new Error('No response from Agent 4');
+  const content = completion.choices[0]?.message?.content;
+  if (!content) throw new Error('Agent 4: No response from model');
+
+  const raw    = JSON.parse(content) as unknown;
+  const result = validateAndNormalize(raw, dayNumber, phase.phaseNumber, week, dailyTimeAvailable);
+
+  // Augment with static resource library if category provided and LLM left resources empty
+  if (category && !result.task.resources?.primary) {
+    try {
+      const matched = await matchTaskToResources(
+        result.task.title,
+        result.task.description,
+        category,
+        skillLevel ?? 'beginner',
+      );
+      result.task.resources = {
+        primary:       matched.primary,
+        supplementary: matched.supplementary,
+      };
+    } catch {
+      // Non-blocking — resource matching is best-effort
     }
-
-    const result = JSON.parse(response) as DailyTask;
-
-    // Match resources to this task
-    if (category) {
-      try {
-        console.log(`🔍 Matching resources for: "${result.task.title}"`);
-        const matchedResources = await matchTaskToResources(
-          result.task.title,
-          result.task.description,
-          category,
-          skillLevel || 'beginner'
-        );
-
-        // Add resources to task
-        result.task.resources = {
-          primary: matchedResources.primary,
-          supplementary: matchedResources.supplementary
-        };
-
-        console.log(`✅ Resources matched:`,
-          matchedResources.primary ? `${matchedResources.primary.title} (${matchedResources.matchMethod})` : 'none');
-      } catch (error) {
-        console.error('Resource matching failed:', error);
-        // Don't block task generation if resource matching fails
-        result.task.resources = {
-          primary: null,
-          supplementary: []
-        };
-      }
-    }
-
-    return result;
-
-  } catch (error) {
-    console.error('Agent 4 Error:', error);
-    throw new Error(`Task generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
+
+  return result;
 }

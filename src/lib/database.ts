@@ -22,8 +22,8 @@ export async function createGoal(
   try {
     // Trim goal_analysis to essential fields only — prevents JSONB payload timeouts
     const trimmedAnalysis = goalAnalysis?.goalAnalysis ? {
-      goalType: goalAnalysis.goalAnalysis.goalType,
       domain: goalAnalysis.goalAnalysis.domain,
+      category: goalAnalysis.goalAnalysis.category,
       complexity: goalAnalysis.goalAnalysis.complexity,
       successCriteria: goalAnalysis.goalAnalysis.successCriteria,
       keyMilestones: goalAnalysis.goalAnalysis.keyMilestones,

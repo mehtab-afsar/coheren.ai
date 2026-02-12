@@ -1,94 +1,21 @@
-# Self-Determination Theory (SDT)
-**Source:** Ryan & Deci (2000) - American Psychologist
+# Self-Determination Theory — Ryan & Deci (2000)
 
-## Core Principle
-Humans have three innate psychological needs that, when satisfied, lead to enhanced self-motivation, mental health, and well-being.
+## The Three Basic Psychological Needs
+Self-Determination Theory proposes that humans have three innate psychological needs. When all three are satisfied, motivation, well-being, and persistence increase. When any one is frustrated, motivation deteriorates.
+1. AUTONOMY — the feeling of choice and self-direction. "I choose to do this" vs. "I have to do this." Autonomy does not mean absence of structure; it means that the person endorses the behavior as their own.
+2. COMPETENCE — the feeling of effectiveness and growing mastery. People need to experience progress and success, not just effort. Early wins are critical for building competence.
+3. RELATEDNESS — the sense of connection to others and belonging. Habits embedded in social contexts (groups, accountability partners, community) are far more durable than solitary habits.
 
-## The Three Basic Needs
+## Intrinsic vs. Extrinsic Motivation
+Intrinsic motivation (doing something because it is inherently interesting or satisfying) is more durable and associated with greater creativity and deeper learning.
+Extrinsic motivation (doing something for a reward, grade, or to avoid punishment) can undermine intrinsic motivation if applied to activities that were previously intrinsically motivated — the "overjustification effect."
+The goal of great coaching is to help users find intrinsic reasons to continue (growth, mastery, identity) rather than relying on external rewards (streaks, badges, points) that fade.
 
-### 1. Autonomy
-- Feeling of choice and self-direction
-- Actions feel self-endorsed, not controlled
-- "I choose to do this" vs "I have to do this"
+## Coaching Language for Autonomy Support
+Use language that supports autonomy: "You might consider..." "When you're ready..." "What feels right to you?" "Here are some options."
+Avoid controlling language: "You must..." "You have to..." "You should..." "You need to..."
+Ask about the person's own reasons for change rather than providing external reasons. Their internal reasons are more persistent than yours.
 
-**For Habit Formation:**
-- Give users choice in task timing/order
-- Avoid controlling language ("you must")
-- Let users customize their roadmap
-
-### 2. Competence
-- Feeling effective and capable
-- Experiencing mastery and growth
-- Optimal challenge level (not too easy, not too hard)
-
-**For Habit Formation:**
-- Start with achievable tasks
-- Celebrate progress visibly
-- Gradually increase difficulty
-- Provide clear feedback on improvement
-
-### 3. Relatedness
-- Feeling connected to others
-- Sense of belonging and care
-- Meaningful social bonds
-
-**For Habit Formation:**
-- Warm, personalized AI coaching tone
-- Acknowledge user's journey
-- Future: accountability partners, community
-
-## Motivation Continuum
-
-```
-Amotivation → External → Introjected → Identified → Integrated → Intrinsic
-(No motivation)  (Rewards)   (Guilt/Pride)  (Personal value)  (Part of self)  (Pure enjoyment)
-```
-
-**Goal:** Move users from external motivation toward integrated/intrinsic motivation.
-
-## Key Research Findings
-
-1. **Autonomy-supportive environments** increase intrinsic motivation
-2. **Tangible rewards** can undermine intrinsic motivation
-3. **Positive feedback** enhances motivation when it affirms competence
-4. **Controlling language** decreases motivation
-5. **Choice** increases persistence and performance
-
-## Application in CONSIST
-
-### Onboarding
-- Ask about preferences (autonomy)
-- Start with easy wins (competence)
-- Use warm, supportive tone (relatedness)
-
-### Daily Tasks
-- Offer task flexibility where possible
-- Match difficulty to skill level
-- Celebrate completions genuinely
-
-### When Struggling
-- Don't guilt-trip ("you should have...")
-- Acknowledge difficulty with empathy
-- Offer adjusted plans (restore autonomy)
-
-### Weekly Reviews
-- Highlight competence growth
-- Reinforce personal values behind goal
-- Connect progress to larger purpose
-
-## Coaching Language Examples
-
-**Autonomy-Supportive:**
-- "You might consider..."
-- "When you're ready..."
-- "What feels right for you?"
-
-**Competence-Building:**
-- "You've shown you can do this"
-- "Building on yesterday's progress..."
-- "This is within your reach"
-
-**Relatedness-Affirming:**
-- "I'm here to support you"
-- "Many people find this challenging"
-- "You're not alone in this journey"
+## Application: The Competence Ramp
+Start users at the level where they experience immediate success (below their current ability). This satisfies the competence need from day one.
+Gradually increase challenge as competence grows — the "flow channel" where challenge slightly exceeds current skill. Too easy = boredom. Too hard = anxiety. The right match = engagement and intrinsic motivation.

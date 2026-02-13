@@ -10,8 +10,15 @@
  *   economy   — Agent 4             (simple, high-volume)
  *
  * Provider priority order (first available wins):
- *   reasoning: Groq 70b → Anthropic Claude Sonnet 4.5
- *   economy:   Groq 8b  → Anthropic Claude Haiku 4.5
+ *   reasoning: Groq 70b  [→ add anthropicReasoning here when ready]
+ *   economy:   Groq 8b   [→ add anthropicEconomy here when ready]
+ *
+ * Adding Anthropic:
+ *   1. npm install @anthropic-ai/sdk
+ *   2. Add VITE_ANTHROPIC_API_KEY to .env
+ *   3. Import and add the anthropicReasoning / anthropicEconomy adapters
+ *      from src/lib/ai-router-anthropic.ts (create when needed — see ARCHITECTURE.md)
+ *   4. Push them into REASONING_CHAIN / ECONOMY_CHAIN below
  *
  * Adding a new provider: implement ProviderAdapter and push to the chain arrays.
  * Switching primary:     reorder the arrays — no agent changes needed.
@@ -77,77 +84,18 @@ const groqEconomy: ProviderAdapter = {
   },
 };
 
-// ── Anthropic adapters ────────────────────────────────────────────────────────
-// Activated when VITE_ANTHROPIC_API_KEY is set.
-// SDK is loaded dynamically so the app bundle is not affected when key is absent.
-
-async function callAnthropic(
-  model: string,
-  params: RouterCallParams,
-): Promise<RouterCompletion> {
-  // Surface a clear 503 if the SDK package is not installed
-  let AnthropicSDK: typeof import('@anthropic-ai/sdk').default;
-  try {
-    AnthropicSDK = (await import('@anthropic-ai/sdk')).default;
-  } catch {
-    throw Object.assign(
-      new Error('[AI Router] @anthropic-ai/sdk not installed — run: npm install @anthropic-ai/sdk'),
-      { status: 503 },
-    );
-  }
-
-  const client = new AnthropicSDK({
-    apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY,
-    dangerouslyAllowBrowser: true,
-  });
-
-  const systemMsg = params.messages.find(m => m.role === 'system')?.content ?? '';
-  const userMsgs  = params.messages
-    .filter(m => m.role !== 'system')
-    .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
-
-  // Anthropic has no json_object param — inject the requirement into the system prompt
-  const system = params.response_format?.type === 'json_object'
-    ? `${systemMsg}\n\nYou MUST respond with valid JSON only. No markdown fences, no prose outside JSON.`
-    : systemMsg;
-
-  const response = await client.messages.create({
-    model,
-    max_tokens:  params.max_tokens  ?? 2000,
-    temperature: params.temperature ?? 0.3,
-    system,
-    messages: userMsgs,
-  });
-
-  const content = response.content[0]?.type === 'text' ? response.content[0].text : '';
-  return { content, provider: 'anthropic', model };
-}
-
-const anthropicReasoning: ProviderAdapter = {
-  name:  'anthropic',
-  model: 'claude-sonnet-4-5-20250929',
-  isAvailable: () => Boolean(import.meta.env.VITE_ANTHROPIC_API_KEY),
-  call: (params) => callAnthropic('claude-sonnet-4-5-20250929', params),
-};
-
-const anthropicEconomy: ProviderAdapter = {
-  name:  'anthropic',
-  model: 'claude-haiku-4-5-20251001',
-  isAvailable: () => Boolean(import.meta.env.VITE_ANTHROPIC_API_KEY),
-  call: (params) => callAnthropic('claude-haiku-4-5-20251001', params),
-};
-
 // ── Provider chains ───────────────────────────────────────────────────────────
 // Reorder these arrays to change provider priority without touching agents.
+// To add Anthropic: push anthropicReasoning / anthropicEconomy after installing the SDK.
 
 const REASONING_CHAIN: ProviderAdapter[] = [
-  groqReasoning,      // Primary:  Groq 70b     (free, high-quality)
-  anthropicReasoning, // Fallback: Claude Sonnet 4.5
+  groqReasoning, // Primary: Groq 70b (free tier)
+  // anthropicReasoning — add when VITE_ANTHROPIC_API_KEY + @anthropic-ai/sdk are ready
 ];
 
 const ECONOMY_CHAIN: ProviderAdapter[] = [
-  groqEconomy,        // Primary:  Groq 8b      (free, high rate-limit)
-  anthropicEconomy,   // Fallback: Claude Haiku 4.5
+  groqEconomy, // Primary: Groq 8b (free tier, high rate-limit)
+  // anthropicEconomy — add when VITE_ANTHROPIC_API_KEY + @anthropic-ai/sdk are ready
 ];
 
 // ── Core router ───────────────────────────────────────────────────────────────
@@ -162,7 +110,7 @@ async function routeCall(
   if (available.length === 0) {
     throw new Error(
       `[AI Router] No providers configured for ${tierLabel} tier. ` +
-      'Set VITE_GROQ_API_KEY or VITE_ANTHROPIC_API_KEY in .env.',
+      'Set VITE_GROQ_API_KEY in .env.',
     );
   }
 

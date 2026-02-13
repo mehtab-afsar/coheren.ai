@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useRef, useEffect } from 'react';
+import { motion, useScroll, useTransform, type MotionStyle } from 'framer-motion';
 import {
   CheckCircle2,
   X,
@@ -14,6 +14,150 @@ import { HeroSection } from './HeroSection';
 import { FloatingNav } from '@shared/components/ui/floating-navbar';
 import { StickyScroll } from '@shared/components/ui/sticky-scroll-reveal';
 import { GlowingEffect } from '@shared/components/ui/glowing-effect';
+
+const TOTAL_FRAMES = 192;
+
+// Scroll thresholds: each card reveals over a 0.12 window, spaced 0.2 apart
+const CARD_WINDOWS = [
+  [0.10, 0.22], // top-left
+  [0.30, 0.42], // top-right
+  [0.50, 0.62], // bottom-left
+  [0.70, 0.82], // bottom-right
+] as const;
+
+const SCIENCE_CARDS = [
+  {
+    title: 'Stanford BJ Fogg Model',
+    desc: "Built on BJ Fogg's Tiny Habits — motivation alone fails. We pair the right behavior with the right moment and make it tiny enough to always win.",
+    foot: 'Motivation × Ability × Prompt',
+    dot: 'bg-violet-500',
+    side: 'left',
+  },
+  {
+    title: '200+ Peer-Reviewed Papers',
+    desc: 'Every nudge and recalibration is derived from published research on habit formation, self-efficacy, and intrinsic motivation.',
+    stats: [['66', 'days to habit'], ['3×', 'retention'], ['91%', 'clarity']] as [string, string][],
+    side: 'right',
+  },
+  {
+    title: 'Dopamine-Loop Design',
+    desc: 'Temporal Motivation Theory — urgency and reward proximity drive action. One task per day creates a dopamine loop your brain learns to crave.',
+    bars: true,
+    side: 'left',
+  },
+  {
+    title: 'Real-World Testing',
+    desc: 'Stress-tested across goals from "run a marathon" to "learn ML" — in every case the AI adapted without breaking.',
+    foot: 'Fitness · Writing · Coding · Finance · Language',
+    dot: 'bg-amber-500',
+    side: 'right',
+  },
+] as const;
+
+function ScienceCard({ card, style }: { card: typeof SCIENCE_CARDS[number]; style: MotionStyle }) {
+  return (
+    <motion.div
+      style={style}
+      className="flex-1 flex flex-col justify-center gap-1 text-center cursor-default"
+      whileHover={{ scale: 1.12 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+    >
+      <h3 className="text-base font-semibold text-white leading-tight tracking-tight">{card.title}</h3>
+      <p className="text-sm text-white/55 leading-snug">{card.desc}</p>
+    </motion.div>
+  );
+}
+
+function ScienceSection() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: containerRef,
+    offset: ['start start', 'end end'],
+  });
+
+  // Drive frame index imperatively (no re-render)
+  useEffect(() => {
+    return scrollYProgress.on('change', v => {
+      if (!imgRef.current) return;
+      const idx = Math.min(Math.floor(v * TOTAL_FRAMES), TOTAL_FRAMES - 1);
+      imgRef.current.src = `/science-frames/frame_${String(idx).padStart(4, '0')}.jpg`;
+    });
+  }, [scrollYProgress]);
+
+  // Each card: opacity + translate from its respective side
+  const c0Opacity = useTransform(scrollYProgress, [CARD_WINDOWS[0][0], CARD_WINDOWS[0][1]], [0, 1]);
+  const c0X      = useTransform(scrollYProgress, [CARD_WINDOWS[0][0], CARD_WINDOWS[0][1]], [-32, 0]);
+  const c1Opacity = useTransform(scrollYProgress, [CARD_WINDOWS[1][0], CARD_WINDOWS[1][1]], [0, 1]);
+  const c1X      = useTransform(scrollYProgress, [CARD_WINDOWS[1][0], CARD_WINDOWS[1][1]], [32, 0]);
+  const c2Opacity = useTransform(scrollYProgress, [CARD_WINDOWS[2][0], CARD_WINDOWS[2][1]], [0, 1]);
+  const c2X      = useTransform(scrollYProgress, [CARD_WINDOWS[2][0], CARD_WINDOWS[2][1]], [-32, 0]);
+  const c3Opacity = useTransform(scrollYProgress, [CARD_WINDOWS[3][0], CARD_WINDOWS[3][1]], [0, 1]);
+  const c3X      = useTransform(scrollYProgress, [CARD_WINDOWS[3][0], CARD_WINDOWS[3][1]], [32, 0]);
+
+  const cardMotionStyles = [
+    { opacity: c0Opacity, x: c0X },
+    { opacity: c1Opacity, x: c1X },
+    { opacity: c2Opacity, x: c2X },
+    { opacity: c3Opacity, x: c3X },
+  ] as const;
+
+  return (
+    <section id="science" className="relative z-10 scroll-mt-20" style={{ backgroundColor: '#000000' }}>
+      {/* 500vh scroll container — drives both frame scrubbing and card reveals */}
+      <div ref={containerRef} style={{ height: '500vh' }}>
+        <div className="sticky top-0 h-screen flex flex-col items-center justify-center px-6 gap-6 overflow-hidden">
+
+          {/* Heading */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="text-center"
+          >
+            <h2 className="text-4xl font-light tracking-tight text-white sm:text-5xl" style={{ letterSpacing: '-0.03em' }}>
+              The science behind Coheren
+            </h2>
+            <p className="mt-3 text-base text-white/40 max-w-md mx-auto leading-relaxed font-light">
+              Our AI doesn't guess. It knows.
+            </p>
+          </motion.div>
+
+          {/* Brain full-width, cards overlaid on top */}
+          <div className="relative w-full max-w-6xl">
+
+            {/* Brain — fills the container */}
+            <img
+              ref={imgRef}
+              src="/science-frames/frame_0000.jpg"
+              className="w-full"
+              style={{ aspectRatio: '16/9', display: 'block', mixBlendMode: 'screen' }}
+              alt="Brain animation"
+            />
+
+            {/* Cover bottom-left watermark */}
+            <div className="absolute bottom-0 left-0 w-32 h-14 bg-black" />
+
+            {/* Left column — pinned top to bottom, cards fill equally */}
+            <div className="absolute top-4 bottom-4 left-4 w-[26%] flex flex-col gap-3">
+              <ScienceCard card={SCIENCE_CARDS[0]} style={cardMotionStyles[0] as MotionStyle} />
+              <ScienceCard card={SCIENCE_CARDS[2]} style={cardMotionStyles[2] as MotionStyle} />
+            </div>
+
+            {/* Right column */}
+            <div className="absolute bottom-0 right-0 w-[28%] h-[30%] bg-black" />
+            <div className="absolute top-4 bottom-4 right-4 w-[26%] flex flex-col gap-3">
+              <ScienceCard card={SCIENCE_CARDS[1]} style={cardMotionStyles[1] as MotionStyle} />
+              <ScienceCard card={SCIENCE_CARDS[3]} style={cardMotionStyles[3] as MotionStyle} />
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 interface LandingPageProps {
   onGetStarted?: (goal: string) => void;
@@ -510,98 +654,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
 
 
       {/* The Science Behind Coheren */}
-      <section id="science" className="relative z-10 overflow-hidden py-24 px-4 lg:px-8 scroll-mt-20" style={{ backgroundColor: '#0A0A0A' }}>
-        <div className="max-w-5xl mx-auto">
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-5xl font-light tracking-tight text-white sm:text-6xl" style={{ letterSpacing: '-0.03em' }}>
-              The science behind Coheren
-            </h2>
-            <p className="mt-4 text-lg text-white/40 max-w-xl mx-auto leading-relaxed font-light">
-              Our AI doesn't guess. It knows.
-            </p>
-          </motion.div>
-
-          {/* 2×2 grid — curtain reveal from center outwards */}
-          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {[
-              {
-                title: 'Stanford BJ Fogg Model',
-                desc: "Coheren's task engine is built directly on BJ Fogg's Tiny Habits research — motivation alone fails. We pair the right behavior with the right moment and make it tiny enough to always win.",
-                foot: 'Motivation × Ability × Prompt',
-                dot: 'bg-violet-500',
-              },
-              {
-                title: '200+ Peer-Reviewed Papers',
-                desc: 'Every nudge, cadence, and recalibration is derived from published research on habit formation, self-efficacy, and intrinsic motivation — not guesswork.',
-                stats: [['66', 'days avg to habit'], ['3×', 'higher retention'], ['91%', 'clarity']],
-              },
-              {
-                title: 'Dopamine-Loop Design',
-                desc: 'We apply Temporal Motivation Theory — urgency and reward proximity drive action. One task per day creates a daily dopamine loop your brain learns to crave.',
-                bars: true,
-              },
-              {
-                title: 'Real-World Testing',
-                desc: 'Stress-tested across goals from "run a marathon" to "write a novel" to "learn ML" — in every case the AI adapted without breaking.',
-                foot: 'Fitness · Writing · Coding · Finance · Language',
-                dot: 'bg-amber-500',
-              },
-            ].map((card, index) => (
-              <motion.li
-                key={index}
-                className="min-h-[18rem] list-none"
-                initial={{ opacity: 0, scale: 0.88 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true, margin: '-60px' }}
-                transition={{ duration: 0.55, delay: index * 0.08, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <div className="relative h-full rounded-2xl border border-white/[0.08] bg-white/[0.03] p-2 transition-all duration-300 hover:border-violet-500/40">
-                  <GlowingEffect spread={36} glow proximity={80} inactiveZone={0.01} borderWidth={2} disabled={false} />
-                  <div className="relative flex h-full flex-col justify-between gap-4 overflow-hidden rounded-xl border border-white/[0.05] bg-white/[0.02] p-7">
-                    <div className="flex flex-col gap-3">
-                      <h3 className="text-xl font-semibold text-white leading-snug tracking-tight">{card.title}</h3>
-                      <p className="text-sm text-white/50 leading-relaxed">{card.desc}</p>
-                    </div>
-                    {card.foot && (
-                      <div className="flex items-center gap-2">
-                        <div className={`h-1.5 w-1.5 rounded-full ${card.dot}`} />
-                        <span className="text-xs text-white/30">{card.foot}</span>
-                      </div>
-                    )}
-                    {card.stats && (
-                      <div className="flex items-center gap-6">
-                        {card.stats.map(([stat, label]) => (
-                          <div key={label} className="flex flex-col">
-                            <span className="text-base font-bold text-white">{stat}</span>
-                            <span className="text-[10px] text-white/30 leading-tight">{label}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {card.bars && (
-                      <div className="flex items-center gap-2">
-                        <div className="flex gap-1">
-                          {[1,2,3,4,5].map(i => (
-                            <div key={i} className={`h-1.5 rounded-full ${i <= 4 ? 'bg-emerald-500' : 'bg-white/10'}`} style={{ width: `${i * 6}px` }} />
-                          ))}
-                        </div>
-                        <span className="text-xs text-white/30">momentum builds daily</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </motion.li>
-            ))}
-          </ul>
-        </div>
-      </section>
+      <ScienceSection />
 
       {/* Footer */}
       <footer className="relative z-10 border-t border-slate-200 bg-white pb-6 pt-16 lg:pb-8 lg:pt-24">

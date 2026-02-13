@@ -17,9 +17,10 @@ export const ragSupabase = createClient(
   supabaseAnonKey ?? 'placeholder-anon-key',
   {
     auth: {
-      persistSession:   false,
-      autoRefreshToken: false,
+      persistSession:    false,
+      autoRefreshToken:  false,
       detectSessionInUrl: false,
+      storageKey: 'sb-rag-anon-client', // unique key prevents "Multiple GoTrueClient" warning
     },
   }
 );

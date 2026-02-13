@@ -14,7 +14,7 @@ import { useDashboardNav } from './hooks/useDashboardNav';
 
 export default function Dashboard() {
   const { currentView, setCurrentView, sidebarOpen, setSidebarOpen } = useDashboardNav();
-  const { checkpointData, isRecalibrating, handleCheckpointComplete } = useCheckpoint();
+  const { checkpointData, isRecalibrating, recalibrationResult, handleCheckpointComplete } = useCheckpoint();
 
   const currentDay = useStore((state) => state.currentDay);
 
@@ -77,6 +77,7 @@ export default function Dashboard() {
               masteringAreas={checkpointData.masteringAreas}
               onComplete={handleCheckpointComplete}
               isRecalibrating={isRecalibrating}
+              recalibrationResult={recalibrationResult}
             />
           </div>
         </div>

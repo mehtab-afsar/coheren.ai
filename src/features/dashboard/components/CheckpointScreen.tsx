@@ -23,6 +23,12 @@ interface CheckpointScreenProps {
   masteringAreas?: string[];
   onComplete: (feedback: CheckpointFeedback) => void;
   isRecalibrating?: boolean;
+  /** Agent 5 output — surfaced after recalibration completes */
+  recalibrationResult?: {
+    coachMessage: string;
+    nextSprintFocus: string;
+    stoneDirective?: string;
+  } | null;
 }
 
 export interface CheckpointFeedback {
@@ -42,7 +48,8 @@ export default function CheckpointScreen({
   strugglingAreas = [],
   masteringAreas = [],
   onComplete,
-  isRecalibrating = false
+  isRecalibrating = false,
+  recalibrationResult = null,
 }: CheckpointScreenProps) {
   const [confidence, setConfidence] = useState(5);
   const [energy, setEnergy] = useState<CheckpointFeedback['energyLevel']>('good');
@@ -313,6 +320,77 @@ export default function CheckpointScreen({
                         ))}
                       </ul>
                     </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Your Next Sprint Focus (Agent 5 output) ─────────────────── */}
+              {recalibrationResult && (
+                <div style={{
+                  marginTop: tokens.spacing.xl,
+                  padding: tokens.spacing.lg,
+                  backgroundColor: `${tokens.colors.primary}08`,
+                  borderLeft: `4px solid ${tokens.colors.primary}`,
+                  borderRadius: `0 ${tokens.borderRadius.xl} ${tokens.borderRadius.xl} 0`,
+                }}>
+                  <p style={{
+                    fontSize: tokens.typography.sizes.xs,
+                    fontWeight: tokens.typography.weights.medium,
+                    color: tokens.colors.primary,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                    marginBottom: tokens.spacing.sm,
+                  }}>
+                    Your Consistency Plan for Sprint {sprintNumber + 1}
+                  </p>
+
+                  {/* Coach's personalised message */}
+                  <p style={{
+                    fontSize: tokens.typography.sizes.sm,
+                    color: tokens.colors.text.primary,
+                    lineHeight: 1.6,
+                    marginBottom: recalibrationResult.stoneDirective ? tokens.spacing.md : 0,
+                    fontStyle: 'italic',
+                  }}>
+                    &ldquo;{recalibrationResult.coachMessage}&rdquo;
+                  </p>
+
+                  {/* Stone-specific directive (the most actionable piece) */}
+                  {recalibrationResult.stoneDirective && (
+                    <div style={{
+                      marginTop: tokens.spacing.sm,
+                      padding: tokens.spacing.md,
+                      backgroundColor: tokens.colors.surface,
+                      borderRadius: tokens.borderRadius.lg,
+                      border: `1px solid ${tokens.colors.border}`,
+                    }}>
+                      <p style={{
+                        fontSize: tokens.typography.sizes.xs,
+                        fontWeight: tokens.typography.weights.medium,
+                        color: tokens.colors.text.secondary,
+                        marginBottom: tokens.spacing.xs,
+                      }}>
+                        Coach's directive for your profile:
+                      </p>
+                      <p style={{
+                        fontSize: tokens.typography.sizes.sm,
+                        color: tokens.colors.text.primary,
+                        lineHeight: 1.6,
+                      }}>
+                        {recalibrationResult.stoneDirective}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Next sprint focus theme */}
+                  {recalibrationResult.nextSprintFocus && (
+                    <p style={{
+                      fontSize: tokens.typography.sizes.xs,
+                      color: tokens.colors.text.tertiary,
+                      marginTop: tokens.spacing.sm,
+                    }}>
+                      Sprint {sprintNumber + 1} focus: {recalibrationResult.nextSprintFocus}
+                    </p>
                   )}
                 </div>
               )}

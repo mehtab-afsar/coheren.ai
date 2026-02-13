@@ -18,7 +18,7 @@
  */
 
 import type { Agent1Output, AgentContext } from '@types-app/agents';
-import { callGroqWithFallback } from '@lib/groq-client';
+import { callReasoning } from '@lib/ai-router';
 
 const SYSTEM_PROMPT = `You are Agent 1: Goal Analyzer — a precision intelligence module.
 
@@ -187,7 +187,7 @@ function validateAndNormalize(raw: unknown): Agent1Output {
 }
 
 export async function analyzeGoal(context: AgentContext): Promise<Agent1Output> {
-  const response = await callGroqWithFallback({
+  const { content } = await callReasoning({
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: buildUserPrompt(context) },
@@ -196,8 +196,6 @@ export async function analyzeGoal(context: AgentContext): Promise<Agent1Output> 
     max_tokens: 1500,
     response_format: { type: 'json_object' },
   });
-
-  const content = response.choices[0]?.message?.content;
   if (!content) {
     throw new Error('Agent 1: No response received from model');
   }

@@ -17,7 +17,10 @@
     "supabase:status": "supabase status",
     "supabase:stop": "supabase stop",
     "supabase:restart": "supabase restart",
-    "supabase:logs": "supabase logs"
+    "supabase:logs": "supabase logs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.94.0",
@@ -37,6 +40,7 @@
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "@vitest/ui": "^4.0.18",
     "autoprefixer": "^10.4.23",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
@@ -50,6 +54,7 @@
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4",
     "vite-plugin-pwa": "^1.2.0",
+    "vitest": "^4.0.18",
     "workbox-window": "^7.4.0"
   }
 }

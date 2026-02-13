@@ -21,7 +21,7 @@ import type {
   StoneType,
   TaskStep,
 } from '@types-app/agents';
-import { callGroqWithFallback } from '@lib/groq-client';
+import { callEconomy, callReasoning } from '@lib/ai-router';
 import { matchTaskToResources } from '@lib/resourceMatcher';
 import { retrieveKnowledgeSemantic } from '@core/rag/semantic-retriever';
 
@@ -121,7 +121,10 @@ const DOMAIN_DELIVERY_CONTEXT: Record<string, string> = {
 - coaching_cue should highlight a professional principle or specific workflow tactic.`,
 
   Financial: `Domain: Financial Learning
-- Include a "Real Money Check" note: label each step as simulation or real action. Never directive about actual investments.
+- Label EVERY step explicitly as either "(Simulation)" or "(Real Action — only if ready)". Never mix both in the same step.
+- Step 1 is ALWAYS a learning/simulation step — never a real-money action on Day 1 of a phase.
+- Add a "Real Money Check" tip: "Before taking any real action with money, complete the simulation version first. Papertrading and hypothetical portfolios are valid practice."
+- Use plain definitions for every financial term: write "ETF (Exchange-Traded Fund — a basket of stocks)" not just "ETF".
 - coaching_cue should highlight a key risk/reward concept or mental model.`,
 
   Health: `Domain: Health & Wellness
@@ -138,7 +141,7 @@ const DOMAIN_DELIVERY_CONTEXT: Record<string, string> = {
 // ─── Phase Resolution ─────────────────────────────────────────────────────────
 // Uses durationDays accumulation — the old weeks[] arithmetic was fragile.
 
-function resolvePhaseForDay(
+export function resolvePhaseForDay(
   phases: Phase[],
   dayNumber: number,
 ): { phase: Phase; week: number; dayInPhase: number } {
@@ -185,6 +188,14 @@ Your job: Generate ONE specific, step-by-step task for today's curriculum day.
 ${domainCtx ? `── DOMAIN CONTEXT ──\n${domainCtx}\n` : ''}
 ── STONE-AWARE DELIVERY RULES ──
 ${stoneRules || 'No special delivery adjustments required.'}
+
+── DOMAIN + STONE TIEBREAKER ──
+If domain is Career AND FearOfFailure is an active stone:
+- KEEP the Experiment framing in the title (e.g. "Experiment: Write LinkedIn About section").
+- successCriteria.primary MUST name a specific deliverable — even a rough one counts.
+  Examples: "About section written (quality is irrelevant, existence is the goal)",
+            "Three job titles researched and noted down", "Email draft saved in drafts folder".
+- Do NOT use open-ended criteria such as "just try it" or "see what happens".
 
 ── GLOBAL RULES ──
 1. estimatedMinutes ≤ ${dailyTimeAvailable}. Never exceed the daily time budget.
@@ -292,6 +303,53 @@ ${previousTasksContext}
 `.trim();
 }
 
+// ─── URL Sanitizer ────────────────────────────────────────────────────────────
+// 8b model falls back to well-known placeholder video IDs (e.g. dQw4w9WgXcQ).
+// Convert any watch?v= URL with a placeholder ID (or any non-search watch URL
+// that the model made up) to a youtube.com/results?search_query= URL derived
+// from the task title so Cinema Mode always has a usable, searchable link.
+
+const PLACEHOLDER_VIDEO_IDS = new Set([
+  'dQw4w9WgXcQ', // Rick Astley — most common 8b fallback
+  'xvFZjo5PgG0', // another common placeholder
+  'VIDEO_ID',
+  'XXXXXXXXXX',
+]);
+
+export function sanitizeResourceUrl(url: unknown, taskTitle: string): string | null {
+  if (typeof url !== 'string' || !url.trim()) return null;
+
+  const raw = url.trim();
+
+  // Already a proper YouTube search URL — keep as-is
+  if (raw.includes('youtube.com/results?search_query=')) return raw;
+
+  // Detect watch?v= URLs — check if the video ID is a known placeholder
+  const watchMatch = raw.match(/[?&]v=([A-Za-z0-9_-]{6,12})/);
+  if (watchMatch) {
+    const videoId = watchMatch[1];
+    if (PLACEHOLDER_VIDEO_IDS.has(videoId)) {
+      // Rebuild as search URL from task title
+      const query = encodeURIComponent(taskTitle.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').trim());
+      return `https://www.youtube.com/results?search_query=${query}`;
+    }
+    // Non-placeholder watch URL — accept it (could be a real video the model recalled)
+    return raw;
+  }
+
+  // Any other URL format — keep as-is
+  return raw;
+}
+
+function sanitizeResourceObject(res: unknown, taskTitle: string): unknown {
+  if (typeof res !== 'object' || res === null) return res;
+  const r = res as Record<string, unknown>;
+  if (typeof r.url === 'string') {
+    return { ...r, url: sanitizeResourceUrl(r.url, taskTitle) ?? r.url };
+  }
+  return res;
+}
+
 // ─── Validate & Normalize ─────────────────────────────────────────────────────
 
 function validateAndNormalize(
@@ -305,6 +363,8 @@ function validateAndNormalize(
   const task   = (typeof parsed.task === 'object' && parsed.task !== null
     ? parsed.task : {}) as Record<string, unknown>;
 
+  const taskTitle = typeof task.title === 'string' ? task.title : 'daily practice';
+
   // Steps
   const rawSteps = Array.isArray(task.steps) ? task.steps : [];
   const steps: TaskStep[] = rawSteps.map((s: unknown, i: number) => {
@@ -314,13 +374,25 @@ function validateAndNormalize(
       instruction: typeof st.instruction === 'string' ? st.instruction : `Step ${i + 1}`,
       duration:    typeof st.duration    === 'string' ? st.duration    : '5 minutes',
       details:     st.details ?? undefined,
-      resource:    st.resource ?? undefined,
+      resource:    st.resource ? sanitizeResourceObject(st.resource, taskTitle) : undefined,
       practice:    st.practice ?? undefined,
     } as TaskStep;
   });
 
   if (steps.length === 0) {
     steps.push({ stepNumber: 1, instruction: 'Complete today\'s practice.', duration: `${dailyTimeAvailable} minutes` });
+  }
+
+  // Minimum 2-step guard — 8b model can collapse conflicting stone rules into 1 step.
+  // Split the only step into a low-friction starter + the main action.
+  if (steps.length === 1) {
+    const mainStep = steps[0];
+    steps.unshift({
+      stepNumber: 1,
+      instruction: 'Set up your space: open what you need, set a timer, and take one slow breath. You are ready.',
+      duration: '2 minutes',
+    });
+    mainStep.stepNumber = 2;
   }
 
   // Clamp estimatedMinutes
@@ -332,12 +404,16 @@ function validateAndNormalize(
     ? task.tips.filter((t): t is string => typeof t === 'string')
     : ['Focus on consistency over perfection today.'];
 
-  // Resources
+  // Resources — sanitize placeholder URLs produced by economy model
   const rawResources = (typeof task.resources === 'object' && task.resources !== null
     ? task.resources : {}) as Record<string, unknown>;
   const resources = {
-    primary:       rawResources.primary ?? null,
-    supplementary: Array.isArray(rawResources.supplementary) ? rawResources.supplementary : [],
+    primary:       rawResources.primary
+      ? sanitizeResourceObject(rawResources.primary, taskTitle)
+      : null,
+    supplementary: Array.isArray(rawResources.supplementary)
+      ? (rawResources.supplementary as unknown[]).map(r => sanitizeResourceObject(r, taskTitle))
+      : [],
   };
 
   // successCriteria
@@ -412,24 +488,46 @@ export async function generateTask(
     phase, week, dayInPhase, stoneProfile, science, previousTasksContext,
   );
 
-  const completion = await callGroqWithFallback(
-    {
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user',   content: userPrompt   },
-      ],
-      temperature:     0.5,
-      max_tokens:      2500,
-      response_format: { type: 'json_object' },
-    },
-    'economy',
-  );
+  const { content } = await callEconomy({
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user',   content: userPrompt   },
+    ],
+    temperature:     0.5,
+    max_tokens:      2500,
+    response_format: { type: 'json_object' },
+  });
 
-  const content = completion.choices[0]?.message?.content;
   if (!content) throw new Error('Agent 4: No response from model');
 
   const raw    = JSON.parse(content) as unknown;
-  const result = validateAndNormalize(raw, dayNumber, phase.phaseNumber, week, dailyTimeAvailable);
+  let result   = validateAndNormalize(raw, dayNumber, phase.phaseNumber, week, dailyTimeAvailable);
+
+  // If the 8b model collapsed to 1 real step (the min-step guard injected a generic starter),
+  // retry with the reasoning (70b) model for better stone-aware generation.
+  const isGenericStarter = result.task.steps[0]?.instruction.includes('Set up your space');
+  if (result.task.steps.length <= 2 && isGenericStarter) {
+    try {
+      const { content: retryContent } = await callReasoning({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user',   content: userPrompt   },
+        ],
+        temperature:     0.5,
+        max_tokens:      2500,
+        response_format: { type: 'json_object' },
+      });
+      if (retryContent) {
+        const retryRaw    = JSON.parse(retryContent) as unknown;
+        const retryResult = validateAndNormalize(retryRaw, dayNumber, phase.phaseNumber, week, dailyTimeAvailable);
+        if (retryResult.task.steps.length >= 2 && !retryResult.task.steps[0]?.instruction.includes('Set up your space')) {
+          result = retryResult;
+        }
+      }
+    } catch {
+      // Non-blocking — 8b result is still valid
+    }
+  }
 
   // Augment with static resource library if category provided and LLM left resources empty
   if (category && !result.task.resources?.primary) {

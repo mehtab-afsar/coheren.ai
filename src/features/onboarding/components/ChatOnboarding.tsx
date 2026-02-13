@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Sparkles, LogIn, UserPlus, Mail, Lock } from 'lucide-react';
 import { useStore } from '@core/store/useStore';
-import { callGroqWithFallback, callGroqEconomy } from '@lib/groq-client';
+import { callReasoning, callEconomy } from '@lib/ai-router';
 import { tokens, text, button } from '@core/design-system';
 import { generateInitialTasks } from '@shared/utils/taskGenerator';
 import { detectCategory } from '@shared/utils/categoryDetection';
@@ -155,6 +155,7 @@ export default function ChatOnboarding({ onLoginSuccess }: ChatOnboardingProps) 
   const [onboardingPhase, setOnboardingPhase] = useState<'conversation' | 'stones' | 'generating'>('conversation');
   const [goalAnalysis, setGoalAnalysis] = useState<Agent1Output | null>(null);
   const [stones, setStones] = useState<BuildingStone[]>([]);
+  const [agentError, setAgentError] = useState<{ message: string; retryFn: () => void } | null>(null);
 
   // Auth gate (shown after roadmap generation for unauthenticated users)
   const {
@@ -193,7 +194,7 @@ export default function ChatOnboarding({ onLoginSuccess }: ChatOnboardingProps) 
       const triggerInitialResponse = async () => {
         setIsTyping(true);
         try {
-          const completion = await callGroqWithFallback({
+          const { content: aiResponse = "That's a great goal! What's your current experience level — beginner, intermediate, or advanced?" } = await callReasoning({
             messages: [
               {
                 role: 'system',
@@ -203,8 +204,7 @@ export default function ChatOnboarding({ onLoginSuccess }: ChatOnboardingProps) 
             ],
             temperature: 0.7,
             max_tokens: 150,
-          }, 'standard');
-          const aiResponse = completion.choices[0]?.message?.content || "That's a great goal! What's your current experience level — beginner, intermediate, or advanced?";
+          });
           setMessages(prev => [...prev, {
             id: (Date.now() + 1).toString(),
             role: 'ai',
@@ -259,7 +259,7 @@ export default function ChatOnboarding({ onLoginSuccess }: ChatOnboardingProps) 
       }));
 
       // We use a small, fast model to extract data into JSON with FULL context
-      const extractCompletion = await callGroqEconomy({
+      const { content: extractRaw } = await callEconomy({
         messages: [
           {
             role: 'system',
@@ -289,7 +289,7 @@ Current Data Already Collected: ${JSON.stringify(collectedData)}`
         response_format: { type: "json_object" }
       });
 
-      const newData = JSON.parse(extractCompletion.choices[0]?.message?.content || '{}');
+      const newData = JSON.parse(extractRaw || '{}');
 
       // Clean Merge: Only update fields if the AI actually found something new and non-null
       setCollectedData(prev => {
@@ -386,8 +386,8 @@ The system will automatically detect when the data is complete and transition to
 
       console.log('💬 AI Whisper:', whisper.trim());
 
-      // Inject the whisper into the system prompt - use standard tier with fallback
-      const completion = await callGroqWithFallback({
+      // Inject the whisper into the system prompt
+      const { content: aiResponse = "Tell me more!" } = await callReasoning({
         messages: [
           { role: 'system', content: systemPrompt + whisper },
           ...conversationHistory,
@@ -395,9 +395,7 @@ The system will automatically detect when the data is complete and transition to
         ],
         temperature: 0.7,
         max_tokens: 150,
-      }, 'standard'); // Use standard tier for conversational AI with auto-fallback
-
-      const aiResponse = completion.choices[0]?.message?.content || "Tell me more!";
+      });
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -509,8 +507,14 @@ The system will automatically detect when the data is complete and transition to
         console.error('   Error stack:', error.stack);
       }
       setIsTyping(false);
-      // Show error to user
-      alert('Error analyzing your goal. Please try again or contact support.');
+      setOnboardingPhase('conversation');
+      const isRateLimit = error instanceof Error && (error.message.includes('rate') || error.message.includes('Rate'));
+      setAgentError({
+        message: isRateLimit
+          ? 'API rate limit reached. Please wait a moment and try again.'
+          : 'Something went wrong while analyzing your goal. Please try again.',
+        retryFn: () => { setAgentError(null); runAnalysisAndGetStones(); },
+      });
     }
   };
 
@@ -697,8 +701,14 @@ The system will automatically detect when the data is complete and transition to
       clearInterval(progressInterval);
       setGenerationProgress(0);
       setIsGeneratingPlan(false);
-      // Fallback to old system
-      generateStrategicPlan();
+      setOnboardingPhase('conversation');
+      const isRateLimit = error instanceof Error && (error.message.includes('rate') || error.message.includes('Rate'));
+      setAgentError({
+        message: isRateLimit
+          ? 'API rate limit reached while building your curriculum. Please wait a moment and try again.'
+          : 'Something went wrong while building your curriculum. Please try again.',
+        retryFn: () => { setAgentError(null); generateStrategicPlan(); },
+      });
     }
   };
 
@@ -828,13 +838,11 @@ CRITICAL: Each day's tasks should total approximately ${dailyMinutes} minutes. U
 
 Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 easy for ${collectedData.skillLevel} level. Make all tasks specific to ${category} and the goal "${collectedData.goal}".`;
 
-      const completion = await callGroqWithFallback({
+      const { content: responseText = '' } = await callEconomy({
         messages: [{ role: 'user', content: planPrompt }],
         temperature: 0.7,
         max_tokens: 4000,
-      }, 'economy'); // Use economy model for fallback strategic plan
-
-      const responseText = completion.choices[0]?.message?.content || '';
+      });
 
       // Parse JSON response
       let strategicPlan;
@@ -1480,6 +1488,53 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
           </div>
         </div>
       </div>
+      )}
+
+      {/* Agent Error Banner — shown when any agent call fails */}
+      {agentError && (
+        <div style={{
+          position: 'fixed',
+          bottom: tokens.spacing['2xl'],
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 3000,
+          backgroundColor: '#FEF3C7',
+          border: '1px solid #D97706',
+          borderRadius: tokens.borderRadius.xl,
+          padding: `${tokens.spacing.lg} ${tokens.spacing['2xl']}`,
+          display: 'flex',
+          alignItems: 'center',
+          gap: tokens.spacing.xl,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+          maxWidth: '500px',
+          width: 'calc(100% - 48px)',
+        }}>
+          <span style={{ fontSize: tokens.typography.sizes.sm, color: '#92400E', flex: 1 }}>
+            ⚠️ {agentError.message}
+          </span>
+          <button
+            onClick={agentError.retryFn}
+            style={{
+              backgroundColor: '#D97706',
+              color: 'white',
+              border: 'none',
+              borderRadius: tokens.borderRadius.md,
+              padding: `${tokens.spacing.sm} ${tokens.spacing.lg}`,
+              fontSize: tokens.typography.sizes.sm,
+              fontWeight: tokens.typography.weights.medium,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Try Again
+          </button>
+          <button
+            onClick={() => setAgentError(null)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#92400E', fontSize: '18px', padding: 0 }}
+          >
+            ×
+          </button>
+        </div>
       )}
 
       {/* Auth Gate Overlay — shown after roadmap generation for unauthenticated users */}

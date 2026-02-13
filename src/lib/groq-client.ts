@@ -14,6 +14,35 @@ const groq = new Groq({
   dangerouslyAllowBrowser: true,
 });
 
+// ── Session-level telemetry ───────────────────────────────────────────────────
+// Lightweight in-memory stats (resets on page reload / script restart).
+// Read with getGroqSessionStats(); reset between test runs with resetGroqSessionStats().
+
+interface GroqSessionStats {
+  totalCalls: number;
+  rateLimitHits: number;
+  fallbackCount: number;              // times we fell back from the preferred tier
+  modelUsage: Record<string, number>; // model-id → successful call count
+}
+
+const _stats: GroqSessionStats = {
+  totalCalls: 0,
+  rateLimitHits: 0,
+  fallbackCount: 0,
+  modelUsage: {},
+};
+
+export function getGroqSessionStats(): Readonly<GroqSessionStats> {
+  return { ..._stats, modelUsage: { ..._stats.modelUsage } };
+}
+
+export function resetGroqSessionStats(): void {
+  _stats.totalCalls = 0;
+  _stats.rateLimitHits = 0;
+  _stats.fallbackCount = 0;
+  _stats.modelUsage = {};
+}
+
 // Model tiers (ordered by capability and cost)
 // Note: llama-3.1-70b-versatile has been decommissioned
 const MODEL_TIERS = {
@@ -65,8 +94,12 @@ export async function callGroqWithFallback(
         retries
       );
 
+      // Record successful call in telemetry
+      _stats.totalCalls += 1;
+      _stats.modelUsage[model] = (_stats.modelUsage[model] ?? 0) + 1;
       if (tier !== preferredTier) {
-        console.log(`✅ Success with fallback model: ${tier}`);
+        _stats.fallbackCount += 1;
+        console.log(`✅ Success with fallback model: ${tier} (session fallbacks: ${_stats.fallbackCount})`);
       }
 
       return result;
@@ -80,7 +113,8 @@ export async function callGroqWithFallback(
         throw error;
       }
 
-      console.warn(`⚠️ ${tier} model rate limited, trying next tier...`);
+      _stats.rateLimitHits += 1;
+      console.warn(`⚠️ ${tier} model rate limited (session hits: ${_stats.rateLimitHits}), trying next tier...`);
     }
   }
 

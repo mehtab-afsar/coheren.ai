@@ -13,7 +13,7 @@
  */
 
 import type { Agent1Output, Agent2Output, AgentContext } from '@types-app/agents';
-import { callGroqWithFallback } from '@lib/groq-client';
+import { callReasoning } from '@lib/ai-router';
 import { DOMAIN_GAPS, STONE_DESCRIPTIONS } from './stone-taxonomy';
 
 function buildSystemPrompt(): string {
@@ -141,7 +141,7 @@ export async function generateQuestions(
   context: AgentContext,
   goalAnalysis: Agent1Output
 ): Promise<Agent2Output> {
-  const response = await callGroqWithFallback({
+  const { content } = await callReasoning({
     messages: [
       { role: 'system', content: buildSystemPrompt() },
       { role: 'user', content: buildUserPrompt(context, goalAnalysis) },
@@ -150,8 +150,6 @@ export async function generateQuestions(
     max_tokens: 3000,
     response_format: { type: 'json_object' },
   });
-
-  const content = response.choices[0]?.message?.content;
   if (!content) {
     throw new Error('Agent 2 Mode 1: No response received');
   }

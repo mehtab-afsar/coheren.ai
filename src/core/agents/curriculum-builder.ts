@@ -28,7 +28,7 @@ import type {
   Phase,
   Roadmap,
 } from '@types-app/agents';
-import { callGroqWithFallback } from '@lib/groq-client';
+import { callReasoning } from '@lib/ai-router';
 import { retrieveKnowledgeSemantic } from '@core/rag/semantic-retriever';
 
 // ─── Domain Pedagogy Map ──────────────────────────────────────────────────────
@@ -450,7 +450,7 @@ export async function buildCurriculum(
     science = await retrieveKnowledgeSemantic({ query, matchCount: 3 });
   }
 
-  const response = await callGroqWithFallback({
+  const { content } = await callReasoning({
     messages: [
       { role: 'system', content: buildSystemPrompt(g.domain) },
       { role: 'user',   content: buildUserPrompt(context, goalAnalysis, stoneProfile, science, phaseCount) },
@@ -459,8 +459,6 @@ export async function buildCurriculum(
     max_tokens:  4000,
     response_format: { type: 'json_object' },
   });
-
-  const content = response.choices[0]?.message?.content;
   if (!content) throw new Error('Agent 3: No response received from model');
 
   const raw = JSON.parse(content) as unknown;

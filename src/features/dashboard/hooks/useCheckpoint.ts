@@ -20,9 +20,16 @@ interface CheckpointData {
   }>;
 }
 
+interface RecalibrationResult {
+  coachMessage: string;
+  nextSprintFocus: string;
+  stoneDirective?: string;
+}
+
 export function useCheckpoint() {
   const [checkpointData, setCheckpointData] = useState<CheckpointData | null>(null);
   const [isRecalibrating, setIsRecalibrating] = useState(false);
+  const [recalibrationResult, setRecalibrationResult] = useState<RecalibrationResult | null>(null);
 
   const currentDay = useStore((state) => state.currentDay);
   const user = useStore((state) => state.user);
@@ -144,8 +151,12 @@ export function useCheckpoint() {
       // Update local tasks with new sprint tasks
       setTasks(convertedTasks);
 
-      // Show success message
-      alert(`🎉 Checkpoint Complete!\n\n${result.analysis.recalibratedSprint.personalizedMessage}`);
+      // Surface the Agent 5 result in the UI (replaces the alert)
+      setRecalibrationResult({
+        coachMessage:    result.analysis.recalibratedSprint.personalizedMessage,
+        nextSprintFocus: result.analysis.checkpointAnalysis.nextSprintFocus,
+        // stoneDirective will be added when real stone profile is loaded from DB
+      });
 
       setIsRecalibrating(false);
     } catch (error) {
@@ -158,6 +169,7 @@ export function useCheckpoint() {
   return {
     checkpointData,
     isRecalibrating,
+    recalibrationResult,
     handleCheckpointComplete,
   };
 }

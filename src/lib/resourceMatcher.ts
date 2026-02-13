@@ -5,18 +5,13 @@
  * Uses keyword matching, topic analysis, and LLM fallback.
  */
 
-import Groq from 'groq-sdk';
+import { callEconomy } from './ai-router';
 import {
   getResourcesForCategory,
   searchResourcesByTopic,
   type ResourceLink,
   type GoalResources
 } from './resourceLibrary';
-
-const groq = new Groq({
-  apiKey: import.meta.env.VITE_GROQ_API_KEY,
-  dangerouslyAllowBrowser: true,
-});
 
 // ============================================
 // KEYWORD MAPPING
@@ -175,14 +170,12 @@ Category: ${category}
 Return ONLY the topics as a comma-separated list (e.g., "footwork, defense, movement")
 No explanations.`;
 
-    const completion = await groq.chat.completions.create({
+    const { content: response } = await callEconomy({
       messages: [{ role: 'user', content: prompt }],
-      model: 'llama-3.3-70b-versatile',
       temperature: 0.3,
       max_tokens: 50,
     });
 
-    const response = completion.choices[0]?.message?.content || '';
     const topics = response.split(',').map(t => t.trim().toLowerCase());
 
     return topics;
@@ -227,14 +220,11 @@ Return ONLY this JSON (no markdown, no code blocks):
   "why": "Why this is the best resource for this task"
 }`;
 
-    const completion = await groq.chat.completions.create({
+    const { content: responseText } = await callEconomy({
       messages: [{ role: 'user', content: prompt }],
-      model: 'llama-3.3-70b-versatile',
       temperature: 0.7,
       max_tokens: 300,
     });
-
-    const responseText = completion.choices[0]?.message?.content || '';
 
     // Try to parse JSON
     let resource;

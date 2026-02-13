@@ -10,7 +10,7 @@
  * Status enum: ACCELERATE | MAINTAIN | SIMPLIFY | RECOVER
  */
 
-import { callGroqWithFallback } from '@lib/groq-client';
+import { callReasoning } from '@lib/ai-router';
 import { retrieveKnowledgeSemantic } from '@core/rag';
 import type {
   StoneType,
@@ -150,7 +150,7 @@ interface PerformanceSignals {
   status: RecalibrationStatus;
 }
 
-function computeSignals(
+export function computeSignals(
   tasks: CompletedTaskFeedback[],
   dailyBudget: number
 ): PerformanceSignals {
@@ -360,7 +360,7 @@ Map paceAdjustment: ACCELERATE→accelerate, MAINTAIN→maintain, SIMPLIFY/RECOV
 Include ${status === 'RECOVER' ? '2 rest days and 1 review day' : status === 'SIMPLIFY' ? '1 review day' : '0–1 rest days'}.
 Return JSON only.`;
 
-  const completion = await callGroqWithFallback({
+  const { content: response } = await callReasoning({
     messages: [
       { role: 'system', content: AGENT5_SYSTEM_PROMPT },
       { role: 'user', content: userPrompt }
@@ -369,8 +369,6 @@ Return JSON only.`;
     max_tokens: 4000,
     response_format: { type: 'json_object' }
   });
-
-  const response = completion.choices[0]?.message?.content;
   if (!response) throw new Error('Agent 5 returned no response');
 
   const parsed = JSON.parse(response) as Agent5Output;

@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  ArrowRight,
   CheckCircle2,
   X,
   MessageSquare,
@@ -13,8 +12,8 @@ import { useStore } from '@core/store/useStore';
 import { tokens } from '@core/design-system';
 import { HeroSection } from './HeroSection';
 import { FloatingNav } from '@shared/components/ui/floating-navbar';
-import { Timeline } from '@shared/components/ui/timeline';
 import { StickyScroll } from '@shared/components/ui/sticky-scroll-reveal';
+import { GlowingEffect } from '@shared/components/ui/glowing-effect';
 
 interface LandingPageProps {
   onGetStarted?: (goal: string) => void;
@@ -22,60 +21,7 @@ interface LandingPageProps {
 
 export default function LandingPage({ onGetStarted }: LandingPageProps) {
   const setStep = useStore((state) => state.setStep);
-  const [goalInput, setGoalInput] = useState('');
-  const [placeholderText, setPlaceholderText] = useState('');
-
-  const placeholderExamples = [
-    "I want to learn boxing",
-    "I want to prepare for CAT",
-    "I want to build reading habits",
-    "I want to learn guitar",
-    "I want to get fit",
-    "I want to learn Spanish",
-    "I want to code daily"
-  ];
-
-  // Typing animation effect
-  useEffect(() => {
-    let currentText = '';
-    let currentIndex = 0;
-    let isDeleting = false;
-    let phraseIndex = 0;
-
-    const type = () => {
-      const currentPhrase = placeholderExamples[phraseIndex];
-
-      if (!isDeleting) {
-        currentText = currentPhrase.substring(0, currentIndex + 1);
-        currentIndex++;
-
-        if (currentIndex === currentPhrase.length) {
-          isDeleting = true;
-          setTimeout(type, 2000); // Pause at end
-          setPlaceholderText(currentText);
-          return;
-        }
-      } else {
-        currentText = currentPhrase.substring(0, currentIndex - 1);
-        currentIndex--;
-
-        if (currentIndex === 0) {
-          isDeleting = false;
-          phraseIndex = (phraseIndex + 1) % placeholderExamples.length;
-          setTimeout(type, 500); // Pause before next phrase
-          setPlaceholderText(currentText);
-          return;
-        }
-      }
-
-      setPlaceholderText(currentText);
-      setTimeout(type, isDeleting ? 50 : 100);
-    };
-
-    const timer = setTimeout(type, 1000);
-    return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const [goalInput] = useState('');
 
   const handleGetStarted = (customGoal?: string) => {
     const goal = customGoal || goalInput.trim();
@@ -127,27 +73,11 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       />
 
       {/* How It Works — Floating Card + Pinned Sticky Scroll */}
-      <section id="how-it-works" className="scroll-mt-0 relative bg-transparent mt-0 pt-16 pb-24 px-4 lg:px-8">
-        {/* Single spherical glow — large enough to cover end of hero + start of this section */}
-        <div
-          className="pointer-events-none absolute inset-x-0 flex justify-center"
-          style={{ top: '-480px' }}
-          aria-hidden
-        >
-          <div
-            style={{
-              width: '1100px',
-              height: '1100px',
-              borderRadius: '50%',
-              background: 'radial-gradient(circle, hsla(262,83%,58%,0.32) 0%, hsla(262,83%,58%,0.14) 45%, transparent 70%)',
-              filter: 'blur(90px)',
-            }}
-          />
-        </div>
+      <section id="how-it-works" className="scroll-mt-0 relative z-10 bg-transparent mt-0 pt-16 pb-0 px-4 lg:px-8">
 
-        {/* Floating card */}
+        {/* Floating card — slides over the pinned hero like a curtain */}
         <div
-          className="relative mx-auto max-w-7xl rounded-[2rem] border border-white/[0.06] bg-[#0A0A0A] shadow-[0_8px_60px_-12px_rgba(0,0,0,0.5),0_2px_4px_rgba(0,0,0,0.2)]"
+          className="relative mx-auto max-w-7xl rounded-[2.5rem] border border-white/[0.06] bg-[#0A0A0A] shadow-[0_-24px_80px_-8px_rgba(0,0,0,0.6),0_8px_60px_-12px_rgba(0,0,0,0.5)]"
           style={{ overflow: "clip" }}
         >
           {/* Section header inside the card */}
@@ -274,6 +204,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
         padding: `${tokens.spacing['5xl']} ${tokens.spacing.xl}`,
         background: 'linear-gradient(180deg, #FAFBFC 0%, white 100%)',
         position: 'relative',
+        zIndex: 10,
         scrollMarginTop: '80px'
       }}>
         <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
@@ -483,6 +414,8 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       <section id="why-coheren" style={{
         padding: `${tokens.spacing['5xl']} ${tokens.spacing.xl}`,
         backgroundColor: 'white',
+        position: 'relative',
+        zIndex: 10,
         scrollMarginTop: '80px'
       }}>
         <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
@@ -576,161 +509,176 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       </section>
 
 
-      {/* The Science Behind Coheren - Clean & Simple */}
-      <section id="science" style={{
-        padding: `${tokens.spacing['5xl']} ${tokens.spacing.xl}`,
-        backgroundColor: 'white',
-        scrollMarginTop: '80px'
-      }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: tokens.spacing['4xl'] }}>
-            <h2 style={{
-              fontSize: '56px',
-              fontWeight: 200,
-              letterSpacing: '-0.03em',
-              marginBottom: tokens.spacing.md,
-              color: '#0F172A',
-              lineHeight: 1.1
-            }}>
+      {/* The Science Behind Coheren */}
+      <section id="science" className="relative z-10 overflow-hidden py-24 px-4 lg:px-8 scroll-mt-20" style={{ backgroundColor: '#0A0A0A' }}>
+        <div className="max-w-5xl mx-auto">
+          {/* Header */}
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-5xl font-light tracking-tight text-white sm:text-6xl" style={{ letterSpacing: '-0.03em' }}>
               The science behind Coheren
             </h2>
-            <p style={{
-              fontSize: tokens.typography.sizes.xl,
-              color: '#64748B',
-              maxWidth: '650px',
-              margin: '0 auto',
-              lineHeight: 1.6,
-              fontWeight: tokens.typography.weights.light
-            }}>
+            <p className="mt-4 text-lg text-white/40 max-w-xl mx-auto leading-relaxed font-light">
               Our AI doesn't guess. It knows.
             </p>
-          </div>
+          </motion.div>
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: tokens.spacing['3xl']
-          }}>
+          {/* 2×2 grid — curtain reveal from center outwards */}
+          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {[
-              { title: 'Stanford Behavior Design Lab', desc: 'Built on proven behavior change frameworks' },
-              { title: '200+ Peer-Reviewed Papers', desc: 'Research on habit formation and motivation' },
-              { title: 'Dopamine Science', desc: 'Temporal motivation theory applied' },
-              { title: 'Real-World Testing', desc: 'Validated with beta users' }
-            ].map((item, index) => (
-              <div
+              {
+                title: 'Stanford BJ Fogg Model',
+                desc: "Coheren's task engine is built directly on BJ Fogg's Tiny Habits research — motivation alone fails. We pair the right behavior with the right moment and make it tiny enough to always win.",
+                foot: 'Motivation × Ability × Prompt',
+                dot: 'bg-violet-500',
+              },
+              {
+                title: '200+ Peer-Reviewed Papers',
+                desc: 'Every nudge, cadence, and recalibration is derived from published research on habit formation, self-efficacy, and intrinsic motivation — not guesswork.',
+                stats: [['66', 'days avg to habit'], ['3×', 'higher retention'], ['91%', 'clarity']],
+              },
+              {
+                title: 'Dopamine-Loop Design',
+                desc: 'We apply Temporal Motivation Theory — urgency and reward proximity drive action. One task per day creates a daily dopamine loop your brain learns to crave.',
+                bars: true,
+              },
+              {
+                title: 'Real-World Testing',
+                desc: 'Stress-tested across goals from "run a marathon" to "write a novel" to "learn ML" — in every case the AI adapted without breaking.',
+                foot: 'Fitness · Writing · Coding · Finance · Language',
+                dot: 'bg-amber-500',
+              },
+            ].map((card, index) => (
+              <motion.li
                 key={index}
-                style={{
-                  padding: tokens.spacing['2xl'],
-                  textAlign: 'left'
-                }}
+                className="min-h-[18rem] list-none"
+                initial={{ opacity: 0, scale: 0.88 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                viewport={{ once: true, margin: '-60px' }}
+                transition={{ duration: 0.55, delay: index * 0.08, ease: [0.22, 1, 0.36, 1] }}
               >
-                <h3 style={{
-                  fontSize: tokens.typography.sizes['2xl'],
-                  fontWeight: tokens.typography.weights.semibold,
-                  marginBottom: tokens.spacing.md,
-                  color: '#0F172A',
-                  letterSpacing: '-0.02em'
-                }}>
-                  {item.title}
-                </h3>
-                <p style={{
-                  fontSize: tokens.typography.sizes.lg,
-                  color: '#64748B',
-                  lineHeight: 1.8,
-                  fontWeight: tokens.typography.weights.light
-                }}>
-                  {item.desc}
-                </p>
-              </div>
+                <div className="relative h-full rounded-2xl border border-white/[0.08] bg-white/[0.03] p-2 transition-all duration-300 hover:border-violet-500/40">
+                  <GlowingEffect spread={36} glow proximity={80} inactiveZone={0.01} borderWidth={2} disabled={false} />
+                  <div className="relative flex h-full flex-col justify-between gap-4 overflow-hidden rounded-xl border border-white/[0.05] bg-white/[0.02] p-7">
+                    <div className="flex flex-col gap-3">
+                      <h3 className="text-xl font-semibold text-white leading-snug tracking-tight">{card.title}</h3>
+                      <p className="text-sm text-white/50 leading-relaxed">{card.desc}</p>
+                    </div>
+                    {card.foot && (
+                      <div className="flex items-center gap-2">
+                        <div className={`h-1.5 w-1.5 rounded-full ${card.dot}`} />
+                        <span className="text-xs text-white/30">{card.foot}</span>
+                      </div>
+                    )}
+                    {card.stats && (
+                      <div className="flex items-center gap-6">
+                        {card.stats.map(([stat, label]) => (
+                          <div key={label} className="flex flex-col">
+                            <span className="text-base font-bold text-white">{stat}</span>
+                            <span className="text-[10px] text-white/30 leading-tight">{label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {card.bars && (
+                      <div className="flex items-center gap-2">
+                        <div className="flex gap-1">
+                          {[1,2,3,4,5].map(i => (
+                            <div key={i} className={`h-1.5 rounded-full ${i <= 4 ? 'bg-emerald-500' : 'bg-white/10'}`} style={{ width: `${i * 6}px` }} />
+                          ))}
+                        </div>
+                        <span className="text-xs text-white/30">momentum builds daily</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </motion.li>
             ))}
-          </div>
+          </ul>
         </div>
       </section>
 
-      {/* Footer - Minimal & Clean */}
-      <footer style={{
-        borderTop: '1px solid #E2E8F0',
-        backgroundColor: 'white'
-      }}>
-        <div style={{
-          maxWidth: '1200px',
-          margin: '0 auto',
-          padding: `${tokens.spacing.xl} ${tokens.spacing['2xl']}`,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: tokens.spacing.xl,
-          flexWrap: 'wrap'
-        }}>
-          {/* Left side - Full Logo */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center'
-          }}>
-            <img
-              src="/logo-full.svg"
-              alt="Coheren"
-              style={{
-                width: '180px',
-                height: 'auto',
-                objectFit: 'contain',
-                display: 'block'
-              }}
-            />
+      {/* Footer */}
+      <footer className="relative z-10 border-t border-slate-200 bg-white pb-6 pt-16 lg:pb-8 lg:pt-24">
+        <div className="px-4 lg:px-8 max-w-7xl mx-auto">
+          {/* Top row: brand + social */}
+          <div className="md:flex md:items-start md:justify-between">
+            <a href="/" className="flex items-center gap-x-2" aria-label="coheren.ai">
+              <img src="/logo-full.svg" alt="Coheren" className="h-7 w-auto" />
+            </a>
+            <ul className="flex list-none mt-6 md:mt-0 space-x-3">
+              {[
+                { label: 'Twitter', href: 'https://twitter.com', icon: (
+                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.259 5.631 5.905-5.631Zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                )},
+                { label: 'LinkedIn', href: 'https://linkedin.com', icon: (
+                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                )},
+              ].map((link, i) => (
+                <li key={i}>
+                  <a
+                    href={link.href}
+                    target="_blank"
+                    aria-label={link.label}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900"
+                  >
+                    {link.icon}
+                  </a>
+                </li>
+              ))}
+            </ul>
           </div>
 
-          {/* Right side - Mailing list */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: tokens.spacing.sm
-          }}>
-            <input
-              type="email"
-              placeholder="Enter your email"
-              style={{
-                padding: `${tokens.spacing.sm} ${tokens.spacing.lg}`,
-                border: '1px solid #E2E8F0',
-                borderRadius: tokens.borderRadius.lg,
-                fontSize: tokens.typography.sizes.sm,
-                color: '#475569',
-                outline: 'none',
-                transition: 'all 0.2s',
-                width: '240px'
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = tokens.colors.primary;
-                e.currentTarget.style.boxShadow = '0 0 0 3px rgba(67, 56, 202, 0.1)';
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = '#E2E8F0';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
-            />
-            <button
-              style={{
-                padding: `${tokens.spacing.sm} ${tokens.spacing.lg}`,
-                background: tokens.colors.primary,
-                color: 'white',
-                border: 'none',
-                borderRadius: tokens.borderRadius.lg,
-                cursor: 'pointer',
-                fontSize: tokens.typography.sizes.sm,
-                fontWeight: tokens.typography.weights.medium,
-                transition: 'all 0.2s',
-                whiteSpace: 'nowrap'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = tokens.colors.primaryHover;
-                e.currentTarget.style.transform = 'scale(1.02)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = tokens.colors.primary;
-                e.currentTarget.style.transform = 'scale(1)';
-              }}
-            >
-              Join Waitlist
-            </button>
+          {/* Bottom row: copyright + nav + legal */}
+          <div className="border-t border-slate-100 mt-6 pt-6 md:mt-4 md:pt-8 lg:grid lg:grid-cols-10">
+            {/* Copyright — left col */}
+            <div className="mt-6 text-sm leading-6 text-slate-400 whitespace-nowrap lg:mt-0 lg:row-[1/3] lg:col-[1/4]">
+              <div>© {new Date().getFullYear()} coheren.ai</div>
+              <div>All rights reserved.</div>
+            </div>
+
+            {/* Main nav links */}
+            <nav className="lg:mt-0 lg:col-[4/11]">
+              <ul className="list-none flex flex-wrap -my-1 -mx-2 lg:justify-end">
+                {[
+                  { label: 'How it Works', href: '#how-it-works' },
+                  { label: 'Features', href: '#roadmap-preview' },
+                  { label: 'Why Coheren', href: '#why-coheren' },
+                  { label: 'Science', href: '#science' },
+                ].map((link, i) => (
+                  <li key={i} className="my-1 mx-2 shrink-0">
+                    <a
+                      href={link.href}
+                      onClick={(e) => { e.preventDefault(); document.querySelector(link.href)?.scrollIntoView({ behavior: 'smooth' }); }}
+                      className="text-sm text-slate-700 underline-offset-4 hover:underline"
+                    >
+                      {link.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+
+            {/* Legal links */}
+            <div className="mt-6 lg:mt-0 lg:col-[4/11]">
+              <ul className="list-none flex flex-wrap -my-1 -mx-3 lg:justify-end">
+                {[
+                  { label: 'Privacy Policy', href: '#' },
+                  { label: 'Terms of Service', href: '#' },
+                ].map((link, i) => (
+                  <li key={i} className="my-1 mx-3 shrink-0">
+                    <a href={link.href} className="text-sm text-slate-400 underline-offset-4 hover:underline">
+                      {link.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
       </footer>

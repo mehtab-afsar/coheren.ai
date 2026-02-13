@@ -1,10 +1,5 @@
-import React, { useState } from "react";
-import {
-  motion,
-  AnimatePresence,
-  useScroll,
-  useMotionValueEvent,
-} from "framer-motion";
+import React from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@lib/utils";
 
 interface NavItem {
@@ -30,22 +25,12 @@ export const FloatingNav = ({
   onCtaClick,
   className,
 }: FloatingNavProps) => {
-  const { scrollYProgress } = useScroll();
-  const [visible, setVisible] = useState(false);
-
-  useMotionValueEvent(scrollYProgress, "change", (current) => {
-    if (typeof current === "number") {
-      const direction = current - scrollYProgress.getPrevious()!;
-      setVisible(direction <= 0);
-    }
-  });
-
   return (
     <AnimatePresence mode="wait">
       <motion.div
-        initial={{ opacity: 0, y: -100 }}
-        animate={{ y: visible ? 0 : -100, opacity: visible ? 1 : 0 }}
-        transition={{ duration: 0.2 }}
+        initial={{ opacity: 0, y: -16 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.4, delay: 0.2 }}
         className={cn(
           "fixed inset-x-0 top-8 z-[5000] mx-auto flex w-full max-w-2xl items-center justify-between",
           "rounded-full border border-black/[0.08] bg-white/90 backdrop-blur-md",

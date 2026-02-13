@@ -44,7 +44,7 @@ export function HeroSection({
   return (
     <section
       className={cn(
-        "relative min-h-screen",
+        "sticky top-0 z-0 min-h-screen",
         "bg-transparent text-foreground",
         "px-4",
       )}
@@ -72,19 +72,36 @@ export function HeroSection({
           <span className="bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent drop-shadow-2xl">
             Think less. Do{" "}
           </span>
-          {/* inline-grid stacks enter/exit in same cell — container never collapses */}
+          {/* inline-grid keeps container width stable across word changes */}
           <span className="relative inline-grid align-bottom">
             <AnimatePresence mode="popLayout">
               <motion.span
                 key={word}
                 style={{ gridArea: "1/1" }}
-                initial={{ opacity: 0, y: 20, filter: "blur(6px)" }}
-                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -16, filter: "blur(4px)" }}
-                transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-                className="inline-block bg-gradient-to-r from-violet-600 to-indigo-500 bg-clip-text text-transparent"
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                variants={{
+                  hidden: {},
+                  visible: { transition: { staggerChildren: 0.04, delayChildren: 0.22 } },
+                  exit:   { transition: { staggerChildren: 0.02, staggerDirection: -1 } },
+                }}
+                className="inline-flex"
               >
-                {word}
+                {word.split("").map((char, i) => (
+                  <span key={i} style={{ display: "inline-block", overflow: "hidden", lineHeight: 1.1 }}>
+                    <motion.span
+                      className="inline-block bg-gradient-to-r from-violet-600 to-indigo-500 bg-clip-text text-transparent"
+                      variants={{
+                        hidden: { y: "105%", opacity: 0 },
+                        visible: { y: "0%", opacity: 1, transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] } },
+                        exit:    { y: "-60%", opacity: 0, transition: { duration: 0.2, ease: [0.55, 0, 1, 0.45] } },
+                      }}
+                    >
+                      {char}
+                    </motion.span>
+                  </span>
+                ))}
               </motion.span>
             </AnimatePresence>
           </span>

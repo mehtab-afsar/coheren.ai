@@ -18,7 +18,6 @@ const AuthShaderPanel = () => (
 import { useStore } from '@core/store/useStore';
 import { callReasoning, callEconomy } from '@lib/ai-router';
 import { tokens, button } from '@core/design-system';
-import { generateInitialTasks } from '@shared/utils/taskGenerator';
 import { detectCategory } from '@shared/utils/categoryDetection';
 import { retrieveKnowledge, type UserContext } from '@core/rag';
 import type { GoalCategory } from '@types-app/index';

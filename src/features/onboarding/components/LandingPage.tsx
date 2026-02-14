@@ -61,10 +61,24 @@ const CARD_SCROLL_WINDOWS = [
 
 function ScienceSection({ wrapperRef }: { wrapperRef: React.RefObject<HTMLDivElement | null> }) {
   const imgRef = useRef<HTMLImageElement>(null);
+  // Hold preloaded Image objects in memory so browser keeps them cached
+  const framesRef = useRef<HTMLImageElement[]>([]);
+
   const { scrollYProgress } = useScroll({
     target: wrapperRef,
     offset: ['start start', 'end end'],
   });
+
+  // Preload all frames into browser memory on mount — eliminates network latency on scroll
+  useEffect(() => {
+    const images: HTMLImageElement[] = [];
+    for (let i = 0; i < TOTAL_FRAMES; i++) {
+      const img = new Image();
+      img.src = `/science-frames/frame_${String(i).padStart(4, '0')}.jpg`;
+      images.push(img);
+    }
+    framesRef.current = images;
+  }, []);
 
   // Drive frame index imperatively (no re-render)
   useEffect(() => {

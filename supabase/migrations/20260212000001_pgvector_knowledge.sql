@@ -15,7 +15,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- re-running the ingestion script is idempotent via upsert on conflict.
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS public.knowledge_chunks (
-  id          UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   chunk_id    TEXT        NOT NULL UNIQUE,     -- stable slug from ingest script
   content     TEXT        NOT NULL,            -- the actual text passage
   source      TEXT        NOT NULL,            -- e.g. "Atomic Habits"

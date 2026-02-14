@@ -6,7 +6,7 @@
 -- TASK_FEEDBACK TABLE
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS public.task_feedback (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users NOT NULL,
   task_id UUID REFERENCES public.daily_tasks NOT NULL,
   goal_id UUID REFERENCES public.user_goals NOT NULL,

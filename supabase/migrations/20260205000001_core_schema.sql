@@ -41,7 +41,7 @@ CREATE POLICY "Users can insert own profile"
 -- USER_GOALS TABLE (FIXED to match UserGoal interface)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS public.user_goals (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users NOT NULL,
   title TEXT NOT NULL,
   description TEXT,
@@ -83,7 +83,7 @@ CREATE INDEX IF NOT EXISTS idx_user_goals_created_at ON public.user_goals(create
 -- GOAL_STONES TABLE (FIXED to match GoalStone interface)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS public.goal_stones (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   goal_id UUID REFERENCES public.user_goals(id) ON DELETE CASCADE NOT NULL,
   question TEXT NOT NULL,
   answer TEXT NOT NULL,
@@ -146,7 +146,7 @@ CREATE INDEX IF NOT EXISTS idx_goal_stones_goal_id ON public.goal_stones(goal_id
 -- ROADMAPS TABLE (FIXED to match Roadmap interface)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS public.roadmaps (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   goal_id UUID REFERENCES public.user_goals(id) ON DELETE CASCADE NOT NULL,
   phases JSONB NOT NULL,
   config JSONB,
@@ -207,7 +207,7 @@ CREATE INDEX IF NOT EXISTS idx_roadmaps_goal_id ON public.roadmaps(goal_id);
 -- DAILY_TASKS TABLE (FIXED to match DailyTaskRecord interface)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS public.daily_tasks (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   roadmap_id UUID REFERENCES public.roadmaps(id) ON DELETE CASCADE NOT NULL,
   day_number INT NOT NULL,
   title TEXT NOT NULL,
@@ -282,7 +282,7 @@ CREATE INDEX IF NOT EXISTS idx_daily_tasks_is_completed ON public.daily_tasks(is
 -- CHECKPOINTS TABLE
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS public.checkpoints (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   roadmap_id UUID REFERENCES public.roadmaps(id) ON DELETE CASCADE NOT NULL,
   checkpoint_day INT NOT NULL,
   overall_mastery TEXT CHECK (overall_mastery IN ('struggling', 'on-track', 'excelling')),

@@ -167,6 +167,12 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
   const setStep = useStore((state) => state.setStep);
   const [goalInput] = useState('');
   const scienceWrapperRef = useRef<HTMLDivElement>(null);
+  const pricingWrapperRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress: pricingScrollYProgress } = useScroll({
+    target: pricingWrapperRef,
+    offset: ['start start', 'end end'],
+  });
+  const pricingX = useTransform(pricingScrollYProgress, [0, 0.6], ['100%', '0%']);
 
   const handleGetStarted = (customGoal?: string) => {
     const goal = customGoal || goalInput.trim();
@@ -659,7 +665,39 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
         </div>
       </div>
 
-      <PricingSection />
+      {/* Pricing curtain slides in from right over testimonials — 300vh scroll window */}
+      <div ref={pricingWrapperRef} style={{ height: '300vh', position: 'relative' }}>
+        <div style={{ position: 'sticky', top: 0, height: '100vh', overflow: 'hidden' }}>
+
+          {/* GIF backdrop — plays automatically, pricing curtain covers it */}
+          <img
+            src="/backdrop.gif"
+            alt=""
+            style={{
+              position: 'absolute', inset: 0,
+              width: '100%', height: '100%',
+              objectFit: 'cover',
+              zIndex: 0,
+            }}
+          />
+
+          <motion.div
+            style={{
+              position: 'absolute', inset: 0,
+              x: pricingX,
+              zIndex: 30,
+              backgroundColor: 'rgba(0,0,0,0.45)',
+              backdropFilter: 'blur(28px)',
+              WebkitBackdropFilter: 'blur(28px)',
+              borderRadius: '3rem 0 0 3rem',
+              boxShadow: '-50px 0 100px rgba(0,0,0,0.6)',
+              overflow: 'hidden',
+            }}
+          >
+            <PricingSection />
+          </motion.div>
+        </div>
+      </div>
 
       <MinimalFooter />
     </div>

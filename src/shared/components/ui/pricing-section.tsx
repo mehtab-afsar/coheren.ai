@@ -61,7 +61,7 @@ export function PricingSection() {
   const [isYearly, setIsYearly] = useState(false);
 
   return (
-    <section className="relative w-full bg-white overflow-hidden py-24 px-4">
+    <section className="relative w-full bg-transparent overflow-hidden py-24 px-4">
       {/* Subtle purple glow top-center */}
       <div
         className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2"
@@ -82,16 +82,16 @@ export function PricingSection() {
           transition={{ duration: 0.6 }}
           className="text-center mb-10"
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-500 mb-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-400 mb-4">
             Pricing
           </p>
           <h2
-            className="text-4xl font-light text-gray-900 sm:text-5xl"
+            className="text-4xl font-light text-white sm:text-5xl"
             style={{ letterSpacing: "-0.03em" }}
           >
             Start free. Stay only if it works.
           </h2>
-          <p className="mt-4 text-base text-gray-500 max-w-md mx-auto">
+          <p className="mt-4 text-base text-white/50 max-w-md mx-auto">
             No tricks. Try the AI for free — upgrade when you're hooked.
           </p>
         </motion.div>
@@ -104,11 +104,11 @@ export function PricingSection() {
           transition={{ duration: 0.5, delay: 0.1 }}
           className="flex justify-center mb-10"
         >
-          <div className="relative flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 p-1">
+          <div className="relative flex items-center gap-1 rounded-full border border-white/15 bg-white/10 p-1">
             <button
               onClick={() => setIsYearly(false)}
               className={`relative rounded-full px-5 py-2 text-sm font-medium transition-colors duration-200 ${
-                !isYearly ? "text-white" : "text-gray-500 hover:text-gray-800"
+                !isYearly ? "text-white" : "text-white/50 hover:text-white"
               }`}
             >
               {!isYearly && (
@@ -123,7 +123,7 @@ export function PricingSection() {
             <button
               onClick={() => setIsYearly(true)}
               className={`relative flex items-center gap-2 rounded-full px-5 py-2 text-sm font-medium transition-colors duration-200 ${
-                isYearly ? "text-white" : "text-gray-500 hover:text-gray-800"
+                isYearly ? "text-white" : "text-white/50 hover:text-white"
               }`}
             >
               {isYearly && (
@@ -153,10 +153,10 @@ export function PricingSection() {
               variants={cardVariants}
             >
               <Card
-                className={`relative h-full ${
+                className={`relative h-full backdrop-blur-sm ${
                   plan.popular
-                    ? "ring-2 ring-violet-500 bg-white"
-                    : "bg-white border-gray-200"
+                    ? "ring-2 ring-violet-500/60 bg-white/10 border-white/20"
+                    : "bg-white/8 border-white/15"
                 }`}
               >
                 {plan.badge && (
@@ -166,11 +166,11 @@ export function PricingSection() {
                 )}
 
                 <CardHeader className="text-left pb-4">
-                  <h3 className="text-2xl font-semibold text-gray-900">{plan.name}</h3>
-                  <p className="text-sm text-gray-500 mt-1 leading-relaxed">{plan.description}</p>
+                  <h3 className="text-2xl font-semibold text-white">{plan.name}</h3>
+                  <p className="text-sm text-white/55 mt-1 leading-relaxed">{plan.description}</p>
 
                   <div className="flex items-baseline gap-1 mt-4">
-                    <span className="text-5xl font-semibold text-gray-900">
+                    <span className="text-5xl font-semibold text-white">
                       $
                       <NumberFlow
                         value={isYearly ? plan.yearlyPrice : plan.monthlyPrice}
@@ -178,7 +178,7 @@ export function PricingSection() {
                       />
                     </span>
                     {plan.monthlyPrice > 0 && (
-                      <span className="text-gray-400 text-sm">
+                      <span className="text-white/40 text-sm">
                         /{isYearly ? "year" : "month"}
                       </span>
                     )}
@@ -189,8 +189,8 @@ export function PricingSection() {
                   <button
                     className={`w-full rounded-xl py-3 text-base font-medium transition-all duration-200 ${
                       plan.popular
-                        ? "bg-violet-600 text-white shadow-md shadow-violet-200 hover:bg-violet-700"
-                        : "border border-gray-200 text-gray-800 hover:border-violet-300 hover:text-violet-700"
+                        ? "bg-violet-600 text-white shadow-md shadow-violet-900/50 hover:bg-violet-700"
+                        : "border border-white/20 text-white/80 hover:border-violet-400 hover:text-violet-300"
                     }`}
                   >
                     {plan.buttonText}
@@ -201,21 +201,21 @@ export function PricingSection() {
                     {plan.features.map((f, fi) => (
                       <li key={fi} className="flex items-center gap-3">
                         <span className="text-violet-500 flex-shrink-0">{f.icon}</span>
-                        <span className="text-sm text-gray-600">{f.text}</span>
+                        <span className="text-sm text-white/70">{f.text}</span>
                       </li>
                     ))}
                   </ul>
 
                   {/* Includes */}
-                  <div className="border-t border-gray-100 pt-5 space-y-2.5">
-                    <p className="text-sm font-semibold text-gray-800">{plan.includes[0]}</p>
+                  <div className="border-t border-white/10 pt-5 space-y-2.5">
+                    <p className="text-sm font-semibold text-white/80">{plan.includes[0]}</p>
                     <ul className="space-y-2">
                       {plan.includes.slice(1).map((item, ii) => (
                         <li key={ii} className="flex items-center gap-3">
                           <span className="flex-shrink-0 h-5 w-5 rounded-full border border-violet-400 bg-violet-50 grid place-content-center">
                             <CheckCheck className="h-3 w-3 text-violet-500" />
                           </span>
-                          <span className="text-sm text-gray-600">{item}</span>
+                          <span className="text-sm text-white/60">{item}</span>
                         </li>
                       ))}
                     </ul>
@@ -232,7 +232,7 @@ export function PricingSection() {
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
           transition={{ delay: 0.4, duration: 0.5 }}
-          className="text-center text-xs text-gray-400 mt-8"
+          className="text-center text-xs text-white/35 mt-8"
         >
           No credit card required for Free plan · Cancel Pro anytime
         </motion.p>

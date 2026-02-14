@@ -50,6 +50,15 @@ const SCIENCE_CARDS = [
 ] as const;
 
 
+// Scroll windows for each card: [fadeIn start, fadeIn end]
+// Cards appear in order: Stanford(0) → 200+Papers(1) → Dopamine(2) → RealWorld(3)
+const CARD_SCROLL_WINDOWS = [
+  [0.05, 0.18], // Stanford BJ Fogg  — left top
+  [0.22, 0.35], // 200+ Papers       — right top
+  [0.39, 0.52], // Dopamine Loop     — left bottom
+  [0.56, 0.69], // Real-World        — right bottom
+] as const;
+
 function ScienceSection({ wrapperRef }: { wrapperRef: React.RefObject<HTMLDivElement | null> }) {
   const imgRef = useRef<HTMLImageElement>(null);
   const { scrollYProgress } = useScroll({
@@ -66,9 +75,25 @@ function ScienceSection({ wrapperRef }: { wrapperRef: React.RefObject<HTMLDivEle
     });
   }, [scrollYProgress]);
 
+  // Per-card scroll-driven opacity + x (left cards slide from left, right from right)
+  const c0Opacity = useTransform(scrollYProgress, [CARD_SCROLL_WINDOWS[0][0], CARD_SCROLL_WINDOWS[0][1]], [0, 1]);
+  const c0X      = useTransform(scrollYProgress, [CARD_SCROLL_WINDOWS[0][0], CARD_SCROLL_WINDOWS[0][1]], [-24, 0]);
+  const c1Opacity = useTransform(scrollYProgress, [CARD_SCROLL_WINDOWS[1][0], CARD_SCROLL_WINDOWS[1][1]], [0, 1]);
+  const c1X      = useTransform(scrollYProgress, [CARD_SCROLL_WINDOWS[1][0], CARD_SCROLL_WINDOWS[1][1]], [24, 0]);
+  const c2Opacity = useTransform(scrollYProgress, [CARD_SCROLL_WINDOWS[2][0], CARD_SCROLL_WINDOWS[2][1]], [0, 1]);
+  const c2X      = useTransform(scrollYProgress, [CARD_SCROLL_WINDOWS[2][0], CARD_SCROLL_WINDOWS[2][1]], [-24, 0]);
+  const c3Opacity = useTransform(scrollYProgress, [CARD_SCROLL_WINDOWS[3][0], CARD_SCROLL_WINDOWS[3][1]], [0, 1]);
+  const c3X      = useTransform(scrollYProgress, [CARD_SCROLL_WINDOWS[3][0], CARD_SCROLL_WINDOWS[3][1]], [24, 0]);
+
+  const cardMotion = [
+    { opacity: c0Opacity, x: c0X },
+    { opacity: c1Opacity, x: c1X },
+    { opacity: c2Opacity, x: c2X },
+    { opacity: c3Opacity, x: c3X },
+  ];
 
   return (
-    // Sticky inside the 500vh wrapper — stays pinned to top for the full scroll range
+    // Sticky inside the 600vh wrapper — stays pinned to top for the full scroll range
     <section
       id="science"
       className="sticky top-0 z-10 h-screen scroll-mt-20 flex flex-col items-center justify-center px-6 gap-6 overflow-hidden"
@@ -105,24 +130,32 @@ function ScienceSection({ wrapperRef }: { wrapperRef: React.RefObject<HTMLDivEle
         {/* Cover bottom-left watermark */}
         <div className="absolute bottom-0 left-0 w-32 h-14 bg-black" />
 
-        {/* Left column — full cards on desktop, title-only on mobile */}
+        {/* Left column — cards [0] Stanford, [2] Dopamine */}
         <div className="absolute top-4 bottom-4 left-4 w-[26%] flex flex-col gap-3">
-          {[SCIENCE_CARDS[0], SCIENCE_CARDS[2]].map((card, i) => (
-            <div key={i} className="flex-1 flex flex-col justify-center gap-1.5 text-center group cursor-default transition-transform duration-300 ease-out hover:scale-110">
-              <p className="text-[10px] sm:text-base font-semibold text-white leading-tight transition-all duration-300 group-hover:text-white">{card.title}</p>
-              <p className="hidden sm:block text-xs sm:text-sm text-white/55 leading-snug transition-all duration-300 group-hover:text-white/80">{card.desc}</p>
-            </div>
+          {([0, 2] as const).map((cardIdx) => (
+            <motion.div
+              key={cardIdx}
+              style={cardMotion[cardIdx]}
+              className="flex-1 flex flex-col justify-center gap-1.5 text-center group cursor-default hover:scale-110 transition-transform duration-300 ease-out"
+            >
+              <p className="text-[10px] sm:text-base font-semibold text-white leading-tight">{SCIENCE_CARDS[cardIdx].title}</p>
+              <p className="hidden sm:block text-xs sm:text-sm text-white/55 leading-snug group-hover:text-white/80 transition-colors duration-300">{SCIENCE_CARDS[cardIdx].desc}</p>
+            </motion.div>
           ))}
         </div>
 
-        {/* Right column — full cards on desktop, title-only on mobile */}
+        {/* Right column — cards [1] 200+, [3] Real-World */}
         <div className="absolute bottom-0 right-0 w-[28%] h-[30%] bg-black hidden sm:block" />
         <div className="absolute top-4 bottom-4 right-4 w-[26%] flex flex-col gap-3">
-          {[SCIENCE_CARDS[1], SCIENCE_CARDS[3]].map((card, i) => (
-            <div key={i} className="flex-1 flex flex-col justify-center gap-1.5 text-center group cursor-default transition-transform duration-300 ease-out hover:scale-110">
-              <p className="text-[10px] sm:text-base font-semibold text-white leading-tight transition-all duration-300 group-hover:text-white">{card.title}</p>
-              <p className="hidden sm:block text-xs sm:text-sm text-white/55 leading-snug transition-all duration-300 group-hover:text-white/80">{card.desc}</p>
-            </div>
+          {([1, 3] as const).map((cardIdx) => (
+            <motion.div
+              key={cardIdx}
+              style={cardMotion[cardIdx]}
+              className="flex-1 flex flex-col justify-center gap-1.5 text-center group cursor-default hover:scale-110 transition-transform duration-300 ease-out"
+            >
+              <p className="text-[10px] sm:text-base font-semibold text-white leading-tight">{SCIENCE_CARDS[cardIdx].title}</p>
+              <p className="hidden sm:block text-xs sm:text-sm text-white/55 leading-snug group-hover:text-white/80 transition-colors duration-300">{SCIENCE_CARDS[cardIdx].desc}</p>
+            </motion.div>
           ))}
         </div>
 

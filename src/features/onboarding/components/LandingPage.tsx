@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, useScroll, useTransform, type MotionStyle } from 'framer-motion';
 import {
   CheckCircle2,
@@ -13,7 +13,9 @@ import { tokens } from '@core/design-system';
 import { HeroSection } from './HeroSection';
 import { FloatingNav } from '@shared/components/ui/floating-navbar';
 import { StickyScroll } from '@shared/components/ui/sticky-scroll-reveal';
-import { GlowingEffect } from '@shared/components/ui/glowing-effect';
+import { Testimonials } from '@shared/components/ui/unique-testimonial';
+import { MinimalFooter } from '@shared/components/ui/minimal-footer';
+import { PricingSection } from '@shared/components/ui/pricing-section';
 
 const TOTAL_FRAMES = 192;
 
@@ -68,11 +70,10 @@ function ScienceCard({ card, style }: { card: typeof SCIENCE_CARDS[number]; styl
   );
 }
 
-function ScienceSection() {
-  const containerRef = useRef<HTMLDivElement>(null);
+function ScienceSection({ wrapperRef }: { wrapperRef: React.RefObject<HTMLDivElement | null> }) {
   const imgRef = useRef<HTMLImageElement>(null);
   const { scrollYProgress } = useScroll({
-    target: containerRef,
+    target: wrapperRef,
     offset: ['start start', 'end end'],
   });
 
@@ -103,57 +104,56 @@ function ScienceSection() {
   ] as const;
 
   return (
-    <section id="science" className="relative z-10 scroll-mt-20" style={{ backgroundColor: '#000000' }}>
-      {/* 500vh scroll container — drives both frame scrubbing and card reveals */}
-      <div ref={containerRef} style={{ height: '500vh' }}>
-        <div className="sticky top-0 h-screen flex flex-col items-center justify-center px-6 gap-6 overflow-hidden">
+    // Sticky inside the 500vh wrapper — stays pinned to top for the full scroll range
+    <section
+      id="science"
+      className="sticky top-0 z-10 h-screen scroll-mt-20 flex flex-col items-center justify-center px-6 gap-6 overflow-hidden"
+      style={{ backgroundColor: '#000000' }}
+    >
+      {/* Heading */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.6 }}
+        className="text-center"
+      >
+        <h2 className="text-4xl font-light tracking-tight text-white sm:text-5xl" style={{ letterSpacing: '-0.03em' }}>
+          The science behind Coheren
+        </h2>
+        <p className="mt-3 text-base text-white/40 max-w-md mx-auto leading-relaxed font-light">
+          Our AI doesn't guess. It knows.
+        </p>
+      </motion.div>
 
-          {/* Heading */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="text-center"
-          >
-            <h2 className="text-4xl font-light tracking-tight text-white sm:text-5xl" style={{ letterSpacing: '-0.03em' }}>
-              The science behind Coheren
-            </h2>
-            <p className="mt-3 text-base text-white/40 max-w-md mx-auto leading-relaxed font-light">
-              Our AI doesn't guess. It knows.
-            </p>
-          </motion.div>
+      {/* Brain full-width, cards overlaid on top */}
+      <div className="relative w-full max-w-6xl">
 
-          {/* Brain full-width, cards overlaid on top */}
-          <div className="relative w-full max-w-6xl">
+        {/* Brain — fills the container */}
+        <img
+          ref={imgRef}
+          src="/science-frames/frame_0000.jpg"
+          className="w-full"
+          style={{ aspectRatio: '16/9', display: 'block', mixBlendMode: 'screen' }}
+          alt="Brain animation"
+        />
 
-            {/* Brain — fills the container */}
-            <img
-              ref={imgRef}
-              src="/science-frames/frame_0000.jpg"
-              className="w-full"
-              style={{ aspectRatio: '16/9', display: 'block', mixBlendMode: 'screen' }}
-              alt="Brain animation"
-            />
+        {/* Cover bottom-left watermark */}
+        <div className="absolute bottom-0 left-0 w-32 h-14 bg-black" />
 
-            {/* Cover bottom-left watermark */}
-            <div className="absolute bottom-0 left-0 w-32 h-14 bg-black" />
-
-            {/* Left column — pinned top to bottom, cards fill equally */}
-            <div className="absolute top-4 bottom-4 left-4 w-[26%] flex flex-col gap-3">
-              <ScienceCard card={SCIENCE_CARDS[0]} style={cardMotionStyles[0] as MotionStyle} />
-              <ScienceCard card={SCIENCE_CARDS[2]} style={cardMotionStyles[2] as MotionStyle} />
-            </div>
-
-            {/* Right column */}
-            <div className="absolute bottom-0 right-0 w-[28%] h-[30%] bg-black" />
-            <div className="absolute top-4 bottom-4 right-4 w-[26%] flex flex-col gap-3">
-              <ScienceCard card={SCIENCE_CARDS[1]} style={cardMotionStyles[1] as MotionStyle} />
-              <ScienceCard card={SCIENCE_CARDS[3]} style={cardMotionStyles[3] as MotionStyle} />
-            </div>
-
-          </div>
+        {/* Left column — pinned top to bottom, cards fill equally */}
+        <div className="absolute top-4 bottom-4 left-4 w-[26%] flex flex-col gap-3">
+          <ScienceCard card={SCIENCE_CARDS[0]} style={cardMotionStyles[0] as MotionStyle} />
+          <ScienceCard card={SCIENCE_CARDS[2]} style={cardMotionStyles[2] as MotionStyle} />
         </div>
+
+        {/* Right column */}
+        <div className="absolute bottom-0 right-0 w-[28%] h-[30%] bg-black" />
+        <div className="absolute top-4 bottom-4 right-4 w-[26%] flex flex-col gap-3">
+          <ScienceCard card={SCIENCE_CARDS[1]} style={cardMotionStyles[1] as MotionStyle} />
+          <ScienceCard card={SCIENCE_CARDS[3]} style={cardMotionStyles[3] as MotionStyle} />
+        </div>
+
       </div>
     </section>
   );
@@ -166,6 +166,7 @@ interface LandingPageProps {
 export default function LandingPage({ onGetStarted }: LandingPageProps) {
   const setStep = useStore((state) => state.setStep);
   const [goalInput] = useState('');
+  const scienceWrapperRef = useRef<HTMLDivElement>(null);
 
   const handleGetStarted = (customGoal?: string) => {
     const goal = customGoal || goalInput.trim();
@@ -178,11 +179,6 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && goalInput.trim()) {
-      handleGetStarted();
-    }
-  };
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#FAF9F7' }}>
@@ -653,88 +649,19 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       </section>
 
 
-      {/* The Science Behind Coheren */}
-      <ScienceSection />
-
-      {/* Footer */}
-      <footer className="relative z-10 border-t border-slate-200 bg-white pb-6 pt-16 lg:pb-8 lg:pt-24">
-        <div className="px-4 lg:px-8 max-w-7xl mx-auto">
-          {/* Top row: brand + social */}
-          <div className="md:flex md:items-start md:justify-between">
-            <a href="/" className="flex items-center gap-x-2" aria-label="coheren.ai">
-              <img src="/logo-full.svg" alt="Coheren" className="h-7 w-auto" />
-            </a>
-            <ul className="flex list-none mt-6 md:mt-0 space-x-3">
-              {[
-                { label: 'Twitter', href: 'https://twitter.com', icon: (
-                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.259 5.631 5.905-5.631Zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                )},
-                { label: 'LinkedIn', href: 'https://linkedin.com', icon: (
-                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                )},
-              ].map((link, i) => (
-                <li key={i}>
-                  <a
-                    href={link.href}
-                    target="_blank"
-                    aria-label={link.label}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900"
-                  >
-                    {link.icon}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Bottom row: copyright + nav + legal */}
-          <div className="border-t border-slate-100 mt-6 pt-6 md:mt-4 md:pt-8 lg:grid lg:grid-cols-10">
-            {/* Copyright — left col */}
-            <div className="mt-6 text-sm leading-6 text-slate-400 whitespace-nowrap lg:mt-0 lg:row-[1/3] lg:col-[1/4]">
-              <div>© {new Date().getFullYear()} coheren.ai</div>
-              <div>All rights reserved.</div>
-            </div>
-
-            {/* Main nav links */}
-            <nav className="lg:mt-0 lg:col-[4/11]">
-              <ul className="list-none flex flex-wrap -my-1 -mx-2 lg:justify-end">
-                {[
-                  { label: 'How it Works', href: '#how-it-works' },
-                  { label: 'Features', href: '#roadmap-preview' },
-                  { label: 'Why Coheren', href: '#why-coheren' },
-                  { label: 'Science', href: '#science' },
-                ].map((link, i) => (
-                  <li key={i} className="my-1 mx-2 shrink-0">
-                    <a
-                      href={link.href}
-                      onClick={(e) => { e.preventDefault(); document.querySelector(link.href)?.scrollIntoView({ behavior: 'smooth' }); }}
-                      className="text-sm text-slate-700 underline-offset-4 hover:underline"
-                    >
-                      {link.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </nav>
-
-            {/* Legal links */}
-            <div className="mt-6 lg:mt-0 lg:col-[4/11]">
-              <ul className="list-none flex flex-wrap -my-1 -mx-3 lg:justify-end">
-                {[
-                  { label: 'Privacy Policy', href: '#' },
-                  { label: 'Terms of Service', href: '#' },
-                ].map((link, i) => (
-                  <li key={i} className="my-1 mx-3 shrink-0">
-                    <a href={link.href} className="text-sm text-slate-400 underline-offset-4 hover:underline">
-                      {link.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
+      {/* 600vh wrapper: science is sticky 0→600vh; testimonials slide in from 500vh, covering science */}
+      <div ref={scienceWrapperRef} style={{ height: '600vh', position: 'relative', backgroundColor: '#000000' }}>
+        <ScienceSection wrapperRef={scienceWrapperRef} />
+        {/* Testimonials start at 500vh inside the wrapper — they scroll into view from below
+            while science is still pinned, producing the curtain effect */}
+        <div style={{ position: 'absolute', top: '500vh', left: 0, right: 0, zIndex: 20 }}>
+          <Testimonials />
         </div>
-      </footer>
+      </div>
+
+      <PricingSection />
+
+      <MinimalFooter />
     </div>
   );
 }

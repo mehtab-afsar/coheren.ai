@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@lib/utils";
 
@@ -25,12 +25,31 @@ export const FloatingNav = ({
   onCtaClick,
   className,
 }: FloatingNavProps) => {
+  const [visible, setVisible] = useState(true);
+  const lastScrollY = useRef(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentY = window.scrollY;
+      if (currentY < 50) {
+        setVisible(true);
+      } else if (currentY > lastScrollY.current) {
+        setVisible(false); // scrolling down
+      } else {
+        setVisible(true);  // scrolling up
+      }
+      lastScrollY.current = currentY;
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   return (
     <AnimatePresence mode="wait">
       <motion.div
         initial={{ opacity: 0, y: -16 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.4, delay: 0.2 }}
+        animate={{ y: visible ? 0 : -80, opacity: visible ? 1 : 0 }}
+        transition={{ duration: 0.3, ease: 'easeInOut' }}
         className={cn(
           "fixed inset-x-0 top-8 z-[5000] mx-auto flex w-full max-w-2xl items-center justify-between",
           "rounded-full border border-black/[0.08] bg-white/90 backdrop-blur-md",

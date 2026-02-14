@@ -60,32 +60,56 @@ const CARD_SCROLL_WINDOWS = [
 ] as const;
 
 function ScienceSection({ wrapperRef }: { wrapperRef: React.RefObject<HTMLDivElement | null> }) {
-  const imgRef = useRef<HTMLImageElement>(null);
-  // Hold preloaded Image objects in memory so browser keeps them cached
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Hold decoded Image objects — once loaded they stay decoded in memory
   const framesRef = useRef<HTMLImageElement[]>([]);
+  const loadedRef = useRef<boolean[]>([]);
 
   const { scrollYProgress } = useScroll({
     target: wrapperRef,
     offset: ['start start', 'end end'],
   });
 
-  // Preload all frames into browser memory on mount — eliminates network latency on scroll
+  // Preload + decode all frames. Storing loaded Image objects means canvas.drawImage
+  // is a GPU blit — no network fetch, no JPG decode at scroll time.
   useEffect(() => {
-    const images: HTMLImageElement[] = [];
-    for (let i = 0; i < TOTAL_FRAMES; i++) {
-      const img = new Image();
-      img.src = `/science-frames/frame_${String(i).padStart(4, '0')}.jpg`;
-      images.push(img);
-    }
+    const images: HTMLImageElement[] = new Array(TOTAL_FRAMES);
+    const loaded: boolean[] = new Array(TOTAL_FRAMES).fill(false);
     framesRef.current = images;
+    loadedRef.current = loaded;
+
+    // Draw first frame as soon as it's ready
+    const first = new Image();
+    first.onload = () => {
+      loaded[0] = true;
+      images[0] = first;
+      const canvas = canvasRef.current;
+      if (canvas) {
+        canvas.width = first.naturalWidth;
+        canvas.height = first.naturalHeight;
+        canvas.getContext('2d')?.drawImage(first, 0, 0);
+      }
+    };
+    first.src = `/science-frames/frame_0000.jpg`;
+
+    // Load remaining frames in background
+    for (let i = 1; i < TOTAL_FRAMES; i++) {
+      const img = new Image();
+      const idx = i;
+      img.onload = () => { loaded[idx] = true; images[idx] = img; };
+      img.src = `/science-frames/frame_${String(i).padStart(4, '0')}.jpg`;
+    }
   }, []);
 
-  // Drive frame index imperatively (no re-render)
+  // Drive frame index — canvas.drawImage is a direct GPU blit, no decode cost
   useEffect(() => {
     return scrollYProgress.on('change', v => {
-      if (!imgRef.current) return;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
       const idx = Math.min(Math.floor(v * TOTAL_FRAMES), TOTAL_FRAMES - 1);
-      imgRef.current.src = `/science-frames/frame_${String(idx).padStart(4, '0')}.jpg`;
+      const img = framesRef.current[idx];
+      if (!img || !loadedRef.current[idx]) return;
+      canvas.getContext('2d')?.drawImage(img, 0, 0);
     });
   }, [scrollYProgress]);
 
@@ -132,13 +156,11 @@ function ScienceSection({ wrapperRef }: { wrapperRef: React.RefObject<HTMLDivEle
       {/* Brain full-width, cards overlaid on top */}
       <div className="relative w-full max-w-6xl">
 
-        {/* Brain — fills the container */}
-        <img
-          ref={imgRef}
-          src="/science-frames/frame_0000.jpg"
+        {/* Brain — canvas for lag-free GPU frame blitting */}
+        <canvas
+          ref={canvasRef}
           className="w-full"
           style={{ aspectRatio: '16/9', display: 'block', mixBlendMode: 'screen' }}
-          alt="Brain animation"
         />
 
         {/* Cover bottom-left watermark */}

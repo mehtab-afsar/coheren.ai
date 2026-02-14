@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import NumberFlow from "@number-flow/react";
-import { CheckCheck, Zap, Brain, Route, BookOpen, Infinity } from "lucide-react";
+import { Zap, Brain, Route, BookOpen, Infinity } from "lucide-react";
 
 const plans = [
   {
@@ -60,7 +60,7 @@ export function PricingSection() {
   const [isYearly, setIsYearly] = useState(false);
 
   return (
-    <section className="relative w-full bg-transparent overflow-hidden py-24 px-4">
+    <section className="relative w-full bg-transparent overflow-hidden py-8 sm:py-16 px-4">
       {/* Subtle purple glow top-center */}
       <div
         className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2"
@@ -79,13 +79,13 @@ export function PricingSection() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
-          className="text-center mb-10"
+          className="text-center mb-4 sm:mb-8"
         >
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-400 mb-4">
             Pricing
           </p>
           <h2
-            className="text-4xl font-light text-gray-900 sm:text-5xl"
+            className="text-2xl font-light text-gray-900 sm:text-4xl lg:text-5xl"
             style={{ letterSpacing: "-0.03em" }}
           >
             Start free. Stay only if it works.
@@ -101,7 +101,7 @@ export function PricingSection() {
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="flex justify-center mb-10"
+          className="flex justify-center mb-4 sm:mb-8"
         >
           <div className="relative flex items-center gap-1 rounded-full border border-gray-200 bg-gray-100 p-1">
             <button
@@ -141,7 +141,7 @@ export function PricingSection() {
         </motion.div>
 
         {/* Cards */}
-        <div className="grid gap-6 sm:grid-cols-2 max-w-3xl mx-auto">
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 max-w-3xl mx-auto">
           {plans.map((plan, i) => (
             <motion.div
               key={plan.name}
@@ -178,12 +178,12 @@ export function PricingSection() {
                   </span>
                 )}
 
-                <div className="p-6 pb-4">
-                  <h3 className="text-2xl font-semibold text-gray-900">{plan.name}</h3>
-                  <p className="text-sm text-gray-500 mt-1 leading-relaxed">{plan.description}</p>
+                <div className="p-4 sm:p-6 pb-3 sm:pb-4">
+                  <h3 className="text-xl sm:text-2xl font-semibold text-gray-900">{plan.name}</h3>
+                  <p className="text-xs sm:text-sm text-gray-500 mt-1 leading-relaxed">{plan.description}</p>
 
-                  <div className="flex items-baseline gap-1 mt-4">
-                    <span className="text-5xl font-semibold text-gray-900">
+                  <div className="flex items-baseline gap-1 mt-3">
+                    <span className="text-4xl sm:text-5xl font-semibold text-gray-900">
                       $
                       <NumberFlow
                         value={isYearly ? plan.yearlyPrice : plan.monthlyPrice}
@@ -198,9 +198,9 @@ export function PricingSection() {
                   </div>
                 </div>
 
-                <div className="px-6 pb-6 flex flex-col gap-5">
+                <div className="px-4 sm:px-6 pb-4 sm:pb-6 flex flex-col gap-3 sm:gap-5">
                   <button
-                    className={`w-full rounded-xl py-3 text-base font-medium transition-all duration-200 ${
+                    className={`w-full rounded-xl py-2.5 sm:py-3 text-sm sm:text-base font-medium transition-all duration-200 ${
                       plan.popular
                         ? "bg-violet-600 text-white shadow-md shadow-violet-900/30 hover:bg-violet-700"
                         : "text-gray-800 hover:text-violet-700"

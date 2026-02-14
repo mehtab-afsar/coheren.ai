@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { motion, useScroll, useTransform, type MotionStyle } from 'framer-motion';
+import { motion, useScroll, useTransform } from 'framer-motion';
 import {
   CheckCircle2,
   X,
@@ -19,13 +19,6 @@ import { PricingSection } from '@shared/components/ui/pricing-section';
 
 const TOTAL_FRAMES = 192;
 
-// Scroll thresholds: each card reveals over a 0.12 window, spaced 0.2 apart
-const CARD_WINDOWS = [
-  [0.10, 0.22], // top-left
-  [0.30, 0.42], // top-right
-  [0.50, 0.62], // bottom-left
-  [0.70, 0.82], // bottom-right
-] as const;
 
 const SCIENCE_CARDS = [
   {
@@ -56,19 +49,6 @@ const SCIENCE_CARDS = [
   },
 ] as const;
 
-function ScienceCard({ card, style }: { card: typeof SCIENCE_CARDS[number]; style: MotionStyle }) {
-  return (
-    <motion.div
-      style={style}
-      className="flex-1 flex flex-col justify-center gap-1 text-center cursor-default"
-      whileHover={{ scale: 1.12 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-    >
-      <h3 className="text-base font-semibold text-white leading-tight tracking-tight">{card.title}</h3>
-      <p className="text-sm text-white/55 leading-snug">{card.desc}</p>
-    </motion.div>
-  );
-}
 
 function ScienceSection({ wrapperRef }: { wrapperRef: React.RefObject<HTMLDivElement | null> }) {
   const imgRef = useRef<HTMLImageElement>(null);
@@ -86,22 +66,6 @@ function ScienceSection({ wrapperRef }: { wrapperRef: React.RefObject<HTMLDivEle
     });
   }, [scrollYProgress]);
 
-  // Each card: opacity + translate from its respective side
-  const c0Opacity = useTransform(scrollYProgress, [CARD_WINDOWS[0][0], CARD_WINDOWS[0][1]], [0, 1]);
-  const c0X      = useTransform(scrollYProgress, [CARD_WINDOWS[0][0], CARD_WINDOWS[0][1]], [-32, 0]);
-  const c1Opacity = useTransform(scrollYProgress, [CARD_WINDOWS[1][0], CARD_WINDOWS[1][1]], [0, 1]);
-  const c1X      = useTransform(scrollYProgress, [CARD_WINDOWS[1][0], CARD_WINDOWS[1][1]], [32, 0]);
-  const c2Opacity = useTransform(scrollYProgress, [CARD_WINDOWS[2][0], CARD_WINDOWS[2][1]], [0, 1]);
-  const c2X      = useTransform(scrollYProgress, [CARD_WINDOWS[2][0], CARD_WINDOWS[2][1]], [-32, 0]);
-  const c3Opacity = useTransform(scrollYProgress, [CARD_WINDOWS[3][0], CARD_WINDOWS[3][1]], [0, 1]);
-  const c3X      = useTransform(scrollYProgress, [CARD_WINDOWS[3][0], CARD_WINDOWS[3][1]], [32, 0]);
-
-  const cardMotionStyles = [
-    { opacity: c0Opacity, x: c0X },
-    { opacity: c1Opacity, x: c1X },
-    { opacity: c2Opacity, x: c2X },
-    { opacity: c3Opacity, x: c3X },
-  ] as const;
 
   return (
     // Sticky inside the 500vh wrapper — stays pinned to top for the full scroll range
@@ -141,17 +105,25 @@ function ScienceSection({ wrapperRef }: { wrapperRef: React.RefObject<HTMLDivEle
         {/* Cover bottom-left watermark */}
         <div className="absolute bottom-0 left-0 w-32 h-14 bg-black" />
 
-        {/* Left column — pinned top to bottom, cards fill equally */}
+        {/* Left column — full cards on desktop, title-only on mobile */}
         <div className="absolute top-4 bottom-4 left-4 w-[26%] flex flex-col gap-3">
-          <ScienceCard card={SCIENCE_CARDS[0]} style={cardMotionStyles[0] as MotionStyle} />
-          <ScienceCard card={SCIENCE_CARDS[2]} style={cardMotionStyles[2] as MotionStyle} />
+          {[SCIENCE_CARDS[0], SCIENCE_CARDS[2]].map((card, i) => (
+            <div key={i} className="flex-1 flex flex-col justify-center gap-1.5 text-center group cursor-default transition-transform duration-300 ease-out hover:scale-110">
+              <p className="text-[10px] sm:text-base font-semibold text-white leading-tight transition-all duration-300 group-hover:text-white">{card.title}</p>
+              <p className="hidden sm:block text-xs sm:text-sm text-white/55 leading-snug transition-all duration-300 group-hover:text-white/80">{card.desc}</p>
+            </div>
+          ))}
         </div>
 
-        {/* Right column */}
-        <div className="absolute bottom-0 right-0 w-[28%] h-[30%] bg-black" />
+        {/* Right column — full cards on desktop, title-only on mobile */}
+        <div className="absolute bottom-0 right-0 w-[28%] h-[30%] bg-black hidden sm:block" />
         <div className="absolute top-4 bottom-4 right-4 w-[26%] flex flex-col gap-3">
-          <ScienceCard card={SCIENCE_CARDS[1]} style={cardMotionStyles[1] as MotionStyle} />
-          <ScienceCard card={SCIENCE_CARDS[3]} style={cardMotionStyles[3] as MotionStyle} />
+          {[SCIENCE_CARDS[1], SCIENCE_CARDS[3]].map((card, i) => (
+            <div key={i} className="flex-1 flex flex-col justify-center gap-1.5 text-center group cursor-default transition-transform duration-300 ease-out hover:scale-110">
+              <p className="text-[10px] sm:text-base font-semibold text-white leading-tight transition-all duration-300 group-hover:text-white">{card.title}</p>
+              <p className="hidden sm:block text-xs sm:text-sm text-white/55 leading-snug transition-all duration-300 group-hover:text-white/80">{card.desc}</p>
+            </div>
+          ))}
         </div>
 
       </div>
@@ -684,6 +656,19 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
               zIndex: 0,
             }}
           />
+
+          {/* REWIRE — blend mode on the wrapper so the whole layer inverts against the video */}
+          <div style={{ position: 'absolute', inset: 0, zIndex: 10, mixBlendMode: 'difference', pointerEvents: 'none' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+              <h2 style={{ fontSize: '14vw', fontWeight: 900, lineHeight: 1, letterSpacing: '-0.04em', color: '#ffffff', userSelect: 'none', margin: 0 }}>
+                REWIRE
+              </h2>
+            </div>
+            <div style={{ position: 'absolute', top: '3rem', left: '3rem', fontFamily: 'monospace', fontSize: '10px', color: '#ffffff', opacity: 0.5, lineHeight: 1.8 }}>
+              <p>SYNC_STATE: STABLE</p>
+              <p>AGENT_05: RUNNING</p>
+            </div>
+          </div>
 
           <motion.div
             style={{

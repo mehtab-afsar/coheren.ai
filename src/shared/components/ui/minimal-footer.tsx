@@ -37,7 +37,7 @@ export function MinimalFooter() {
   };
 
   return (
-    <footer className="relative z-20 bg-white overflow-hidden">
+    <footer className="relative z-[100] bg-white overflow-hidden">
 
       {/* Purple glow — bottom center */}
       <div

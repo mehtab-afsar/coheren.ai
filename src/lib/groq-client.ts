@@ -9,8 +9,12 @@
 
 import Groq from 'groq-sdk';
 
+if (!import.meta.env.VITE_GROQ_API_KEY) {
+  console.warn('⚠️  VITE_GROQ_API_KEY is not set. AI features will not work until this is configured.');
+}
+
 const groq = new Groq({
-  apiKey: import.meta.env.VITE_GROQ_API_KEY,
+  apiKey: import.meta.env.VITE_GROQ_API_KEY || 'placeholder-key',
   dangerouslyAllowBrowser: true,
   maxRetries: 0, // Disable SDK-level retries — our callWithRetry handles this
 });

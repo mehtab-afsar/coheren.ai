@@ -12,6 +12,7 @@ import Groq from 'groq-sdk';
 const groq = new Groq({
   apiKey: import.meta.env.VITE_GROQ_API_KEY,
   dangerouslyAllowBrowser: true,
+  maxRetries: 0, // Disable SDK-level retries — our callWithRetry handles this
 });
 
 // ── Session-level telemetry ───────────────────────────────────────────────────
@@ -135,13 +136,16 @@ async function callWithRetry(
   } catch (error: unknown) {
     const groqError = error as GroqError;
     if (groqError.status === 429 && retries > 0) {
-      // Extract wait time from error message (e.g., "Please try again in 2.5s")
-      const waitMatch = groqError.error?.message?.match(/(\d+\.?\d*)s/);
-      const waitSeconds = waitMatch ? parseFloat(waitMatch[1]) : 2;
+      // Extract wait time from error message (e.g., "Please try again in 6.85s")
+      // Groq SDK wraps the message in both error.error.message and error.message
+      const rawMsg = groqError.error?.message ?? groqError.message ?? '';
+      const waitMatch = rawMsg.match(/(\d+\.?\d*)s/);
+      // Use the suggested wait time, with a minimum of 8s and a +2s safety buffer
+      const waitSeconds = Math.max(waitMatch ? parseFloat(waitMatch[1]) : 8, 8) + 2;
 
       console.warn(`⏳ Rate limited. Retrying in ${waitSeconds}s... (${retries} retries left)`);
 
-      await new Promise(resolve => setTimeout(resolve, (waitSeconds + 0.5) * 1000));
+      await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000));
       return callWithRetry(params, retries - 1);
     }
 

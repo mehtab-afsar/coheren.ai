@@ -1,6 +1,20 @@
 import { useState, useRef, useEffect } from 'react';
-import { Sparkles, LogIn, UserPlus, Mail, Lock } from 'lucide-react';
 import { Icons } from '@shared/components/ui/icons';
+import { CoherenLoader } from '@shared/components/ui/coheren-loader';
+import { DitheringShader } from '@shared/components/ui/dithering-shader';
+
+/** Full-bleed sphere shader for the auth gate left panel */
+const AuthShaderPanel = () => (
+  <DitheringShader
+    shape="sphere"
+    type="random"
+    colorBack="#0f0f0f"
+    colorFront="#7c3aed"
+    pxSize={3}
+    speed={1.2}
+    style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }}
+  />
+);
 import { useStore } from '@core/store/useStore';
 import { callReasoning, callEconomy } from '@lib/ai-router';
 import { tokens, button } from '@core/design-system';
@@ -8,15 +22,15 @@ import { generateInitialTasks } from '@shared/utils/taskGenerator';
 import { detectCategory } from '@shared/utils/categoryDetection';
 import { retrieveKnowledge, type UserContext } from '@core/rag';
 import type { GoalCategory } from '@types-app/index';
-import LoadingAnimation from '@shared/components/LoadingAnimation';
 
 
 // Import agent system
-import { runOnboardingAgents, generateCompleteRoadmap } from '@core/agents';
-import type { BuildingStone, StoneAnswer, Agent1Output } from '@core/agents';
+import { runOnboardingAgents, generateCompleteRoadmap, generateTaskBatch } from '@core/agents';
+import type { BuildingStone, StoneAnswer, Agent1Output, DailyTask } from '@core/agents';
 import StoneQuestions from '@features/onboarding/components/StoneQuestions';
 import { syncCompleteRoadmap } from '@lib/database';
 import { useAuthGate } from '../hooks/useAuthGate';
+
 
 // Groq client now imported from groq-client.ts with auto-fallback
 
@@ -190,8 +204,10 @@ export default function ChatOnboarding({ onLoginSuccess }: ChatOnboardingProps) 
   }, [onboardingPhase, isGeneratingPlan]);
 
   // If user came from landing page with a pre-filled goal, trigger AI response automatically
+  const hasTriggeredInitialRef = useRef(false);
   useEffect(() => {
-    if (initialGoal && messages.length === 2 && !isTyping) {
+    if (initialGoal && messages.length === 2 && !hasTriggeredInitialRef.current) {
+      hasTriggeredInitialRef.current = true;
       // The goal is already in messages as a "user" message — trigger AI response
       const triggerInitialResponse = async () => {
         setIsTyping(true);
@@ -232,7 +248,7 @@ export default function ChatOnboarding({ onLoginSuccess }: ChatOnboardingProps) 
   // to avoid the react-hooks/immutability "accessed before declared" lint error.
 
   const handleSend = async () => {
-    if (!userInput.trim()) return;
+    if (!userInput.trim() || isTyping) return;
 
     // If we've moved past conversation phase, don't process new input
     if (onboardingPhase !== 'conversation') {
@@ -577,13 +593,13 @@ The system will automatically detect when the data is complete and transition to
       console.log('   Daily time:', dailyMinutes, 'minutes');
 
       // Run Agent 3 & 4 to generate roadmap and first task
-      const { roadmap: agentRoadmap, firstTask } = await generateCompleteRoadmap(
+      const { roadmap: agentRoadmap, firstTask, stoneProfile } = await generateCompleteRoadmap(
         collectedData.goal,
         timelineDays,
         dailyMinutes,
         answers,
-        collectedData.category || undefined, // Pass category for resource matching
-        collectedData.skillLevel || 'beginner' // Pass skill level for resource matching
+        collectedData.category || undefined,
+        collectedData.skillLevel || 'beginner'
       );
 
       console.log('✅ Roadmap and first task generated');
@@ -627,35 +643,51 @@ The system will automatically detect when the data is complete and transition to
 
       setRoadmap(roadmap);
 
-      // Convert agent task to our format
-      const initialTasks = [{
-        id: '1',
-        title: firstTask.task.title,
-        description: firstTask.task.description,
+      // Helper: convert a DailyTask agent output to the store/DB format
+      const toStoreTask = (agentTask: typeof firstTask, dayNum: number) => ({
+        id: String(dayNum),
+        title: agentTask.task.title,
+        description: agentTask.task.description,
         type: 'practice' as const,
-        duration: firstTask.task.estimatedMinutes,
+        duration: agentTask.task.estimatedMinutes,
         completed: false,
         skipped: false,
         checkInTime: checkInTime || '07:00',
-        scheduledFor: new Date().toISOString().split('T')[0],
-        day: 1,
-        dayNumber: 1,
-        steps: firstTask.task.steps.map(step => step.instruction),
-        tips: firstTask.task.tips,
-        successCriteria: firstTask.task.successCriteria.primary,
-        resources: firstTask.task.resources // Include matched resources
-      }];
+        scheduledFor: new Date(Date.now() + (dayNum - 1) * 86400000).toISOString().split('T')[0],
+        day: dayNum,
+        dayNumber: dayNum,
+        steps: agentTask.task.steps.map(step => step.instruction),
+        tips: agentTask.task.tips,
+        successCriteria: agentTask.task.successCriteria.primary,
+        resources: agentTask.task.resources,
+      });
 
-      // Debug: Log task resources at generation time
-      console.log('📦 Generated Task Resources:', {
-        taskTitle: firstTask.task.title,
-        hasResources: !!firstTask.task.resources,
-        primary: firstTask.task.resources?.primary,
-        supplementaryCount: firstTask.task.resources?.supplementary?.length || 0,
-        fullResources: firstTask.task.resources
+      // Day 1 is already generated; pre-generate days 2–7 in background
+      const initialTasks = [toStoreTask(firstTask, 1)];
+
+      console.log('📦 Day 1 task resources:', {
+        title: firstTask.task.title,
+        primary: firstTask.task.resources?.primary?.url ?? 'none',
       });
 
       setTasks(initialTasks);
+      setGenerationProgress(100);
+      clearInterval(progressInterval);
+
+      // Generate days 2-7 in background (non-blocking) then append to store + DB
+      generateTaskBatch(2, 7, agentRoadmap, stoneProfile, dailyMinutes, collectedData.category || undefined, collectedData.skillLevel || 'beginner')
+        .then((batchTasks: DailyTask[]) => {
+          const extraTasks = batchTasks.map((t: DailyTask, i: number) => toStoreTask(t, i + 2));
+          const allTasks = [...initialTasks, ...extraTasks];
+          setTasks(allTasks);
+          console.log(`✅ Week 1 fully generated (${allTasks.length} tasks)`);
+          const u = useStore.getState().user;
+          if (u) {
+            syncCompleteRoadmap(u.id, collectedData.goal, `Generated via AI for ${collectedData.category}`, goalAnalysis, answers, agentRoadmap, allTasks)
+              .catch((err: unknown) => console.warn('⚠️ Re-sync with week tasks failed:', err));
+          }
+        })
+        .catch((err: unknown) => console.warn('⚠️ Background week generation failed:', err));
 
       setGenerationProgress(100);
       clearInterval(progressInterval);
@@ -709,338 +741,11 @@ The system will automatically detect when the data is complete and transition to
         message: isRateLimit
           ? 'API rate limit reached while building your curriculum. Please wait a moment and try again.'
           : 'Something went wrong while building your curriculum. Please try again.',
-        retryFn: () => { setAgentError(null); generateStrategicPlan(); },
+        retryFn: () => { setAgentError(null); generateStrategicPlanWithAgents(answers); },
       });
     }
   };
 
-  const generateStrategicPlan = async () => {
-    // Prevent multiple calls
-    if (isGeneratingPlan) {
-      return;
-    }
-
-    // NEVER proceed without a category
-    if (!collectedData.category) {
-      return;
-    }
-
-    setIsGeneratingPlan(true);
-    setGenerationProgress(0);
-
-    const category = collectedData.category;
-    const energyPattern = collectedData.energyPattern as 'morning' | 'afternoon' | 'evening' | 'night';
-
-    // Show typing indicator (removed duplicate loading message)
-    setIsTyping(true);
-
-    // Simulate progress for better UX
-    const progressInterval = setInterval(() => {
-      setGenerationProgress((prev) => {
-        if (prev >= 90) {
-          clearInterval(progressInterval);
-          return 90; // Stop at 90%, complete when API returns
-        }
-        return prev + 10;
-      });
-    }, 300);
-
-    try {
-      // Calculate duration in months from timeline
-      const durationInMonths = collectedData.timeline?.target
-        ? calculateDurationInMonths(collectedData.timeline.target)
-        : 3;
-      const totalWeeks = Math.ceil(durationInMonths * 4); // 4 weeks per month
-
-      // Calculate task durations based on user's daily time commitment
-      const dailyMinutes = parseDailyTimeToMinutes(collectedData.dailyTime);
-      const practiceDuration = Math.round(dailyMinutes * 0.50); // 50% for practice
-      const learningDuration = Math.round(dailyMinutes * 0.35); // 35% for learning
-      const reflectionDuration = Math.round(dailyMinutes * 0.15); // 15% for reflection
-
-      // Build strategic plan prompt for Groq with science-backed approach
-      const planPrompt = `You are a JSON API. Return ONLY valid JSON, no explanations.
-
-SCIENTIFIC FOUNDATION FOR HABIT FORMATION:
-- Start TINY (Two-Minute Rule): First weeks should be easy enough that motivation isn't needed
-- HABIT STACKING: Attach new habits to existing routines ("After I [anchor], I will [habit]")
-- PROGRESSIVE OVERLOAD: Increase difficulty by ~10% per week only after consistency
-- CELEBRATION: Include reflection tasks to build positive association
-- ENERGY MATCHING: ${collectedData.energyPattern === 'morning' ? 'Front-load challenging tasks' : collectedData.energyPattern === 'evening' ? 'Save intensive work for evening' : 'Distribute tasks throughout day'}
-
-Create a strategic weekly plan for:
-- GOAL: "${collectedData.goal}"
-- CATEGORY: ${category}
-- SKILL LEVEL: ${collectedData.skillLevel}
-- TIMELINE: ${durationInMonths} months (${totalWeeks} weeks)
-- DAILY TIME: ${dailyMinutes} minutes per day (distribute as: practice ~${practiceDuration}min, learning ~${learningDuration}min, reflection ~${reflectionDuration}min)
-- ENERGY PATTERN: ${collectedData.energyPattern || 'flexible'}
-
-IMPORTANT: The user has ${dailyMinutes} minutes per day. Each day's tasks MUST add up to approximately ${dailyMinutes} minutes total.
-
-Return this EXACT JSON structure (no markdown, no code blocks, no explanations):
-
-{
-  "totalWeeks": ${totalWeeks},
-  "duration": ${durationInMonths},
-  "weekTemplates": [
-    {
-      "weekNumber": 1,
-      "focus": "Foundation",
-      "description": "Build basic understanding",
-      "dailyTasks": [
-        {
-          "dayOfWeek": 1,
-          "practice": {"title": "Specific ${category.toLowerCase()} practice task", "duration": ${practiceDuration}},
-          "learning": {"title": "Learn key ${category.toLowerCase()} concept", "duration": ${learningDuration}},
-          "reflection": {"title": "Reflect on progress", "duration": ${reflectionDuration}}
-        },
-        {
-          "dayOfWeek": 2,
-          "practice": {"title": "Different ${category.toLowerCase()} practice", "duration": ${practiceDuration}},
-          "learning": {"title": "Study ${category.toLowerCase()} technique", "duration": ${learningDuration}},
-          "reflection": {"title": "Note challenges", "duration": ${reflectionDuration}}
-        },
-        {
-          "dayOfWeek": 3,
-          "practice": {"title": "Apply what you learned", "duration": ${practiceDuration}},
-          "learning": {"title": "Review ${category.toLowerCase()} basics", "duration": ${learningDuration}},
-          "reflection": {"title": "Track improvements", "duration": ${reflectionDuration}}
-        },
-        {
-          "dayOfWeek": 4,
-          "practice": {"title": "Increase ${category.toLowerCase()} intensity", "duration": ${practiceDuration}},
-          "learning": {"title": "Learn advanced tip", "duration": ${learningDuration}},
-          "reflection": {"title": "Plan next steps", "duration": ${reflectionDuration}}
-        },
-        {
-          "dayOfWeek": 5,
-          "practice": {"title": "Practice ${category.toLowerCase()} consistently", "duration": ${practiceDuration}},
-          "learning": {"title": "Study common mistakes", "duration": ${learningDuration}},
-          "reflection": {"title": "Self-assessment", "duration": ${reflectionDuration}}
-        },
-        {
-          "dayOfWeek": 6,
-          "practice": {"title": "Light ${category.toLowerCase()} review", "duration": ${practiceDuration}},
-          "learning": {"title": "Read ${category.toLowerCase()} tips", "duration": ${learningDuration}},
-          "reflection": {"title": "Weekly reflection", "duration": ${reflectionDuration}}
-        },
-        {
-          "dayOfWeek": 7,
-          "practice": {"title": "Rest or light activity", "duration": ${Math.round(practiceDuration * 0.5)}},
-          "learning": {"title": "Plan week 2", "duration": ${Math.round(learningDuration * 0.5)}},
-          "reflection": {"title": "Set weekly goal", "duration": ${reflectionDuration}}
-        }
-      ]
-    }
-  ]
-}
-
-CRITICAL: Each day's tasks should total approximately ${dailyMinutes} minutes. Use durations around: practice=${practiceDuration}min, learning=${learningDuration}min, reflection=${reflectionDuration}min.
-
-Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 easy for ${collectedData.skillLevel} level. Make all tasks specific to ${category} and the goal "${collectedData.goal}".`;
-
-      const { content: responseText = '' } = await callEconomy({
-        messages: [{ role: 'user', content: planPrompt }],
-        temperature: 0.7,
-        max_tokens: 4000,
-      });
-
-      // Parse JSON response
-      let strategicPlan;
-      try {
-        // Remove markdown code blocks if present
-        let jsonText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-
-        // Try to extract JSON if there's extra text around it
-        const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          jsonText = jsonMatch[0];
-        }
-
-        strategicPlan = JSON.parse(jsonText);
-      } catch {
-        // Create a default strategic plan structure on parse failure
-        const totalWeeks = Math.ceil(durationInMonths * 4);
-        strategicPlan = {
-          totalWeeks,
-          duration: durationInMonths,
-          weekTemplates: Array.from({ length: Math.min(totalWeeks, 12) }, (_, i) => ({
-            weekNumber: i + 1,
-            focus: i < 3 ? 'Foundation' : i < 6 ? 'Development' : i < 9 ? 'Mastery' : 'Excellence',
-            description: i < 3 ? 'Build basic understanding' : i < 6 ? 'Strengthen core skills' : i < 9 ? 'Advanced practice' : 'Peak performance',
-            dailyTasks: Array.from({ length: 7 }, (_, d) => ({
-              dayOfWeek: d + 1,
-              practice: { title: `${category} practice session`, duration: practiceDuration },
-              learning: { title: `Learn ${category.toLowerCase()} concepts`, duration: learningDuration },
-              reflection: { title: 'Review and reflect', duration: reflectionDuration }
-            }))
-          }))
-        };
-      }
-
-      // Update profile and goal
-      updateUniversalProfile({
-        name: collectedData.name,
-        energyPattern,
-        skillLevel: collectedData.skillLevel || undefined,
-        weekendAvailability: '',
-        dailyRoutine: {
-          wakeTime: collectedData.wakeTime || '7:00 AM',
-          sleepTime: '',
-          workHours: { start: '', end: '' },
-          freeTimeSlots: []
-        }
-      });
-
-      updateCurrentGoal({
-        category,
-        specificGoal: collectedData.goal,
-      });
-
-      // Create roadmap with AI-generated phases
-      const phases = strategicPlan.weekTemplates.slice(0, 4).map((week: { focus: string; description: string }, idx: number) => ({
-        title: week.focus,
-        weeks: idx === 0 ? '1-' + Math.ceil(strategicPlan.totalWeeks / 4) :
-               idx === 1 ? Math.ceil(strategicPlan.totalWeeks / 4 + 1) + '-' + Math.ceil(strategicPlan.totalWeeks / 2) :
-               idx === 2 ? Math.ceil(strategicPlan.totalWeeks / 2 + 1) + '-' + Math.ceil(strategicPlan.totalWeeks * 3 / 4) :
-               Math.ceil(strategicPlan.totalWeeks * 3 / 4 + 1) + '-' + strategicPlan.totalWeeks,
-        description: week.description
-      }));
-
-      const roadmap = {
-        title: collectedData.goal,
-        category,
-        duration: strategicPlan.duration,
-        dailyTime: collectedData.dailyTime || '30 minutes',
-        recommendedTime: energyPattern === 'morning' ? '7:00 AM' :
-                        energyPattern === 'evening' ? '7:00 PM' : '2:00 PM',
-        phases,
-        startDate: new Date().toISOString().split('T')[0],
-        endDate: new Date(Date.now() + strategicPlan.duration * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        strategicPlan // Store the full AI plan for later use
-      };
-
-      setRoadmap(roadmap);
-
-      // Generate Day 1 tasks from the AI plan
-      const initialTasks = generateInitialTasks(roadmap, checkInTime || '07:00');
-      setTasks(initialTasks);
-
-      // === SYNC TO BACKEND - DISABLED ===
-      // Using Supabase directly instead of separate backend
-      /*
-      try {
-        // Auto-create user with name from conversation
-        await getOrCreateUser(collectedData.name);
-
-        // Create journey in backend
-        const backendJourney = await createJourney({
-          title: collectedData.goal,
-          category,
-          duration_months: strategicPlan.duration,
-          daily_time_minutes: dailyMinutes,
-          skill_level: collectedData.skillLevel as 'beginner' | 'intermediate' | 'advanced',
-          strategic_plan: strategicPlan,
-        });
-
-        // Generate Day 1 tasks in backend
-        await generateDayTasks(backendJourney.id, 1, initialTasks.map(t => ({
-          title: t.title,
-          description: t.description,
-          type: t.type,
-          duration: t.duration,
-        })));
-
-        // Store journey ID for later use
-        localStorage.setItem('coheren_journey_id', backendJourney.id);
-      } catch {
-        // Backend sync failed, but local data is still valid - app works offline
-      }
-      */
-      // === END BACKEND SYNC ===
-
-      // Complete progress bar
-      setGenerationProgress(100);
-      setIsTyping(false);
-
-      // Wait a moment to show 100% completion, then transition
-      setTimeout(() => setStep(2), 800);
-
-    } catch {
-      // Handle plan generation error - use fallback
-      setIsTyping(false);
-      setGenerationProgress(100); // Complete progress bar even on error
-
-      // Fallback to basic roadmap if AI fails
-      const fallbackRoadmap = {
-        title: collectedData.goal,
-        category,
-        duration: 3,
-        dailyTime: collectedData.dailyTime || '30 minutes',
-        recommendedTime: energyPattern === 'morning' ? '7:00 AM' :
-                        energyPattern === 'evening' ? '7:00 PM' : '2:00 PM',
-        phases: [
-          { title: 'Foundation', weeks: '1-4', description: 'Build your base' },
-          { title: 'Development', weeks: '5-8', description: 'Strengthen skills' },
-          { title: 'Mastery', weeks: '9-10', description: 'Advanced practice' },
-          { title: 'Excellence', weeks: '11-12', description: 'Peak performance' },
-        ],
-        startDate: new Date().toISOString().split('T')[0],
-        endDate: new Date(Date.now() + 3 * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      };
-
-      updateUniversalProfile({
-        name: collectedData.name,
-        energyPattern,
-        skillLevel: collectedData.skillLevel || undefined,
-        dailyRoutine: {
-          wakeTime: collectedData.wakeTime || '7:00 AM',
-          sleepTime: '',
-          workHours: { start: '', end: '' },
-          freeTimeSlots: []
-        }
-      });
-
-      updateCurrentGoal({ category, specificGoal: collectedData.goal });
-      setRoadmap(fallbackRoadmap);
-
-      const initialTasks = generateInitialTasks(fallbackRoadmap, checkInTime || '07:00');
-      setTasks(initialTasks);
-
-      // === SYNC FALLBACK TO BACKEND - DISABLED ===
-      // Using Supabase directly instead
-      /*
-      try {
-        await getOrCreateUser(collectedData.name);
-        const dailyMinutes = parseDailyTimeToMinutes(collectedData.dailyTime);
-
-        const backendJourney = await createJourney({
-          title: collectedData.goal,
-          category,
-          duration_months: 3,
-          daily_time_minutes: dailyMinutes,
-          skill_level: collectedData.skillLevel as 'beginner' | 'intermediate' | 'advanced',
-          strategic_plan: fallbackRoadmap,
-        });
-
-        await generateDayTasks(backendJourney.id, 1, initialTasks.map(t => ({
-          title: t.title,
-          description: t.description,
-          type: t.type,
-          duration: t.duration,
-        })));
-
-        localStorage.setItem('coheren_journey_id', backendJourney.id);
-      } catch {
-        // Backend sync failed for fallback - app works offline
-      }
-      */
-      // === END FALLBACK BACKEND SYNC ===
-
-      setTimeout(() => setStep(2), 800);
-    }
-  };
 
 
   return (
@@ -1134,7 +839,7 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
           gap: tokens.spacing['3xl'],
         }}>
           {/* Loading Animation */}
-          <LoadingAnimation size="large" />
+          <CoherenLoader size={72} color="#7c3aed" />
 
           {/* Loading Text */}
           <div style={{ textAlign: 'center', maxWidth: '500px', marginTop: tokens.spacing.lg }}>
@@ -1189,7 +894,6 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: `${tokens.spacing.lg} ${tokens.spacing.xl}`,
-        borderBottom: `1px solid ${tokens.colors.gray[200]}`,
         position: 'relative',
         zIndex: 1,
       }}>
@@ -1244,6 +948,13 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
         </button>
       </div>
 
+      {/* Transition loader — shown while stones are being fetched */}
+      {onboardingPhase === 'stones' && stones.length === 0 && (
+        <div className="flex flex-1 items-center justify-center">
+          <CoherenLoader size={64} color="#7c3aed" />
+        </div>
+      )}
+
       {/* Stone Questions Phase */}
       {onboardingPhase === 'stones' && stones.length > 0 && (
         <div style={{
@@ -1291,7 +1002,7 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
 
             {/* Messages scroll area */}
             <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-              <div className="max-w-3xl mx-auto px-6 py-8 flex flex-col">
+              <div className="max-w-3xl mx-auto px-6 py-8 pb-24 flex flex-col">
                 {messages.map((message) => (
                   <div key={message.id} className={`flex gap-4 py-6 border-b border-zinc-100 last:border-0 animate-[fadeIn_0.35s_ease-out] ${message.role === 'user' ? 'justify-end' : ''}`}>
                     {/* AI Avatar */}
@@ -1333,8 +1044,8 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
               </div>
             </div>
 
-            {/* Input area — floating at bottom */}
-            <div className="max-w-3xl mx-auto w-full px-6 pt-2 pb-4">
+            {/* Input area — truly floating */}
+            <div className="fixed bottom-0 left-0 right-0 flex justify-center px-6 pb-6 pt-3" style={{ zIndex: 50 }}>
               {isTyping || onboardingPhase !== 'conversation' ? (
                 <div className="w-full max-w-2xl mx-auto flex items-center px-5 h-12 rounded-full bg-zinc-100 border border-zinc-200">
                   <span className="text-sm text-zinc-400">
@@ -1417,141 +1128,78 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
         </div>
       )}
 
-      {/* Auth Gate Overlay — shown after roadmap generation for unauthenticated users */}
+      {/* Auth Gate — centered card overlay */}
       {showAuthGate && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          zIndex: 2000,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: tokens.spacing.xl,
-        }}>
-          {/* Blurred backdrop */}
-          <div style={{
-            position: 'absolute',
-            inset: 0,
-            backdropFilter: 'blur(16px)',
-            backgroundColor: 'rgba(15, 23, 42, 0.6)',
-          }} />
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4"
+          style={{ backdropFilter: 'blur(14px)', backgroundColor: 'rgba(15,15,15,0.5)' }}>
 
-          {/* Modal */}
-          <div style={{
-            position: 'relative',
-            zIndex: 1,
-            backgroundColor: 'white',
-            borderRadius: tokens.borderRadius['2xl'],
-            padding: tokens.spacing['3xl'],
-            maxWidth: '440px',
-            width: '100%',
-            boxShadow: '0 24px 64px rgba(0,0,0,0.2)',
-          }}>
-            {/* Header */}
-            <div style={{ textAlign: 'center', marginBottom: tokens.spacing['2xl'] }}>
-              <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '56px',
-                height: '56px',
-                borderRadius: '50%',
-                backgroundColor: tokens.colors.primary + '15',
-                marginBottom: tokens.spacing.lg,
-              }}>
-                <Sparkles size={24} color={tokens.colors.primary} />
-              </div>
-              <h2 style={{
-                fontSize: tokens.typography.sizes['2xl'],
-                fontWeight: tokens.typography.weights.medium,
-                color: tokens.colors.text.primary,
-                marginBottom: tokens.spacing.sm,
-                letterSpacing: '-0.02em',
-              }}>
-                Your roadmap is ready! 🎉
+          {/* Card */}
+          <div className="flex w-full overflow-hidden rounded-2xl shadow-2xl"
+            style={{ maxWidth: '820px', minHeight: '480px', background: '#fff' }}>
+
+            {/* Left — sphere shader */}
+            <div className="hidden md:block relative w-[42%] flex-shrink-0 overflow-hidden rounded-l-2xl">
+              <AuthShaderPanel />
+            </div>
+
+            {/* Right — form */}
+            <div className="flex flex-1 flex-col justify-center px-10 py-10">
+
+              <h2 className="text-2xl font-medium tracking-tight mb-1" style={{ color: tokens.colors.text.primary }}>
+                {authGateMode === 'signup' ? 'Get Started' : 'Welcome back'}
               </h2>
-              <p style={{
-                fontSize: tokens.typography.sizes.sm,
-                color: tokens.colors.text.secondary,
-                lineHeight: 1.6,
-              }}>
+              <p className="text-sm mb-6" style={{ color: tokens.colors.text.secondary, lineHeight: 1.6 }}>
                 {authGateMode === 'signup'
                   ? 'Create a free account to save your personalized plan and start today.'
                   : 'Sign in to your account to access your roadmap.'}
               </p>
-            </div>
 
-            {/* Error */}
-            {authError && (
-              <div style={{
-                padding: tokens.spacing.md,
-                backgroundColor: '#FEE2E2',
-                borderRadius: tokens.borderRadius.md,
-                marginBottom: tokens.spacing.lg,
-                color: '#991B1B',
-                fontSize: tokens.typography.sizes.sm,
-              }}>
-                {authError}
-              </div>
-            )}
+              {/* Error */}
+              {authError && (
+                <div className="text-sm rounded-lg px-4 py-3 mb-4"
+                  style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>
+                  {authError}
+                </div>
+              )}
 
-            {/* Form */}
-            <form onSubmit={handleAuthGateSubmit}>
-              {authGateMode === 'signup' && (
-                <div style={{ marginBottom: tokens.spacing.md }}>
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <UserPlus size={18} style={{ position: 'absolute', left: '12px', color: tokens.colors.text.tertiary }} />
+              {/* Form */}
+              <form onSubmit={handleAuthGateSubmit} className="flex flex-col gap-3">
+                {authGateMode === 'signup' && (
+                  <div>
+                    <label className="block text-sm mb-1.5" style={{ color: tokens.colors.text.primary }}>Your name</label>
                     <input
                       type="text"
-                      placeholder="Your name"
+                      placeholder="Alex"
                       value={authName}
                       onChange={(e) => setAuthName(e.target.value)}
                       required
-                      style={{
-                        width: '100%',
-                        padding: `${tokens.spacing.md} ${tokens.spacing.md} ${tokens.spacing.md} 40px`,
-                        border: `1.5px solid ${tokens.colors.border}`,
-                        borderRadius: tokens.borderRadius.lg,
-                        fontSize: tokens.typography.sizes.base,
-                        color: tokens.colors.text.primary,
-                        outline: 'none',
-                        transition: 'border-color 0.2s',
-                      }}
+                      className="w-full px-3 py-2.5 text-sm rounded-lg outline-none"
+                      style={{ border: `1.5px solid ${tokens.colors.border}`, color: tokens.colors.text.primary }}
                       onFocus={(e) => e.currentTarget.style.borderColor = tokens.colors.primary}
                       onBlur={(e) => e.currentTarget.style.borderColor = tokens.colors.border}
                     />
                   </div>
-                </div>
-              )}
+                )}
 
-              <div style={{ marginBottom: tokens.spacing.md }}>
-                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                  <Mail size={18} style={{ position: 'absolute', left: '12px', color: tokens.colors.text.tertiary }} />
+                <div>
+                  <label className="block text-sm mb-1.5" style={{ color: tokens.colors.text.primary }}>Your email</label>
                   <input
                     type="email"
                     placeholder="you@example.com"
                     value={authEmail}
                     onChange={(e) => setAuthEmail(e.target.value)}
                     required
-                    style={{
-                      width: '100%',
-                      padding: `${tokens.spacing.md} ${tokens.spacing.md} ${tokens.spacing.md} 40px`,
-                      border: `1.5px solid ${tokens.colors.border}`,
-                      borderRadius: tokens.borderRadius.lg,
-                      fontSize: tokens.typography.sizes.base,
-                      color: tokens.colors.text.primary,
-                      outline: 'none',
-                      transition: 'border-color 0.2s',
-                    }}
+                    className="w-full px-3 py-2.5 text-sm rounded-lg outline-none"
+                    style={{ border: `1.5px solid ${tokens.colors.border}`, color: tokens.colors.text.primary }}
                     onFocus={(e) => e.currentTarget.style.borderColor = tokens.colors.primary}
                     onBlur={(e) => e.currentTarget.style.borderColor = tokens.colors.border}
                   />
                 </div>
-              </div>
 
-              <div style={{ marginBottom: tokens.spacing.xl }}>
-                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                  <Lock size={18} style={{ position: 'absolute', left: '12px', color: tokens.colors.text.tertiary }} />
+                <div>
+                  <label className="block text-sm mb-1.5" style={{ color: tokens.colors.text.primary }}>
+                    {authGateMode === 'signup' ? 'Create a password' : 'Password'}
+                  </label>
                   <input
                     type="password"
                     placeholder="••••••••"
@@ -1559,67 +1207,38 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
                     onChange={(e) => setAuthPassword(e.target.value)}
                     required
                     minLength={6}
-                    style={{
-                      width: '100%',
-                      padding: `${tokens.spacing.md} ${tokens.spacing.md} ${tokens.spacing.md} 40px`,
-                      border: `1.5px solid ${tokens.colors.border}`,
-                      borderRadius: tokens.borderRadius.lg,
-                      fontSize: tokens.typography.sizes.base,
-                      color: tokens.colors.text.primary,
-                      outline: 'none',
-                      transition: 'border-color 0.2s',
-                    }}
+                    className="w-full px-3 py-2.5 text-sm rounded-lg outline-none"
+                    style={{ border: `1.5px solid ${tokens.colors.border}`, color: tokens.colors.text.primary }}
                     onFocus={(e) => e.currentTarget.style.borderColor = tokens.colors.primary}
                     onBlur={(e) => e.currentTarget.style.borderColor = tokens.colors.border}
                   />
                 </div>
-              </div>
 
-              <button
-                type="submit"
-                disabled={authLoading}
-                style={{
-                  ...button.primary,
-                  width: '100%',
-                  padding: tokens.spacing.lg,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: tokens.spacing.sm,
-                  opacity: authLoading ? 0.7 : 1,
-                  cursor: authLoading ? 'not-allowed' : 'pointer',
-                  marginBottom: tokens.spacing.lg,
-                }}
-              >
-                {authLoading ? 'Saving your roadmap...' : authGateMode === 'signup' ? (
-                  <><UserPlus size={18} /> Save My Roadmap</>
-                ) : (
-                  <><LogIn size={18} /> Sign In & Continue</>
-                )}
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  disabled={authLoading}
+                  className="w-full py-2.5 rounded-lg text-sm font-medium mt-1 transition-opacity"
+                  style={{
+                    ...button.primary,
+                    opacity: authLoading ? 0.7 : 1,
+                    cursor: authLoading ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {authLoading ? 'Saving your roadmap...' : authGateMode === 'signup' ? 'Create a new account' : 'Sign In & Continue'}
+                </button>
+              </form>
 
-            {/* Toggle */}
-            <p style={{
-              textAlign: 'center',
-              fontSize: tokens.typography.sizes.sm,
-              color: tokens.colors.text.secondary,
-            }}>
-              {authGateMode === 'signup' ? 'Already have an account?' : "Don't have an account?"}{' '}
-              <button
-                onClick={() => { setAuthGateMode(authGateMode === 'signup' ? 'login' : 'signup'); setAuthError(null); }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: tokens.colors.primary,
-                  fontWeight: tokens.typography.weights.semibold,
-                  cursor: 'pointer',
-                  textDecoration: 'underline',
-                }}
-              >
-                {authGateMode === 'signup' ? 'Sign In' : 'Sign Up'}
-              </button>
-            </p>
+              <p className="text-center text-sm mt-4" style={{ color: tokens.colors.text.secondary }}>
+                {authGateMode === 'signup' ? 'Already have an account?' : "Don't have an account?"}{' '}
+                <button
+                  onClick={() => { setAuthGateMode(authGateMode === 'signup' ? 'login' : 'signup'); setAuthError(null); }}
+                  className="font-medium underline cursor-pointer bg-transparent border-none"
+                  style={{ color: tokens.colors.text.primary }}
+                >
+                  {authGateMode === 'signup' ? 'Login' : 'Sign Up'}
+                </button>
+              </p>
+            </div>
           </div>
         </div>
       )}

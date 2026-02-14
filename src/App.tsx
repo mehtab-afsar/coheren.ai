@@ -4,6 +4,7 @@ import LandingPage from '@features/onboarding/components/LandingPage';
 import ChatOnboarding from '@features/onboarding/components/ChatOnboarding';
 import Dashboard from '@features/dashboard';
 import Settings from '@features/dashboard/components/Settings';
+import AuthPage from '@features/auth/AuthPage';
 import { onAuthStateChange, supabase } from '@lib/supabase';
 import { getTasksByRoadmapId, calculateStreak } from '@lib/database';
 
@@ -66,7 +67,9 @@ function App() {
         }
 
         // Default to step 1 immediately to avoid blank screen during async DB check
-        if (liveStep === 0) {
+        // Only redirect on fresh sign-in or initial session load — NOT on token refresh,
+        // so users who clicked "Back" to the landing page are not pushed back into chat.
+        if (liveStep === 0 && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
           useStore.setState({ step: 1 });
         }
 
@@ -115,10 +118,15 @@ function App() {
               duration: durationDays,
               dailyTime: roadmapRow.config?.daily_time_minutes ? `${roadmapRow.config.daily_time_minutes} minutes` : '45 minutes',
               recommendedTime: '08:00',
-              phases: phases.map((p: { title: string; weeks: string; description: string }) => ({
-                title: p.title,
-                weeks: p.weeks,
-                description: p.description,
+              phases: phases.map((p: Record<string, unknown>) => ({
+                // Handle both seed shape {title, weeks, description} and agent shape {phaseName, weeks[], primaryGoals[]}
+                title: (p.title ?? p.phaseName ?? 'Phase') as string,
+                weeks: Array.isArray(p.weeks)
+                  ? `${p.weeks[0]}-${p.weeks[p.weeks.length - 1]}`
+                  : (p.weeks ?? '') as string,
+                description: Array.isArray(p.primaryGoals)
+                  ? (p.primaryGoals as string[]).join('. ')
+                  : (p.description ?? '') as string,
               })),
               startDate,
               endDate,
@@ -278,7 +286,7 @@ function App() {
 
   return (
     <>
-      {step === 0 && !user && <LandingPage key="landing" onGetStarted={(goal: string) => {
+      {step === 0 && <LandingPage key="landing" onGetStarted={(goal: string) => {
         setInitialGoal(goal);
         useStore.setState({ step: 1 });
       }} />}
@@ -287,6 +295,8 @@ function App() {
         setTimeout(() => setLoginPending(false), 8000);
       }} />}
       {step === 2 && user && <Dashboard key="dashboard" />}
+      {step === 3 && <AuthPage key="signup" mode="signup" />}
+      {step === 4 && <AuthPage key="signin" mode="signin" />}
       {step === 10 && user && <Settings key="settings" />}
 
       {/* Quick reset button - bottom right corner for development */}

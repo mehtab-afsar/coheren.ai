@@ -106,16 +106,16 @@ export async function generateCompleteRoadmap(
   timeline: number,
   dailyTime: number,
   stoneAnswers: StoneAnswer[],
-  category?: string, // For resource matching
-  skillLevel?: 'beginner' | 'intermediate' | 'advanced' // For resource matching
+  category?: string,
+  skillLevel?: 'beginner' | 'intermediate' | 'advanced'
 ): Promise<{
   goalAnalysis: Agent1Output;
   roadmap: Agent3Output;
   firstTask: DailyTask;
+  stoneProfile: Agent2ProfileOutput;
 }> {
   console.log('🚀 Starting complete roadmap generation...');
 
-  // Step 1 & 2: Analyze goal (already done in onboarding)
   const context: AgentContext = {
     userId: 'temp',
     goal,
@@ -125,21 +125,18 @@ export async function generateCompleteRoadmap(
 
   const goalAnalysis = await analyzeGoal(context);
 
-  // Extract stone profile from answers
   console.log('🧱 Extracting stone profile from answers...');
   const stoneProfile = await extractStones(context, goalAnalysis, stoneAnswers);
 
-  // Step 3: Build curriculum with stone profile
   const roadmap = await buildCurriculum(context, goalAnalysis, stoneProfile);
 
-  // Step 4: Generate first day's task (with resources!)
   const firstTask = await generateTask(
     1,
     roadmap,
     stoneProfile,
     dailyTime,
-    undefined,          // previousTasksContext
-    category,           // Pass category for resource matching
+    undefined,
+    category,
     skillLevel || 'beginner'
   );
 
@@ -148,7 +145,8 @@ export async function generateCompleteRoadmap(
   return {
     goalAnalysis,
     roadmap,
-    firstTask
+    firstTask,
+    stoneProfile,
   };
 }
 
@@ -160,7 +158,9 @@ export async function generateTaskBatch(
   endDay: number,
   roadmap: Agent3Output,
   stoneProfile: Agent2ProfileOutput,
-  dailyTimeAvailable: number
+  dailyTimeAvailable: number,
+  category?: string,
+  skillLevel?: 'beginner' | 'intermediate' | 'advanced'
 ): Promise<DailyTask[]> {
   console.log(`📋 Generating tasks for days ${startDay} to ${endDay}...`);
 
@@ -171,7 +171,10 @@ export async function generateTaskBatch(
       day,
       roadmap,
       stoneProfile,
-      dailyTimeAvailable
+      dailyTimeAvailable,
+      undefined,
+      category,
+      skillLevel || 'beginner'
     );
     tasks.push(task);
 

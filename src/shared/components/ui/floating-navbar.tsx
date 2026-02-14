@@ -9,12 +9,18 @@ interface NavItem {
   icon?: React.ReactNode;
 }
 
+interface CtaDropdownItem {
+  label: string;
+  onClick: () => void;
+}
+
 interface FloatingNavProps {
   brand?: string;
   onBrandClick?: () => void;
   navItems: NavItem[];
   ctaLabel?: string;
   onCtaClick?: () => void;
+  ctaDropdown?: CtaDropdownItem[];
   className?: string;
 }
 
@@ -24,11 +30,26 @@ export const FloatingNav = ({
   navItems,
   ctaLabel = "Get Started",
   onCtaClick,
+  ctaDropdown,
   className,
 }: FloatingNavProps) => {
   const [visible, setVisible] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [ctaOpen, setCtaOpen] = useState(false);
+  const ctaRef = useRef<HTMLDivElement>(null);
   const lastScrollY = useRef(0);
+
+  // Close CTA dropdown on outside click
+  useEffect(() => {
+    if (!ctaOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (ctaRef.current && !ctaRef.current.contains(e.target as Node)) {
+        setCtaOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [ctaOpen]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -86,16 +107,42 @@ export const FloatingNav = ({
           </div>
 
           {/* CTA — desktop only */}
-          <button
-            onClick={onCtaClick}
-            className={cn(
-              "hidden sm:block group relative rounded-full border border-neutral-200 px-4 py-1.5 text-sm font-medium text-black",
-              "transition-all duration-200 hover:border-violet-300 hover:text-violet-700 hover:shadow-[0_0_12px_rgba(139,92,246,0.2)]",
-            )}
-          >
-            <span>{ctaLabel}</span>
-            <span className="absolute inset-x-0 -bottom-px mx-auto h-px w-1/2 bg-gradient-to-r from-transparent via-violet-500 to-transparent transition-opacity duration-200 group-hover:opacity-100 opacity-60" />
-          </button>
+          <div ref={ctaRef} className="hidden sm:block relative">
+            <button
+              onClick={ctaDropdown ? () => setCtaOpen(v => !v) : onCtaClick}
+              className={cn(
+                "group relative rounded-full border border-neutral-200 px-4 py-1.5 text-sm font-medium text-black flex items-center gap-1",
+                "transition-all duration-200 hover:border-violet-300 hover:text-violet-700 hover:shadow-[0_0_12px_rgba(139,92,246,0.2)]",
+                ctaOpen && "border-violet-300 text-violet-700",
+              )}
+            >
+              <span>{ctaLabel}</span>
+              <span className="absolute inset-x-0 -bottom-px mx-auto h-px w-1/2 bg-gradient-to-r from-transparent via-violet-500 to-transparent transition-opacity duration-200 group-hover:opacity-100 opacity-60" />
+            </button>
+
+            {/* CTA dropdown */}
+            <AnimatePresence>
+              {ctaDropdown && ctaOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                  transition={{ duration: 0.15, ease: 'easeOut' }}
+                  className="absolute right-0 mt-2 w-44 rounded-xl border border-black/[0.08] bg-white/95 backdrop-blur-md shadow-lg overflow-hidden"
+                >
+                  {ctaDropdown.map((item, i) => (
+                    <button
+                      key={i}
+                      onClick={() => { item.onClick(); setCtaOpen(false); }}
+                      className="w-full px-4 py-2.5 text-sm text-left text-neutral-700 hover:text-violet-700 hover:bg-violet-50 transition-colors"
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
           {/* Hamburger — mobile only */}
           <button

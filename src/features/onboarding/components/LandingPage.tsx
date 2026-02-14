@@ -172,6 +172,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
   const setStep = useStore((state) => state.setStep);
   const [goalInput] = useState('');
   const scienceWrapperRef = useRef<HTMLDivElement>(null);
+
   const pricingWrapperRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress: pricingScrollYProgress } = useScroll({
     target: pricingWrapperRef,
@@ -204,7 +205,10 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
           { name: "Science",      onClick: () => document.getElementById('science')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
         ]}
         ctaLabel="Get Started"
-        onCtaClick={() => handleGetStarted()}
+        ctaDropdown={[
+          { label: 'Sign Up', onClick: () => setStep(3) },
+          { label: 'Sign In', onClick: () => setStep(4) },
+        ]}
       />
 
       <HeroSection

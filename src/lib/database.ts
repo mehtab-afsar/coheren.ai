@@ -123,10 +123,12 @@ export async function createRoadmap(goalId: string, roadmap: Agent3Output) {
     .from('roadmaps')
     .insert({
       goal_id: goalId,
-      phases: roadmap.roadmap,
+      phases: roadmap.roadmap.phases,   // store the phases array directly
       config: {
         pedagogical_principles: 'scaffolding, progressive_overload, spacing_effect',
-        checkpoint_interval: 14
+        checkpoint_interval: 14,
+        domain_pedagogy: roadmap.domainPedagogy ?? null,
+        total_weeks: roadmap.roadmap.phases?.reduce((acc: number, p: { weeks: number[] }) => acc + (p.weeks?.length ?? 0), 0) ?? null,
       }
     })
     .select()
@@ -170,7 +172,8 @@ export async function saveTasks(roadmapId: string, tasks: Array<Record<string, u
       steps: task.steps || [],
       tips: task.tips || [],
       successCriteria: task.successCriteria,
-      scheduledFor: task.scheduledFor
+      scheduledFor: task.scheduledFor,
+      resources: task.resources || null,
     },
     is_completed: task.completed || false,
     skipped: task.skipped || false

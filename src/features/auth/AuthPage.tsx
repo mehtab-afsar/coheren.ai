@@ -1,0 +1,253 @@
+import { useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
+import { DitheringShader } from '@shared/components/ui/dithering-shader';
+import { useStore } from '@core/store/useStore';
+import { tokens } from '@core/design-system';
+import { supabase } from '@lib/supabase';
+
+interface AuthPageProps {
+  mode: 'signup' | 'signin';
+}
+
+export default function AuthPage({ mode }: AuthPageProps) {
+  const setStep = useStore((s) => s.setStep);
+
+  const [name, setName]         = useState('');
+  const [email, setEmail]       = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError]       = useState('');
+  const [loading, setLoading]   = useState(false);
+
+  const isSignUp = mode === 'signup';
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    if (isSignUp) {
+      const { error: err } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name } } });
+      setLoading(false);
+      if (err) { setError(err.message); return; }
+      setStep(1);
+    } else {
+      const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+      setLoading(false);
+      if (err) { setError(err.message); return; }
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 flex" style={{ background: '#fff' }}>
+
+      {/* ── Left panel ── */}
+      <div
+        className="hidden lg:flex flex-col flex-shrink-0"
+        style={{ width: '46%', background: '#08080f', position: 'relative', overflow: 'hidden' }}
+      >
+        {/* Noise texture overlay */}
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 1, opacity: 0.035,
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+          backgroundSize: '180px',
+        }} />
+
+        {/* Top brand */}
+        <div className="relative z-10 flex items-center gap-2.5 p-10">
+          <div style={{
+            width: 30, height: 30, borderRadius: 9,
+            background: 'rgba(124,58,237,0.2)',
+            border: '1px solid rgba(124,58,237,0.35)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+              <line x1="3" y1="21" x2="21" y2="3" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round"/>
+              <line x1="12" y1="21" x2="21" y2="12" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round"/>
+            </svg>
+          </div>
+          <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: 15, fontWeight: 500, letterSpacing: '-0.02em' }}>
+            coheren.ai
+          </span>
+        </div>
+
+        {/* Center — small sphere + copy */}
+        <div className="relative z-10 flex flex-col items-center justify-center flex-1 px-12 pb-10 gap-8">
+          {/* Sphere */}
+          <div style={{ position: 'relative', width: 420, height: 420, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}>
+            <DitheringShader
+              shape="sphere"
+              type="random"
+              colorBack="#060612"
+              colorFront="#7c3aed"
+              pxSize={2}
+              speed={0.9}
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+            />
+            {/* Subtle rim light */}
+            <div style={{
+              position: 'absolute', inset: 0, borderRadius: '50%',
+              boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.15)',
+              background: 'radial-gradient(circle at 68% 28%, rgba(167,139,250,0.08) 0%, transparent 60%)',
+            }} />
+          </div>
+
+          {/* Glow beneath sphere */}
+          <div style={{
+            position: 'absolute',
+            width: 480, height: 140,
+            borderRadius: '50%',
+            background: 'radial-gradient(ellipse, rgba(124,58,237,0.18) 0%, transparent 70%)',
+            filter: 'blur(24px)',
+            pointerEvents: 'none',
+          }} />
+
+          {/* Copy */}
+          <div style={{ textAlign: 'center' }}>
+            <h3 style={{ color: 'rgba(255,255,255,0.88)', fontSize: 22, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.4, margin: 0 }}>
+              Turn any goal into<br />one task per day.
+            </h3>
+            <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13, marginTop: 12, lineHeight: 1.6, fontWeight: 300 }}>
+              AI-built roadmap. Adapts as you grow.
+            </p>
+          </div>
+
+          {/* Stat row */}
+          <div className="flex items-center gap-6">
+            {[['10k+', 'Goals built'], ['91%', 'Completion rate'], ['4.9', 'Avg rating']].map(([val, lbl]) => (
+              <div key={lbl} style={{ textAlign: 'center' }}>
+                <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 18, fontWeight: 500, letterSpacing: '-0.03em', margin: 0 }}>{val}</p>
+                <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: 11, margin: '2px 0 0', fontWeight: 300 }}>{lbl}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+      </div>
+
+      {/* ── Right panel — form ── */}
+      <div className="flex flex-1 flex-col" style={{ background: '#fff', overflowY: 'auto' }}>
+
+        {/* Back button */}
+        <div className="flex items-center px-10 pt-9">
+          <button
+            onClick={() => setStep(0)}
+            className="flex items-center gap-1.5 transition-opacity hover:opacity-60"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#9ca3af', fontSize: 13 }}
+          >
+            <ArrowLeft size={14} />
+            <span>Back</span>
+          </button>
+        </div>
+
+        {/* Form centered */}
+        <div className="flex flex-1 items-center justify-center px-8 py-10">
+          <div style={{ width: '100%', maxWidth: 360 }}>
+
+            <h1 style={{ fontSize: 26, fontWeight: 600, letterSpacing: '-0.04em', color: '#0d0d10', margin: '0 0 6px' }}>
+              {isSignUp ? 'Create your account' : 'Welcome back'}
+            </h1>
+            <p style={{ fontSize: 14, color: '#9ca3af', lineHeight: 1.6, margin: '0 0 32px' }}>
+              {isSignUp ? 'Free forever · No credit card required' : 'Sign in to access your roadmap'}
+            </p>
+
+            {error && (
+              <div style={{ fontSize: 13, borderRadius: 10, padding: '10px 14px', marginBottom: 20, background: '#fef2f2', color: '#b91c1c' }}>
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {isSignUp && (
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 500, letterSpacing: '0.04em', color: '#6b7280', marginBottom: 7, textTransform: 'uppercase' }}>
+                    Full name
+                  </label>
+                  <input
+                    type="text" placeholder="Alex Chen" value={name} required
+                    onChange={(e) => setName(e.target.value)}
+                    style={inputStyle}
+                    onFocus={(e) => applyFocus(e.currentTarget)}
+                    onBlur={(e) => applyBlur(e.currentTarget)}
+                  />
+                </div>
+              )}
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, letterSpacing: '0.04em', color: '#6b7280', marginBottom: 7, textTransform: 'uppercase' }}>
+                  Email
+                </label>
+                <input
+                  type="email" placeholder="you@example.com" value={email} required autoFocus
+                  onChange={(e) => setEmail(e.target.value)}
+                  style={inputStyle}
+                  onFocus={(e) => applyFocus(e.currentTarget)}
+                  onBlur={(e) => applyBlur(e.currentTarget)}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, letterSpacing: '0.04em', color: '#6b7280', marginBottom: 7, textTransform: 'uppercase' }}>
+                  Password
+                </label>
+                <input
+                  type="password" placeholder="••••••••" value={password} required minLength={6}
+                  onChange={(e) => setPassword(e.target.value)}
+                  style={inputStyle}
+                  onFocus={(e) => applyFocus(e.currentTarget)}
+                  onBlur={(e) => applyBlur(e.currentTarget)}
+                />
+              </div>
+
+              <button
+                type="submit" disabled={loading}
+                style={{
+                  width: '100%', padding: '12px 0', marginTop: 4,
+                  borderRadius: 11, border: 'none',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em',
+                  background: loading ? '#ddd6fe' : 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+                  color: loading ? '#7c3aed' : '#fff',
+                  boxShadow: loading ? 'none' : '0 4px 18px rgba(109,40,217,0.3)',
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={(e) => { if (!loading) { e.currentTarget.style.boxShadow = '0 6px 24px rgba(109,40,217,0.42)'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
+                onMouseLeave={(e) => { e.currentTarget.style.boxShadow = loading ? 'none' : '0 4px 18px rgba(109,40,217,0.3)'; e.currentTarget.style.transform = 'none'; }}
+              >
+                {loading
+                  ? (isSignUp ? 'Creating account...' : 'Signing in...')
+                  : (isSignUp ? 'Create account' : 'Sign in')}
+              </button>
+            </form>
+
+            <p style={{ textAlign: 'center', fontSize: 13, marginTop: 24, color: '#9ca3af' }}>
+              {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
+              <button
+                onClick={() => setStep(isSignUp ? 4 : 3)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: tokens.colors.primary, padding: 0 }}
+              >
+                {isSignUp ? 'Sign in' : 'Sign up free'}
+              </button>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '11px 14px', fontSize: 14, borderRadius: 10,
+  border: '1.5px solid #e5e7eb', outline: 'none', color: '#111827',
+  background: '#fafafa', boxSizing: 'border-box', transition: 'border-color 0.15s, background 0.15s',
+};
+
+function applyFocus(el: HTMLInputElement) {
+  el.style.borderColor = '#7c3aed';
+  el.style.background = '#fff';
+  el.style.boxShadow = '0 0 0 3px rgba(124,58,237,0.08)';
+}
+
+function applyBlur(el: HTMLInputElement) {
+  el.style.borderColor = '#e5e7eb';
+  el.style.background = '#fafafa';
+  el.style.boxShadow = 'none';
+}

@@ -1,13 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { Sparkles, LogIn, UserPlus, Mail, Lock } from 'lucide-react';
+import { Icons } from '@shared/components/ui/icons';
 import { useStore } from '@core/store/useStore';
 import { callReasoning, callEconomy } from '@lib/ai-router';
-import { tokens, text, button } from '@core/design-system';
+import { tokens, button } from '@core/design-system';
 import { generateInitialTasks } from '@shared/utils/taskGenerator';
 import { detectCategory } from '@shared/utils/categoryDetection';
 import { retrieveKnowledge, type UserContext } from '@core/rag';
 import type { GoalCategory } from '@types-app/index';
 import LoadingAnimation from '@shared/components/LoadingAnimation';
+
 
 // Import agent system
 import { runOnboardingAgents, generateCompleteRoadmap } from '@core/agents';
@@ -1040,16 +1042,10 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
 
   return (
     <div style={{
-      minHeight: '100vh',
+      height: '100vh',
       display: 'flex',
       flexDirection: 'column',
       backgroundColor: tokens.colors.background,
@@ -1187,90 +1183,65 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
         </div>
       )}
 
-      {/* Hero Section with Back Button */}
+      {/* Top bar */}
       <div style={{
-        textAlign: 'center',
-        padding: `${tokens.spacing['2xl']} ${tokens.spacing.xl} ${tokens.spacing.lg} ${tokens.spacing.xl}`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: `${tokens.spacing.lg} ${tokens.spacing.xl}`,
         borderBottom: `1px solid ${tokens.colors.gray[200]}`,
         position: 'relative',
         zIndex: 1,
       }}>
-        {/* Back Button */}
+        {/* Logo — top left */}
         <button
-          onClick={() => setStep(0)}
+          onClick={() => { setStep(0); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
           style={{
-            position: 'absolute',
-            top: tokens.spacing.xl,
-            left: tokens.spacing.xl,
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            fontSize: tokens.typography.sizes.xl,
+            display: 'flex',
+            alignItems: 'center',
+            gap: tokens.spacing.sm,
+            padding: 0,
+          }}
+        >
+          <Icons.logo style={{ width: '22px', height: '22px', color: '#7c3aed' }} />
+          <span style={{
+            fontSize: tokens.typography.sizes.base,
+            fontWeight: tokens.typography.weights.medium,
+            color: tokens.colors.text.primary,
+            letterSpacing: '-0.01em',
+          }}>
+            coheren.ai
+          </span>
+        </button>
+
+        {/* Back button — top right */}
+        <button
+          onClick={() => setStep(0)}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: tokens.typography.sizes.sm,
             color: tokens.colors.text.secondary,
             transition: 'all 0.2s',
-            padding: tokens.spacing.sm,
+            padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`,
             display: 'flex',
             alignItems: 'center',
             gap: tokens.spacing.xs,
-            fontWeight: tokens.typography.weights.light
+            fontWeight: tokens.typography.weights.light,
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.color = tokens.colors.primary;
-            e.currentTarget.style.transform = 'translateX(-4px)';
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.color = tokens.colors.text.secondary;
-            e.currentTarget.style.transform = 'translateX(0)';
           }}
         >
           ← Back
         </button>
-
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 0,
-        }}>
-          <h1 style={text.display}>Coheren</h1>
-          <button
-            onClick={() => {
-              setStep(0);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: 0,
-              marginTop: '-80px',
-            }}
-          >
-            <img
-              src="/logo.svg"
-              alt="Coheren AI Logo"
-              style={{
-                width: '220px',
-                height: 'auto',
-                objectFit: 'contain',
-                userSelect: 'none',
-                WebkitUserSelect: 'none',
-                MozUserSelect: 'none',
-                msUserSelect: 'none',
-                display: 'block'
-              }}
-              draggable="false"
-            />
-          </button>
-          <p style={{
-            ...text.h3,
-            color: tokens.colors.text.secondary,
-            fontWeight: tokens.typography.weights.light,
-            marginTop: '-80px',
-          }}>
-            Your AI-powered goal coach
-          </p>
-        </div>
       </div>
 
       {/* Stone Questions Phase */}
@@ -1315,179 +1286,88 @@ Create ${totalWeeks} week templates with progressive difficulty. Start Week 1 ea
 
       {/* Chat Container */}
       {onboardingPhase === 'conversation' && (
-        <div style={{
-          flex: 1,
-          display: 'flex',
-          justifyContent: 'center',
-          padding: tokens.spacing.xl,
-          overflow: 'hidden',
-          position: 'relative',
-          zIndex: 1,
-        }}>
-        <div style={{
-          width: '100%',
-          maxWidth: '700px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: tokens.spacing.lg,
-        }}>
-          {/* Messages - Clean layout without boxes */}
-          <div style={{
-            flex: 1,
-            overflowY: 'auto',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: tokens.spacing['2xl'],
-            paddingBottom: tokens.spacing.xl,
-          }}>
-            {messages.map((message) => (
-              <div key={message.id} style={{
-                animation: 'fadeIn 0.4s ease-out',
-              }}>
-                {message.role === 'ai' && (
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: tokens.spacing.sm,
-                    marginBottom: tokens.spacing.md,
-                  }}>
-                    <Sparkles size={16} strokeWidth={1.5} color={tokens.colors.primary} />
-                    <span style={{
-                      fontSize: tokens.typography.sizes.sm,
-                      color: tokens.colors.text.tertiary,
-                      fontWeight: tokens.typography.weights.regular,
-                    }}>
-                      Coheren AI
-                    </span>
+        <div className="flex flex-1 min-h-0 overflow-hidden relative z-10">
+          <div className="w-full flex flex-col h-full">
+
+            {/* Messages scroll area */}
+            <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              <div className="max-w-3xl mx-auto px-6 py-8 flex flex-col">
+                {messages.map((message) => (
+                  <div key={message.id} className={`flex gap-4 py-6 border-b border-zinc-100 last:border-0 animate-[fadeIn_0.35s_ease-out] ${message.role === 'user' ? 'justify-end' : ''}`}>
+                    {/* AI Avatar */}
+                    {message.role === 'ai' && (
+                      <div className="flex-shrink-0 mt-0.5 w-[30px] h-[30px] rounded-sm flex items-center justify-center">
+                        <Icons.logo style={{ width: '18px', height: '18px', color: '#7c3aed' }} />
+                      </div>
+                    )}
+                    {/* Content */}
+                    <div className={message.role === 'ai' ? 'flex-1 min-w-0' : 'max-w-[75%]'}>
+                      {message.role === 'ai' ? (
+                        <p className="text-base sm:text-[1.05rem] font-light leading-[1.85] text-zinc-900 m-0">
+                          {message.content}
+                        </p>
+                      ) : (
+                        <div className="bg-[#f4f4f4] text-zinc-800 rounded-2xl rounded-tr-sm px-5 py-3 text-sm sm:text-base font-normal leading-relaxed">
+                          {message.content}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Typing indicator */}
+                {isTyping && (
+                  <div className="flex gap-4 py-6">
+                    <div className="flex-shrink-0 w-[30px] h-[30px] rounded-sm flex items-center justify-center">
+                      <Icons.logo style={{ width: '18px', height: '18px', color: '#7c3aed' }} />
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <div className="w-2 h-2 rounded-full bg-zinc-400" style={{ animation: 'pulse 1.4s infinite ease-in-out both' }} />
+                      <div className="w-2 h-2 rounded-full bg-zinc-400" style={{ animation: 'pulse 1.4s infinite ease-in-out both 0.2s' }} />
+                      <div className="w-2 h-2 rounded-full bg-zinc-400" style={{ animation: 'pulse 1.4s infinite ease-in-out both 0.4s' }} />
+                    </div>
                   </div>
                 )}
-                <p style={{
-                  fontSize: tokens.typography.sizes.lg,
-                  fontWeight: message.role === 'ai' ? tokens.typography.weights.light : tokens.typography.weights.regular,
-                  lineHeight: tokens.typography.lineHeights.relaxed,
-                  color: tokens.colors.text.primary,
-                  margin: 0,
-                  paddingLeft: message.role === 'user' ? tokens.spacing.xl : '0',
-                }}>
-                  {message.content}
-                </p>
-              </div>
-            ))}
 
-            {/* Typing Indicator - Minimal */}
-            {isTyping && (
-              <div>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: tokens.spacing.sm,
-                  marginBottom: tokens.spacing.md,
-                }}>
-                  <Sparkles size={16} strokeWidth={1.5} color={tokens.colors.primary} />
-                  <span style={{
-                    fontSize: tokens.typography.sizes.sm,
-                    color: tokens.colors.text.tertiary,
-                    fontWeight: tokens.typography.weights.regular,
-                  }}>
-                    Coheren AI
+                <div ref={messagesEndRef} />
+              </div>
+            </div>
+
+            {/* Input area — floating at bottom */}
+            <div className="max-w-3xl mx-auto w-full px-6 pt-2 pb-4">
+              {isTyping || onboardingPhase !== 'conversation' ? (
+                <div className="w-full max-w-2xl mx-auto flex items-center px-5 h-12 rounded-full bg-zinc-100 border border-zinc-200">
+                  <span className="text-sm text-zinc-400">
+                    {onboardingPhase !== 'conversation' ? 'Generating your plan...' : 'Thinking...'}
                   </span>
                 </div>
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  <div style={{
-                    width: '8px',
-                    height: '8px',
-                    backgroundColor: tokens.colors.text.tertiary,
-                    borderRadius: '50%',
-                    animation: 'pulse 1.4s infinite ease-in-out both',
-                  }} />
-                  <div style={{
-                    width: '8px',
-                    height: '8px',
-                    backgroundColor: tokens.colors.text.tertiary,
-                    borderRadius: '50%',
-                    animation: 'pulse 1.4s infinite ease-in-out both 0.2s',
-                  }} />
-                  <div style={{
-                    width: '8px',
-                    height: '8px',
-                    backgroundColor: tokens.colors.text.tertiary,
-                    borderRadius: '50%',
-                    animation: 'pulse 1.4s infinite ease-in-out both 0.4s',
-                  }} />
+              ) : (
+                <div className="w-full max-w-2xl mx-auto flex items-center gap-2 bg-white border border-zinc-200 rounded-full px-5 h-12 shadow-sm focus-within:border-zinc-400 transition-colors">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={userInput}
+                    onChange={(e) => setUserInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                    placeholder="Type your message..."
+                    autoFocus
+                    className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-800 placeholder:text-zinc-400"
+                  />
+                  <button
+                    onClick={handleSend}
+                    disabled={!userInput.trim()}
+                    className="flex-shrink-0 w-7 h-7 rounded-full bg-zinc-900 disabled:bg-zinc-200 flex items-center justify-center transition-colors"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M5 12l14 0"/><path d="M13 18l6 -6"/><path d="M13 6l6 6"/>
+                    </svg>
+                  </button>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Input Area - Clean, minimal */}
-          <div style={{
-            display: 'flex',
-            gap: tokens.spacing.md,
-            padding: `${tokens.spacing.lg} 0`,
-            alignItems: 'center',
-          }}>
-            <input
-              ref={inputRef}
-              type="text"
-              value={userInput}
-              onChange={(e) => setUserInput(e.target.value)}
-              onKeyDown={handleKeyPress}
-              placeholder={onboardingPhase !== 'conversation' ? "Generating your plan..." : "Type your message..."}
-              disabled={isTyping || onboardingPhase !== 'conversation'}
-              autoFocus
-              style={{
-                flex: 1,
-                fontSize: tokens.typography.sizes.lg,
-                fontWeight: tokens.typography.weights.light,
-                padding: `${tokens.spacing.lg} 0`,
-                backgroundColor: 'transparent',
-                border: 'none',
-                borderBottom: `1px solid ${tokens.colors.border}`,
-                borderRadius: '0',
-                color: tokens.colors.text.primary,
-                outline: 'none',
-                transition: tokens.transitions.all,
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderBottomColor = tokens.colors.primary;
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderBottomColor = tokens.colors.border;
-              }}
-            />
-            <button
-              onClick={handleSend}
-              disabled={!userInput.trim() || isTyping || onboardingPhase !== 'conversation'}
-              onMouseEnter={(e) => {
-                if (!e.currentTarget.disabled) {
-                  e.currentTarget.style.transform = `scale(${tokens.colors.state.hoverScale})`;
-                  e.currentTarget.style.backgroundColor = tokens.colors.primaryHover;
-                }
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-                e.currentTarget.style.backgroundColor = tokens.colors.primary;
-              }}
-              style={{
-                ...button.primary,
-                width: '44px',
-                height: '44px',
-                padding: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: userInput.trim() ? 1 : 0.5,
-                fontSize: '20px',
-                fontWeight: 400
-              }}
-            >
-              →
-            </button>
           </div>
         </div>
-      </div>
       )}
 
       {/* Agent Error Banner — shown when any agent call fails */}

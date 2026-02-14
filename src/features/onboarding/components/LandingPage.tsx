@@ -232,14 +232,15 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
           style={{ overflow: "clip" }}
         >
           {/* Section header inside the card */}
-          <div className="px-8 lg:px-16 pt-16 pb-4 text-center">
-            <span className="mb-4 inline-block rounded-full border border-violet-500/30 bg-violet-500/10 px-4 py-1 text-xs font-semibold uppercase tracking-widest text-violet-400">
+          <div className="px-8 lg:px-16 pt-8 pb-0 text-center">
+            <span className="mb-3 inline-block rounded-full border border-violet-500/30 bg-violet-500/10 px-4 py-1 text-xs font-semibold uppercase tracking-widest text-violet-400">
               How It Works
             </span>
-            <h2 className="mt-4 text-4xl font-light tracking-tight text-white sm:text-5xl md:text-6xl">
-              From goal to action,{' '}
+            <h2 className="mt-3 text-4xl font-light tracking-tight text-white sm:text-5xl md:text-6xl">
+              Eliminate the space between
+              <br />
               <span className="bg-gradient-to-r from-violet-400 to-indigo-400 bg-clip-text text-transparent">
-                automatically.
+                'want' and 'did'.
               </span>
             </h2>
           </div>

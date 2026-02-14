@@ -37,7 +37,7 @@ export function MinimalFooter() {
   };
 
   return (
-    <footer className="relative z-[100] bg-white overflow-hidden">
+    <footer className="relative z-[100] bg-black overflow-hidden">
 
       {/* Purple glow — bottom center */}
       <div
@@ -62,10 +62,10 @@ export function MinimalFooter() {
           <div className="shrink-0 w-full sm:w-72 flex flex-col gap-5">
             <div className="flex items-center gap-2">
               <Icons.logo className="h-6 w-6 text-violet-600" />
-              <span className="text-base font-semibold text-slate-900 tracking-tight">coheren.ai</span>
+              <span className="text-base font-semibold text-white tracking-tight">coheren.ai</span>
             </div>
             <div>
-              <p className="text-3xl font-light text-slate-900 leading-snug" style={{ letterSpacing: '-0.02em' }}>
+              <p className="text-3xl font-light text-white leading-snug" style={{ letterSpacing: '-0.02em' }}>
                 Backed by science.<br />
                 <span className="text-violet-600">Built for you.</span>
               </p>
@@ -138,9 +138,6 @@ export function MinimalFooter() {
         <div className="py-6 flex flex-col sm:flex-row items-center justify-between gap-2">
           <p className="text-xs text-slate-400">
             © {year} coheren.ai — All rights reserved.
-          </p>
-          <p className="text-xs text-slate-300">
-            Made with care for goal-setters everywhere.
           </p>
         </div>
 

@@ -669,10 +669,14 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       <div ref={pricingWrapperRef} style={{ height: '300vh', position: 'relative' }}>
         <div style={{ position: 'sticky', top: 0, height: '100vh', overflow: 'hidden' }}>
 
-          {/* GIF backdrop — plays automatically, pricing curtain covers it */}
-          <img
-            src="/backdrop.gif"
-            alt=""
+          {/* Video backdrop — muted until user scrolls to this section */}
+          <video
+            ref={el => { if (el) { el.muted = true; el.volume = 0; } }}
+            src="/backdrop.mp4"
+            autoPlay
+            loop
+            muted
+            playsInline
             style={{
               position: 'absolute', inset: 0,
               width: '100%', height: '100%',
@@ -686,7 +690,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
               position: 'absolute', inset: 0,
               x: pricingX,
               zIndex: 30,
-              backgroundColor: 'rgba(0,0,0,0.45)',
+              backgroundColor: 'rgba(255,255,255,0.12)',
               backdropFilter: 'blur(28px)',
               WebkitBackdropFilter: 'blur(28px)',
               borderRadius: '3rem 0 0 3rem',

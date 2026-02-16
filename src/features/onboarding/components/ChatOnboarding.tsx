@@ -140,6 +140,7 @@ export default function ChatOnboarding({ onLoginSuccess }: ChatOnboardingProps) 
   const updateUniversalProfile = useStore((state) => state.updateUniversalProfile);
   const updateCurrentGoal = useStore((state) => state.updateCurrentGoal);
   const setRoadmap = useStore((state) => state.setRoadmap);
+  const setAgentData = useStore((state) => state.setAgentData);
   const setTasks = useStore((state) => state.setTasks);
   const checkInTime = useStore((state) => state.checkInTime);
 
@@ -618,7 +619,6 @@ The system will automatically detect when the data is complete and transition to
         })),
         startDate: new Date().toISOString().split('T')[0],
         endDate: new Date(new Date().getTime() + durationInMonths * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        agentRoadmap: agentRoadmap.roadmap // Store full agent roadmap
       };
 
       // Update profile and goal
@@ -641,13 +641,23 @@ The system will automatically detect when the data is complete and transition to
       });
 
       setRoadmap(roadmap);
+      // Persist agent data so generateNextDayTasks can use Agent 4 for future days
+      setAgentData(agentRoadmap, stoneProfile);
+
+      // Infer task type from title keywords (DailyTask has no type field)
+      const inferTaskType = (title: string): 'practice' | 'learning' | 'reflection' => {
+        const t = title.toLowerCase();
+        if (/reflect|journal|review|assess|evaluat|check.?in|look back|lesson/.test(t)) return 'reflection';
+        if (/learn|watch|read|study|understand|explor|research|discover/.test(t)) return 'learning';
+        return 'practice';
+      };
 
       // Helper: convert a DailyTask agent output to the store/DB format
       const toStoreTask = (agentTask: typeof firstTask, dayNum: number) => ({
         id: String(dayNum),
         title: agentTask.task.title,
         description: agentTask.task.description,
-        type: 'practice' as const,
+        type: inferTaskType(agentTask.task.title),
         duration: agentTask.task.estimatedMinutes,
         completed: false,
         skipped: false,

@@ -32,7 +32,8 @@
       "@shared/*": ["src/shared/*"],
       "@lib/*": ["src/lib/*"],
       "@utils/*": ["src/utils/*"],
-      "@types-app/*": ["src/types/*"]
+      "@types-app/*": ["src/types/*"],
+      "@hooks/*": ["src/hooks/*"]
     }
   },
   "include": ["src"]

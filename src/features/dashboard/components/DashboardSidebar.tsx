@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { tokens } from '@core/design-system';
 import { useStore } from '@core/store/useStore';
 import { Icons } from '@shared/components/ui/icons';
+import { useUserLevel } from '@hooks/useUserLevel';
 
 interface DashboardSidebarProps {
   currentView: 'today' | 'profile' | 'progress' | 'goals' | 'journey' | 'settings';
@@ -21,6 +22,7 @@ const NAV_HOVER_BG = 'rgba(255,255,255,0.05)';
 
 export default function DashboardSidebar({ currentView, onViewChange, isOpen: controlledIsOpen, onToggle }: DashboardSidebarProps) {
   const setStep = useStore((state) => state.setStep);
+  const level = useUserLevel();
   const [internalIsOpen, setInternalIsOpen] = useState(() => {
     return window.innerWidth >= 768;
   });
@@ -199,7 +201,7 @@ export default function DashboardSidebar({ currentView, onViewChange, isOpen: co
                   color={isActive ? NAV_ACTIVE_TEXT : NAV_INACTIVE}
                 />
                 <span style={{
-                  fontSize: tokens.typography.sizes.sm,
+                  fontSize: tokens.typography.sizes.base,
                   color: isActive ? NAV_ACTIVE_TEXT : NAV_INACTIVE,
                   fontWeight: isActive ? tokens.typography.weights.medium : tokens.typography.weights.light,
                   letterSpacing: isActive ? '-0.01em' : 'normal',
@@ -211,19 +213,38 @@ export default function DashboardSidebar({ currentView, onViewChange, isOpen: co
           })}
         </nav>
 
-        {/* Footer */}
+        {/* Footer — level badge */}
         <div style={{
           padding: `${tokens.spacing.lg} ${tokens.spacing.xl}`,
           borderTop: `1px solid ${SIDEBAR_BORDER}`,
         }}>
-          <p style={{
-            fontSize: '11px',
-            fontWeight: tokens.typography.weights.light,
-            color: 'rgba(255,255,255,0.15)',
-            textAlign: 'center',
-            letterSpacing: '0.05em',
-          }}>
-            v1.0.0
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', fontWeight: tokens.typography.weights.light, letterSpacing: '0.04em' }}>
+              LEVEL
+            </span>
+            <span style={{
+              fontSize: '11px',
+              fontWeight: tokens.typography.weights.medium,
+              color: level.color,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase' as const,
+            }}>
+              {level.label}
+            </span>
+          </div>
+          {/* Progress bar toward next level */}
+          <div style={{ height: '3px', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: '99px', overflow: 'hidden', marginBottom: '6px' }}>
+            <div style={{
+              height: '100%',
+              width: `${level.progress}%`,
+              backgroundColor: level.color,
+              borderRadius: '99px',
+              transition: 'width 0.8s cubic-bezier(0.4,0,0.2,1)',
+              boxShadow: `0 0 6px ${level.color}80`,
+            }} />
+          </div>
+          <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.18)', fontWeight: tokens.typography.weights.light, margin: 0, letterSpacing: '0.02em' }}>
+            {level.tier === 'master' ? level.tagline : `${level.score} / ${level.nextAt} pts`}
           </p>
         </div>
       </div>

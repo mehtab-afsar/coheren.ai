@@ -5,7 +5,8 @@ import { generateTasksForDay, generateTasksFromAIPlan } from '@shared/utils/task
 import type { User } from '@supabase/supabase-js';
 import { getCurrentUser } from '@lib/supabase';
 import { updateTaskCompletion, updateTaskSkip, updateProfile } from '@lib/database';
-import type { TaskResource } from '@types-app/agents.js';
+import type { TaskResource, Agent3Output, Agent2ProfileOutput, DailyTask, TaskStep } from '@types-app/agents.js';
+import { runTaskGenerator } from '@core/agents';
 
 export interface Task {
   id: string;
@@ -83,6 +84,9 @@ interface AppStore extends OnboardingState {
   // App state
   checkInTime: string;
   roadmap: Roadmap | null;
+  // Persisted agent data for ongoing task generation
+  agentRoadmap: Agent3Output | null;
+  stoneProfile: Agent2ProfileOutput | null;
   tasks: Task[];
   currentDay: number;
   streak: number;
@@ -102,6 +106,7 @@ interface AppStore extends OnboardingState {
   setSpecificGoal: (goal: string) => void;
   setCheckInTime: (time: string) => void;
   setRoadmap: (roadmap: Roadmap) => void;
+  setAgentData: (agentRoadmap: Agent3Output, stoneProfile: Agent2ProfileOutput) => void;
   setTasks: (tasks: Task[]) => void;
   completeTask: (taskId: string) => Promise<void>;
   skipTask: (taskId: string, reason?: 'time' | 'health' | 'difficulty' | 'external') => Promise<void>;
@@ -129,6 +134,8 @@ export const useStore = create<AppStore>()(
       currentGoal: {},
       checkInTime: '07:00',
       roadmap: null,
+      agentRoadmap: null,
+      stoneProfile: null,
       tasks: [],
       currentDay: 1,
       streak: 0,
@@ -169,6 +176,8 @@ export const useStore = create<AppStore>()(
       setCheckInTime: (time) => set({ checkInTime: time }),
 
       setRoadmap: (roadmap) => set({ roadmap }),
+
+      setAgentData: (agentRoadmap, stoneProfile) => set({ agentRoadmap, stoneProfile }),
 
       setTasks: (tasks) => set({ tasks }),
 
@@ -383,30 +392,81 @@ export const useStore = create<AppStore>()(
           return;
         }
 
-        // Check if we should adjust difficulty based on performance
-        const nextWeek = Math.ceil((state.currentDay + 1) / 7);
+        const nextDay = state.currentDay;
+
+        // If we have full agent data, use Agent 4 for rich task with steps/resources
+        if (state.agentRoadmap && state.stoneProfile) {
+          const dailyMinutes = parseInt(state.roadmap.dailyTime) || 30;
+
+          // Kick off Agent 4 async, optimistically add a placeholder task
+          runTaskGenerator(nextDay, state.agentRoadmap, state.stoneProfile, dailyMinutes)
+            .then((agentTask: DailyTask) => {
+              const newTask: Task = {
+                id: `agent-day-${nextDay}`,
+                title: agentTask.task.title,
+                description: agentTask.task.description,
+                type: 'practice',
+                duration: agentTask.task.estimatedMinutes,
+                completed: false,
+                skipped: false,
+                scheduledFor: new Date().toISOString().split('T')[0],
+                day: nextDay,
+                dayNumber: nextDay,
+                steps: agentTask.task.steps.map((s: TaskStep) => s.instruction),
+                tips: agentTask.task.tips,
+                successCriteria: agentTask.task.successCriteria.primary,
+                resources: agentTask.task.resources,
+              };
+              // Replace placeholder with real task
+              set((s) => ({
+                tasks: s.tasks
+                  .filter(t => t.id !== `placeholder-day-${nextDay}`)
+                  .concat([newTask])
+              }));
+              console.log(`✅ Agent 4: Day ${nextDay} task generated with resources`);
+            })
+            .catch(() => {
+              // Agent 4 failed — replace placeholder with static fallback
+              const fallback = generateTasksFromAIPlan(state.roadmap!, nextDay, state.checkInTime);
+              set((s) => ({
+                tasks: s.tasks
+                  .filter(t => t.id !== `placeholder-day-${nextDay}`)
+                  .concat(fallback)
+              }));
+            });
+
+          // Add a lightweight placeholder so the UI isn't empty while Agent 4 runs
+          const placeholder: Task = {
+            id: `placeholder-day-${nextDay}`,
+            title: "Generating today's task...",
+            description: 'Your personalized task is being prepared.',
+            type: 'practice',
+            duration: dailyMinutes,
+            completed: false,
+            skipped: false,
+            scheduledFor: new Date().toISOString().split('T')[0],
+            day: nextDay,
+          };
+          set((s) => ({ tasks: [...s.tasks, placeholder] }));
+          return;
+        }
+
+        // Fallback: use static templates
+        const nextWeek = Math.ceil((nextDay + 1) / 7);
         const lastWeekPerformance = state.performanceHistory.find(
           (p) => p.weekNumber === nextWeek - 1
         );
-
         let difficultyMultiplier = 1.0;
-
         if (lastWeekPerformance) {
-          if (lastWeekPerformance.completionRate < 60) {
-            // Struggling - reduce difficulty by 20%
-            difficultyMultiplier = 0.8;
-          } else if (lastWeekPerformance.completionRate > 90) {
-            // Excelling - increase difficulty by 20%
-            difficultyMultiplier = 1.2;
-          }
+          if (lastWeekPerformance.completionRate < 60) difficultyMultiplier = 0.8;
+          else if (lastWeekPerformance.completionRate > 90) difficultyMultiplier = 1.2;
         }
 
-        // Try to use AI-generated plan first, fall back to templates with adaptive difficulty
         const nextDayTasks = state.roadmap.strategicPlan
-          ? generateTasksFromAIPlan(state.roadmap, state.currentDay, state.checkInTime)
+          ? generateTasksFromAIPlan(state.roadmap, nextDay, state.checkInTime)
           : generateTasksForDay(
               state.roadmap.category,
-              state.currentDay,
+              nextDay,
               state.checkInTime,
               difficultyMultiplier
             );
@@ -421,6 +481,8 @@ export const useStore = create<AppStore>()(
         universalProfile: {},
         currentGoal: {},
         roadmap: null,
+        agentRoadmap: null,
+        stoneProfile: null,
         tasks: [],
         currentDay: 1,
         streak: 0,

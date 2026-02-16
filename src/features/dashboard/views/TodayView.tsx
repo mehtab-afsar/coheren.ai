@@ -1,9 +1,10 @@
-import { Flame, Calendar, TrendingUp, CheckCircle2, Circle, Clock, Play, ArrowRight, Sparkles, SkipForward, X, Zap } from 'lucide-react';
+import { Flame, Calendar, TrendingUp, CheckCircle2, Clock, ArrowRight, Sparkles, SkipForward, X, Zap } from 'lucide-react';
 import { useStore } from '@core/store/useStore';
 import { tokens, text, card } from '@core/design-system';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useCinemaMode } from '../hooks/useCinemaMode';
 import { useTaskActions } from '../hooks/useTaskActions';
+import { useBreakpoint } from '@hooks/useBreakpoint';
 
 export default function TodayView() {
   const {
@@ -18,15 +19,46 @@ export default function TodayView() {
   } = useStore();
 
   const { cinemaTaskId, setCinemaTaskId, getYouTubeId, timeToSeconds } = useCinemaMode();
+  const { isMobile } = useBreakpoint();
   const completeTask = useStore((state) => state.completeTask);
   const skipTask = useStore((state) => state.skipTask);
   const { completingTaskId, skippingTaskId, skipReasonTaskId, setSkipReasonTaskId, particles, showSkipMessage, handleCompleteTask, handleSkipTask, confirmSkip } = useTaskActions(completeTask, skipTask);
   const progressCardRef = useRef<HTMLDivElement>(null);
 
+  // Quick Mode — surfaces only the single most important incomplete task
+  const [quickMode, setQuickMode] = useState(false);
+  // Weekly recap dismiss (persisted per session per week boundary)
+  const weekRecapKey = `weekRecap_dismissed_day${currentDay}`;
+  const [weekRecapDismissed, setWeekRecapDismissed] = useState(
+    () => sessionStorage.getItem(weekRecapKey) === '1'
+  );
+  const dismissWeekRecap = () => {
+    sessionStorage.setItem(weekRecapKey, '1');
+    setWeekRecapDismissed(true);
+  };
+
   const todaysTasks = tasks.filter(t => t.day === currentDay && !t.skipped);
   const completedTasks = todaysTasks.filter(t => t.completed);
   const allDone = todaysTasks.length > 0 && todaysTasks.every(t => t.completed);
   const canAdvance = canAdvanceDay();
+
+  // Tasks to render — full list or just the first incomplete one in Quick Mode
+  const incompleteTasks = todaysTasks.filter(t => !t.completed);
+  const visibleTasks = quickMode
+    ? [...completedTasks, ...incompleteTasks.slice(0, 1)]
+    : todaysTasks;
+
+  // Re-engagement: streak broken, not first day, nothing done today
+  const showReEngagement = streak === 0 && currentDay > 1 && completedTasks.length === 0;
+
+  // Weekly recap: first day of a new week (day 8, 15, 22…)
+  const isNewWeekStart = currentDay > 7 && currentDay % 7 === 1;
+  const lastWeekTasks = tasks.filter(t => t.day >= currentDay - 7 && t.day < currentDay);
+  const lastWeekCompleted = lastWeekTasks.filter(t => t.completed).length;
+  const lastWeekRate = lastWeekTasks.length > 0
+    ? Math.round((lastWeekCompleted / lastWeekTasks.length) * 100)
+    : 0;
+  const showWeekRecap = isNewWeekStart && !weekRecapDismissed && lastWeekTasks.length > 0;
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -40,15 +72,6 @@ export default function TodayView() {
     return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
   };
 
-  const getTaskIcon = (type: string) => {
-    switch (type) {
-      case 'practice': return Play;
-      case 'learning': return Calendar;
-      case 'reflection': return TrendingUp;
-      default: return Circle;
-    }
-  };
-
   const handleAdvanceDay = () => {
     const success = advanceDay();
     if (success) window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -58,6 +81,8 @@ export default function TodayView() {
   const cinemaTask = cinemaTaskId ? todaysTasks.find(t => t.id === cinemaTaskId) : null;
   const cinemaResource = cinemaTask?.resources?.primary ?? null;
   const cinemaVideoId = cinemaResource?.type === 'video' ? getYouTubeId(cinemaResource.url) : null;
+  // If resource URL is a search URL (no embeddable ID), keep it for direct linking
+  const cinemaSearchUrl = cinemaResource?.url && !cinemaVideoId ? cinemaResource.url : null;
   const cinemaEmbedUrl = cinemaVideoId ? (() => {
     const p = new URLSearchParams();
     if (cinemaResource?.watchFrom) p.set('start', String(timeToSeconds(cinemaResource.watchFrom)));
@@ -295,6 +320,43 @@ export default function TodayView() {
                 }}>
                   {cinemaTask.description}
                 </p>
+
+                {/* Watch on YouTube — shown when resource URL is a search URL (not embeddable) */}
+                {cinemaSearchUrl && (
+                  <a
+                    href={cinemaSearchUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: tokens.spacing.sm,
+                      marginTop: tokens.spacing.md,
+                      padding: `${tokens.spacing.sm} ${tokens.spacing.lg}`,
+                      backgroundColor: 'rgba(255,0,0,0.12)',
+                      border: '1px solid rgba(255,0,0,0.25)',
+                      borderRadius: tokens.borderRadius.md,
+                      fontSize: tokens.typography.sizes.sm,
+                      fontWeight: tokens.typography.weights.medium,
+                      color: '#ff6b6b',
+                      textDecoration: 'none',
+                      transition: 'all 150ms ease',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.backgroundColor = 'rgba(255,0,0,0.2)';
+                      e.currentTarget.style.color = '#ff4444';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.backgroundColor = 'rgba(255,0,0,0.12)';
+                      e.currentTarget.style.color = '#ff6b6b';
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6a3 3 0 0 0-2.1 2.1C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1C24 15.9 24 12 24 12s0-3.9-.5-5.8zM9.75 15.5V8.5l6.25 3.5-6.25 3.5z"/>
+                    </svg>
+                    Find this on YouTube
+                  </a>
+                )}
               </div>
 
               {/* Steps */}
@@ -604,7 +666,7 @@ export default function TodayView() {
       {/* ── Stats Grid ───────────────────────────────────────────────────── */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
+        gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
         gap: tokens.spacing.md,
         marginBottom: tokens.spacing['3xl'],
       }}>
@@ -683,6 +745,71 @@ export default function TodayView() {
         </div>
       </div>
 
+      {/* ── Re-engagement Banner ─────────────────────────────────────────── */}
+      {showReEngagement && (
+        <div style={{
+          marginBottom: tokens.spacing['2xl'],
+          padding: tokens.spacing.xl,
+          backgroundColor: '#fafaf7',
+          border: `1px solid ${tokens.colors.gray[100]}`,
+          borderLeft: `3px solid ${tokens.colors.primary}`,
+          borderRadius: tokens.borderRadius.lg,
+        }}>
+          <p style={{ fontSize: tokens.typography.sizes.base, fontWeight: tokens.typography.weights.light, color: tokens.colors.text.primary, margin: '0 0 4px 0', lineHeight: 1.5 }}>
+            Life got busy — your roadmap waited for you.
+          </p>
+          <p style={{ fontSize: tokens.typography.sizes.sm, color: tokens.colors.text.tertiary, margin: 0, fontWeight: tokens.typography.weights.light }}>
+            Start with just one task today to rebuild momentum.
+          </p>
+        </div>
+      )}
+
+      {/* ── Weekly Recap ─────────────────────────────────────────────────── */}
+      {showWeekRecap && (
+        <div style={{
+          marginBottom: tokens.spacing['2xl'],
+          padding: tokens.spacing.xl,
+          backgroundColor: tokens.colors.surface,
+          border: `1px solid ${tokens.colors.borderLight}`,
+          borderRadius: tokens.borderRadius.lg,
+          boxShadow: tokens.shadows.xs,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: tokens.spacing.lg,
+        }}>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: '11px', color: tokens.colors.text.tertiary, fontWeight: tokens.typography.weights.regular, letterSpacing: '0.06em', textTransform: 'uppercase' as const, margin: '0 0 6px 0' }}>
+              Week {Math.ceil((currentDay - 1) / 7)} recap
+            </p>
+            <p style={{ fontSize: tokens.typography.sizes.base, fontWeight: tokens.typography.weights.light, color: tokens.colors.text.primary, margin: 0, lineHeight: 1.4 }}>
+              You completed <strong style={{ fontWeight: tokens.typography.weights.medium, color: lastWeekRate >= 70 ? '#059669' : tokens.colors.text.primary }}>{lastWeekCompleted} of {lastWeekTasks.length} tasks</strong> last week — {lastWeekRate}% completion rate.
+              {lastWeekRate >= 80 && ' Outstanding consistency.'}
+              {lastWeekRate >= 50 && lastWeekRate < 80 && ' Keep building on this.'}
+              {lastWeekRate < 50 && ' This week, aim for one more.'}
+            </p>
+          </div>
+          {/* Mini donut-style ring */}
+          <div style={{ position: 'relative', flexShrink: 0, width: 48, height: 48 }}>
+            <svg width="48" height="48" viewBox="0 0 48 48" style={{ transform: 'rotate(-90deg)' }}>
+              <circle cx="24" cy="24" r="18" fill="none" stroke={tokens.colors.gray[100]} strokeWidth="4" />
+              <circle cx="24" cy="24" r="18" fill="none"
+                stroke={lastWeekRate >= 70 ? '#059669' : tokens.colors.primary}
+                strokeWidth="4"
+                strokeDasharray={`${2 * Math.PI * 18 * lastWeekRate / 100} ${2 * Math.PI * 18}`}
+                strokeLinecap="round"
+              />
+            </svg>
+            <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: tokens.typography.weights.medium, color: tokens.colors.text.secondary }}>
+              {lastWeekRate}%
+            </span>
+          </div>
+          <button onClick={dismissWeekRecap} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: tokens.colors.text.tertiary, flexShrink: 0 }}>
+            <X size={14} strokeWidth={1.5} />
+          </button>
+        </div>
+      )}
+
       {/* ── Tasks Section ────────────────────────────────────────────────── */}
       <div>
         <div style={{
@@ -690,16 +817,58 @@ export default function TodayView() {
           justifyContent: 'space-between',
           alignItems: 'center',
           marginBottom: tokens.spacing.lg,
+          gap: tokens.spacing.md,
         }}>
           <h2 style={text.h2}>Today's Tasks</h2>
-          <span style={{ ...text.caption, color: tokens.colors.text.secondary }}>
-            {completedTasks.length} of {todaysTasks.length} complete
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm }}>
+            {/* Quick Mode toggle */}
+            {incompleteTasks.length > 1 && (
+              <button
+                onClick={() => setQuickMode(q => !q)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  padding: '5px 12px',
+                  borderRadius: '99px',
+                  border: `1px solid ${quickMode ? tokens.colors.primary : tokens.colors.borderLight}`,
+                  backgroundColor: quickMode ? `${tokens.colors.primary}12` : 'transparent',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: tokens.typography.weights.medium,
+                  color: quickMode ? tokens.colors.primary : tokens.colors.text.tertiary,
+                  transition: 'all 150ms ease',
+                  whiteSpace: 'nowrap' as const,
+                }}
+              >
+                <Zap size={12} strokeWidth={2} />
+                10 min
+              </button>
+            )}
+            <span style={{ ...text.caption, color: tokens.colors.text.secondary, whiteSpace: 'nowrap' as const }}>
+              {completedTasks.length} of {todaysTasks.length} done
+            </span>
+          </div>
         </div>
 
+        {/* Quick Mode hint */}
+        {quickMode && incompleteTasks.length > 0 && (
+          <div style={{
+            marginBottom: tokens.spacing.lg,
+            padding: `${tokens.spacing.sm} ${tokens.spacing.lg}`,
+            backgroundColor: `${tokens.colors.primary}08`,
+            border: `1px solid ${tokens.colors.primary}20`,
+            borderRadius: tokens.borderRadius.md,
+            fontSize: tokens.typography.sizes.sm,
+            color: tokens.colors.text.secondary,
+            fontWeight: tokens.typography.weights.light,
+          }}>
+            Showing your #1 priority task. Complete it, then toggle off for the full list.
+          </div>
+        )}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacing.xl }}>
-          {todaysTasks.map((task) => {
-            const Icon = getTaskIcon(task.type);
+          {visibleTasks.map((task) => {
             const isCompleting = completingTaskId === task.id;
             const hasCinema = hasCinemaMode(task);
 
@@ -975,20 +1144,50 @@ export default function TodayView() {
                       </div>
                     )}
 
-                    {/* Cinema Mode hint */}
-                    {!task.completed && hasCinema && (
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: tokens.spacing.xs,
-                        marginTop: tokens.spacing.md,
-                        color: tokens.colors.primary,
-                        fontSize: tokens.typography.sizes.sm,
-                        fontWeight: tokens.typography.weights.regular,
-                        opacity: 0.8,
-                      }}>
-                        <Zap size={13} strokeWidth={1.5} />
-                        <span>Open deep focus session</span>
+                    {/* Resource link + Cinema Mode hint */}
+                    {!task.completed && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.md, marginTop: tokens.spacing.md, flexWrap: 'wrap' as const }}>
+                        {/* Direct resource link (always accessible) */}
+                        {task.resources?.primary?.url && (
+                          <a
+                            href={task.resources.primary.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '5px',
+                              fontSize: tokens.typography.sizes.sm,
+                              color: '#0ea5e9',
+                              fontWeight: tokens.typography.weights.regular,
+                              textDecoration: 'none',
+                              opacity: 0.85,
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.textDecoration = 'underline'; }}
+                            onMouseLeave={e => { e.currentTarget.style.opacity = '0.85'; e.currentTarget.style.textDecoration = 'none'; }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6a3 3 0 0 0-2.1 2.1C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1C24 15.9 24 12 24 12s0-3.9-.5-5.8zM9.75 15.5V8.5l6.25 3.5-6.25 3.5z"/>
+                            </svg>
+                            {task.resources.primary.title || 'Learning resource'}
+                          </a>
+                        )}
+                        {/* Cinema Mode deep focus button */}
+                        {hasCinema && (
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: tokens.spacing.xs,
+                            color: tokens.colors.primary,
+                            fontSize: tokens.typography.sizes.sm,
+                            fontWeight: tokens.typography.weights.regular,
+                            opacity: 0.8,
+                          }}>
+                            <Zap size={13} strokeWidth={1.5} />
+                            <span>Open deep focus</span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

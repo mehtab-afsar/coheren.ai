@@ -20,7 +20,18 @@ import type {
   Agent5Input,
   Agent5Output,
 } from '@types-app/agents';
-import type { Task } from '@core/store/useStore';
+// Minimal interface to avoid circular import with @core/store/useStore
+interface Task {
+  day?: number;
+  dayNumber?: number;
+  title: string;
+  difficultyRating?: number;
+  actualDuration?: number;
+  duration: number;
+  userComment?: string;
+  skipped: boolean;
+  skipReason?: 'time' | 'health' | 'difficulty' | 'external';
+}
 
 // ============================================================
 // STATUS ENUM

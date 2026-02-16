@@ -2,6 +2,8 @@ import { User, Clock, Bell, Trash2, Sunrise, Target, Palette, Moon, Sun } from '
 import { useStore } from '@core/store/useStore';
 import { tokens, text, card } from '@core/design-system';
 import { useState } from 'react';
+import { updateProfile } from '@lib/database';
+import { useBreakpoint } from '@hooks/useBreakpoint';
 
 export default function SettingsView() {
   const {
@@ -13,15 +15,25 @@ export default function SettingsView() {
     roadmap,
   } = useStore();
 
+  const { isMobile } = useBreakpoint();
   const [editingCard, setEditingCard] = useState<string | null>(null);
   const [tempName, setTempName] = useState(universalProfile.name || '');
   const [tempCheckInTime, setTempCheckInTime] = useState(checkInTime);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
+  const user = useStore((state) => state.user);
+
   const handleSaveCard = (cardType: string) => {
     if (cardType === 'name') {
-      if (tempName.trim()) {
-        updateUniversalProfile({ name: tempName.trim() });
+      const trimmed = tempName.trim();
+      if (trimmed) {
+        updateUniversalProfile({ name: trimmed });
+        // Persist to Supabase profiles table
+        if (user?.id) {
+          updateProfile(user.id, { full_name: trimmed }).catch((err) =>
+            console.warn('Could not sync name to DB:', err)
+          );
+        }
       }
     } else if (cardType === 'checkin') {
       setCheckInTime(tempCheckInTime);
@@ -49,7 +61,7 @@ export default function SettingsView() {
       {/* Quick Stats Grid - 3 rows x 2 columns */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(2, 1fr)',
+        gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
         gap: tokens.spacing.lg,
         marginBottom: tokens.spacing['3xl']
       }}>

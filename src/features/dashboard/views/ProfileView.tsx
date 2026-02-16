@@ -1,9 +1,11 @@
 import { User, Clock, Sunrise } from 'lucide-react';
 import { useStore } from '@core/store/useStore';
 import { tokens, text, card } from '@core/design-system';
+import { useBreakpoint } from '@hooks/useBreakpoint';
 
 export default function ProfileView() {
   const { universalProfile, currentGoal, roadmap } = useStore();
+  const { isMobile } = useBreakpoint();
 
   return (
     <div>
@@ -43,7 +45,7 @@ export default function ProfileView() {
       {/* Info Grid */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
+        gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
         gap: tokens.spacing.lg,
         marginBottom: tokens.spacing.xl
       }}>

@@ -15,6 +15,7 @@ export default defineConfig({
       '@shared': path.resolve(__dirname, 'src/shared'),
       '@lib': path.resolve(__dirname, 'src/lib'),
       '@utils': path.resolve(__dirname, 'src/utils'),
+      '@hooks': path.resolve(__dirname, 'src/hooks'),
       '@types-app': path.resolve(__dirname, 'src/types'),
     }
   },

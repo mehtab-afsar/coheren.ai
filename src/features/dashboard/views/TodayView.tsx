@@ -545,24 +545,34 @@ export default function TodayView() {
       )}
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div style={{ marginBottom: tokens.spacing['3xl'], textAlign: 'center' }}>
-        <h1 style={{ ...text.h1, marginBottom: tokens.spacing.md }}>
-          {getGreeting()}, {universalProfile.name || 'there'} 👋
-        </h1>
+      <div style={{ marginBottom: tokens.spacing['2xl'] }}>
         <p style={{
           fontSize: tokens.typography.sizes.sm,
           fontWeight: tokens.typography.weights.light,
           color: tokens.colors.text.tertiary,
           marginBottom: tokens.spacing.xs,
+          letterSpacing: '0.02em',
         }}>
-          Your Journey
+          {getGreeting()}
         </p>
-        <p style={{
-          fontSize: tokens.typography.sizes.md,
-          fontWeight: tokens.typography.weights.regular,
-          color: tokens.colors.text.secondary,
+        <h1 style={{
+          fontSize: tokens.typography.sizes['3xl'],
+          fontWeight: tokens.typography.weights.light,
+          color: tokens.colors.text.primary,
+          letterSpacing: '-0.03em',
+          marginBottom: tokens.spacing.sm,
+          lineHeight: 1.2,
         }}>
-          {roadmap?.title} • {roadmap?.duration} months • {Math.ceil((roadmap?.duration || 3) * 4)} weeks
+          {universalProfile.name || 'Welcome back'}
+        </h1>
+        <p style={{
+          fontSize: tokens.typography.sizes.sm,
+          fontWeight: tokens.typography.weights.light,
+          color: tokens.colors.text.tertiary,
+        }}>
+          {roadmap?.title}
+          <span style={{ margin: '0 8px', opacity: 0.4 }}>·</span>
+          Day {currentDay}
         </p>
       </div>
 
@@ -595,56 +605,82 @@ export default function TodayView() {
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: tokens.spacing.lg,
+        gap: tokens.spacing.md,
         marginBottom: tokens.spacing['3xl'],
       }}>
-        {[
-          {
-            icon: <Flame size={18} strokeWidth={1.5} color={streak > 0 ? '#ff6b35' : tokens.colors.gray[300]} />,
-            label: 'Streak',
-            value: streak,
-            sub: streak === 1 ? 'day' : 'days',
-          },
-          {
-            icon: <TrendingUp size={18} strokeWidth={1.5} color={tokens.colors.gray[300]} />,
-            label: 'Progress',
-            value: `${Math.round(completionRate)}%`,
-            sub: 'today',
-            ref: progressCardRef,
-          },
-          {
-            icon: <Calendar size={18} strokeWidth={1.5} color={tokens.colors.gray[300]} />,
-            label: 'Week',
-            value: Math.ceil(currentDay / 7),
-            sub: `of ${Math.ceil((roadmap?.duration || 6) * 4)}`,
-          },
-        ].map((stat, i) => (
-          <div
-            key={i}
-            ref={i === 1 ? progressCardRef : undefined}
-            style={{
-              ...card.standard,
-              backgroundColor: tokens.colors.primary,
-              boxShadow: tokens.shadows.sm,
-              padding: tokens.spacing.lg,
-              transition: tokens.transitions.all,
-              animation: i === 1 && particles.length > 0 ? 'progressPulse 1s ease-in-out' : 'none',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.md }}>
-              {stat.icon}
-              <span style={{ ...text.caption, color: tokens.colors.text.inverse, fontWeight: tokens.typography.weights.regular }}>
-                {stat.label}
-              </span>
-            </div>
-            <div style={{ ...text.h2, color: tokens.colors.text.inverse, fontSize: tokens.typography.sizes['3xl'], marginBottom: tokens.spacing.xs }}>
-              {stat.value}
-            </div>
-            <div style={{ ...text.caption, fontSize: tokens.typography.sizes.sm, color: tokens.colors.text.inverse, opacity: 0.8 }}>
-              {stat.sub}
-            </div>
+        {/* Streak */}
+        <div style={{
+          backgroundColor: tokens.colors.surface,
+          border: `1px solid ${tokens.colors.borderLight}`,
+          borderTop: `3px solid ${streak > 0 ? '#f97316' : tokens.colors.gray[200]}`,
+          borderRadius: tokens.borderRadius.lg,
+          padding: tokens.spacing.lg,
+          boxShadow: tokens.shadows.xs,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: tokens.spacing.md }}>
+            <Flame size={14} strokeWidth={1.5} color={streak > 0 ? '#f97316' : tokens.colors.gray[300]} />
+            <span style={{ fontSize: tokens.typography.sizes.xs, color: tokens.colors.text.tertiary, fontWeight: tokens.typography.weights.regular, letterSpacing: '0.04em', textTransform: 'uppercase' as const }}>
+              Streak
+            </span>
           </div>
-        ))}
+          <div style={{ fontSize: '2rem', fontWeight: tokens.typography.weights.light, color: tokens.colors.text.primary, letterSpacing: '-0.04em', lineHeight: 1, marginBottom: '4px' }}>
+            {streak}
+          </div>
+          <div style={{ fontSize: tokens.typography.sizes.xs, color: tokens.colors.text.tertiary, fontWeight: tokens.typography.weights.light }}>
+            {streak === 1 ? 'day in a row' : 'days in a row'}
+          </div>
+        </div>
+
+        {/* Progress */}
+        <div
+          ref={progressCardRef}
+          style={{
+            backgroundColor: tokens.colors.surface,
+            border: `1px solid ${tokens.colors.borderLight}`,
+            borderTop: `3px solid ${tokens.colors.primary}`,
+            borderRadius: tokens.borderRadius.lg,
+            padding: tokens.spacing.lg,
+            boxShadow: tokens.shadows.xs,
+            animation: particles.length > 0 ? 'progressPulse 1s ease-in-out' : 'none',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: tokens.spacing.md }}>
+            <TrendingUp size={14} strokeWidth={1.5} color={tokens.colors.primary} />
+            <span style={{ fontSize: tokens.typography.sizes.xs, color: tokens.colors.text.tertiary, fontWeight: tokens.typography.weights.regular, letterSpacing: '0.04em', textTransform: 'uppercase' as const }}>
+              Today
+            </span>
+          </div>
+          <div style={{ fontSize: '2rem', fontWeight: tokens.typography.weights.light, color: tokens.colors.text.primary, letterSpacing: '-0.04em', lineHeight: 1, marginBottom: '8px' }}>
+            {Math.round(completionRate)}%
+          </div>
+          {/* Mini progress bar */}
+          <div style={{ height: '3px', backgroundColor: tokens.colors.gray[100], borderRadius: '99px', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${Math.round(completionRate)}%`, backgroundColor: tokens.colors.primary, borderRadius: '99px', transition: 'width 0.6s cubic-bezier(0.4,0,0.2,1)' }} />
+          </div>
+        </div>
+
+        {/* Week */}
+        <div style={{
+          backgroundColor: tokens.colors.surface,
+          border: `1px solid ${tokens.colors.borderLight}`,
+          borderTop: `3px solid #0ea5e9`,
+          borderRadius: tokens.borderRadius.lg,
+          padding: tokens.spacing.lg,
+          boxShadow: tokens.shadows.xs,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: tokens.spacing.md }}>
+            <Calendar size={14} strokeWidth={1.5} color="#0ea5e9" />
+            <span style={{ fontSize: tokens.typography.sizes.xs, color: tokens.colors.text.tertiary, fontWeight: tokens.typography.weights.regular, letterSpacing: '0.04em', textTransform: 'uppercase' as const }}>
+              Week
+            </span>
+          </div>
+          <div style={{ fontSize: '2rem', fontWeight: tokens.typography.weights.light, color: tokens.colors.text.primary, letterSpacing: '-0.04em', lineHeight: 1, marginBottom: '4px' }}>
+            {Math.ceil(currentDay / 7)}
+          </div>
+          <div style={{ fontSize: tokens.typography.sizes.xs, color: tokens.colors.text.tertiary, fontWeight: tokens.typography.weights.light }}>
+            of {Math.ceil((roadmap?.duration || 6) * 4)} weeks
+          </div>
+        </div>
       </div>
 
       {/* ── Tasks Section ────────────────────────────────────────────────── */}
@@ -752,13 +788,32 @@ export default function TodayView() {
                       gap: tokens.spacing.sm,
                       marginBottom: tokens.spacing.md,
                     }}>
-                      <Icon size={16} strokeWidth={1.5} color={tokens.colors.text.secondary} />
-                      <span style={{ ...text.caption, color: tokens.colors.text.secondary, textTransform: 'capitalize', fontWeight: tokens.typography.weights.regular }}>
-                        {task.type}
-                      </span>
-                      <span style={{ ...text.caption, color: tokens.colors.text.tertiary }}>•</span>
-                      <Clock size={16} strokeWidth={1.5} color={tokens.colors.text.secondary} />
-                      <span style={{ ...text.caption, color: tokens.colors.text.secondary, fontWeight: tokens.typography.weights.regular }}>
+                      {/* Type badge with color coding */}
+                      {(() => {
+                        const typeColors: Record<string, { bg: string; text: string; border: string }> = {
+                          practice: { bg: 'rgba(124,58,237,0.08)', text: '#7c3aed', border: 'rgba(124,58,237,0.2)' },
+                          learning: { bg: 'rgba(14,165,233,0.08)', text: '#0284c7', border: 'rgba(14,165,233,0.2)' },
+                          reflection: { bg: 'rgba(16,185,129,0.08)', text: '#059669', border: 'rgba(16,185,129,0.2)' },
+                        };
+                        const c = typeColors[task.type] ?? { bg: tokens.colors.gray[50], text: tokens.colors.text.secondary, border: tokens.colors.gray[200] };
+                        return (
+                          <span style={{
+                            fontSize: '11px',
+                            fontWeight: tokens.typography.weights.medium,
+                            color: c.text,
+                            backgroundColor: c.bg,
+                            border: `1px solid ${c.border}`,
+                            padding: '2px 8px',
+                            borderRadius: '99px',
+                            textTransform: 'capitalize' as const,
+                            letterSpacing: '0.01em',
+                          }}>
+                            {task.type}
+                          </span>
+                        );
+                      })()}
+                      <span style={{ fontSize: '11px', color: tokens.colors.text.tertiary, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                        <Clock size={11} strokeWidth={1.5} />
                         {formatDuration(task.duration)}
                       </span>
                     </div>

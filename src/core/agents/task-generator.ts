@@ -201,7 +201,7 @@ If domain is Career AND FearOfFailure is an active stone:
 1. estimatedMinutes ≤ ${dailyTimeAvailable}. Never exceed the daily time budget.
 2. Steps must be specific and actionable — no vague instructions ("practice X" → "do 3×10 reps of X with a 90-second rest").
 3. Every step has a duration (e.g., "10 minutes", "2 sets of 8 reps").
-4. Include a Cinema Mode resource: specific YouTube search URL, expected channel, watch window (watchFrom/watchTo), and coaching cues (focusPoints).
+4. Include a Cinema Mode resource: a REAL, embeddable YouTube video URL (https://www.youtube.com/watch?v=VIDEO_ID) from a specific well-known educational channel you know. Set watchFrom/watchTo to the exact segment relevant to this task. The video ID must be a real 11-character YouTube video ID — do NOT use search URLs.
 5. successCriteria.primary must be completion-based — not "do it perfectly" but "do it the specified number of times."
 6. whyThisMatters connects to the original goal, not just the phase theme.
 
@@ -222,7 +222,7 @@ Return ONLY valid JSON in this exact schema:
         "details": "<optional extra context>",
         "resource": {
           "type": "video",
-          "url": "<YouTube search URL>",
+          "url": "https://www.youtube.com/watch?v=<REAL_VIDEO_ID>",
           "timestamp": "<e.g. 1:30–4:00>",
           "focusPoints": ["<coaching cue 1>", "<coaching cue 2>"]
         }
@@ -243,16 +243,16 @@ Return ONLY valid JSON in this exact schema:
     "resources": {
       "primary": {
         "type": "video",
-        "title": "<descriptive video title>",
-        "url": "<https://youtube.com/results?search_query=encoded+query>",
+        "title": "<specific video title from a real YouTube video>",
+        "url": "https://www.youtube.com/watch?v=<REAL_11_CHAR_VIDEO_ID>",
         "platform": "YouTube",
-        "channel": "<best channel for this domain/topic>",
-        "duration": "<total video length>",
+        "channel": "<channel name, e.g. JustinGuitar / freeCodeCamp / PsycheTruth>",
+        "duration": "<total video length, e.g. 12:34>",
         "description": "<what this video teaches>",
-        "why": "<why this specific resource for this specific step>",
-        "watchFrom": "<MM:SS>",
-        "watchTo": "<MM:SS>",
-        "watchMinutes": <number>
+        "why": "<why this exact segment is perfect for this day's task>",
+        "watchFrom": "<MM:SS — start of relevant segment, e.g. 2:30>",
+        "watchTo": "<MM:SS — end of relevant segment, e.g. 8:45>",
+        "watchMinutes": <number — watchTo minus watchFrom in minutes>
       },
       "supplementary": []
     }
@@ -316,29 +316,31 @@ const PLACEHOLDER_VIDEO_IDS = new Set([
   'XXXXXXXXXX',
 ]);
 
-export function sanitizeResourceUrl(url: unknown, taskTitle: string): string | null {
+export function sanitizeResourceUrl(url: unknown, _taskTitle?: string): string | null {
   if (typeof url !== 'string' || !url.trim()) return null;
 
   const raw = url.trim();
 
-  // Already a proper YouTube search URL — keep as-is
-  if (raw.includes('youtube.com/results?search_query=')) return raw;
+  // Search URLs are not embeddable — drop them so the resource library can supply a real video
+  if (raw.includes('youtube.com/results?search_query=')) return null;
 
   // Detect watch?v= URLs — check if the video ID is a known placeholder
   const watchMatch = raw.match(/[?&]v=([A-Za-z0-9_-]{6,12})/);
   if (watchMatch) {
     const videoId = watchMatch[1];
     if (PLACEHOLDER_VIDEO_IDS.has(videoId)) {
-      // Rebuild as search URL from task title
-      const query = encodeURIComponent(taskTitle.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').trim());
-      return `https://www.youtube.com/results?search_query=${query}`;
+      // Known placeholder — drop it so the resource library fills in a real video
+      return null;
     }
-    // Non-placeholder watch URL — accept it (could be a real video the model recalled)
+    // Non-placeholder watch URL — accept it (real video the model recalled)
     return raw;
   }
 
-  // Any other URL format — keep as-is
-  return raw;
+  // youtu.be short links — accept as-is
+  if (raw.includes('youtu.be/')) return raw;
+
+  // Any other URL format — drop (not embeddable)
+  return null;
 }
 
 function sanitizeResourceObject(res: unknown, taskTitle: string): unknown {

@@ -1,4 +1,4 @@
-import { Home, User, TrendingUp, Target, Settings, Menu, X, Map } from 'lucide-react';
+import { Home, User, TrendingUp, Target, Menu, X, Map, BookOpen } from 'lucide-react';
 import { useState } from 'react';
 import { tokens } from '@core/design-system';
 import { useStore } from '@core/store/useStore';
@@ -6,8 +6,8 @@ import { Icons } from '@shared/components/ui/icons';
 import { useUserLevel } from '@hooks/useUserLevel';
 
 interface DashboardSidebarProps {
-  currentView: 'today' | 'profile' | 'progress' | 'goals' | 'journey' | 'settings';
-  onViewChange: (view: 'today' | 'profile' | 'progress' | 'goals' | 'journey' | 'settings') => void;
+  currentView: 'today' | 'profile' | 'progress' | 'goals' | 'journey' | 'library';
+  onViewChange: (view: 'today' | 'profile' | 'progress' | 'goals' | 'journey' | 'library') => void;
   isOpen?: boolean;
   onToggle?: (open: boolean) => void;
 }
@@ -38,8 +38,8 @@ export default function DashboardSidebar({ currentView, onViewChange, isOpen: co
     { id: 'journey' as const, label: 'Journey', icon: Map },
     { id: 'progress' as const, label: 'Progress', icon: TrendingUp },
     { id: 'goals' as const, label: 'Goals', icon: Target },
+    { id: 'library' as const, label: 'Library', icon: BookOpen },
     { id: 'profile' as const, label: 'Profile', icon: User },
-    { id: 'settings' as const, label: 'Settings', icon: Settings },
   ];
 
   return (
@@ -87,7 +87,7 @@ export default function DashboardSidebar({ currentView, onViewChange, isOpen: co
           top: 0,
           width: '260px',
           height: '100vh',
-          backgroundColor: SIDEBAR_BG,
+          background: 'linear-gradient(180deg, #08080f 0%, #0d0d1a 100%)',
           borderRight: `1px solid ${SIDEBAR_BORDER}`,
           transition: 'left 500ms cubic-bezier(0.23, 1, 0.32, 1)',
           zIndex: 999,
@@ -185,20 +185,28 @@ export default function DashboardSidebar({ currentView, onViewChange, isOpen: co
                   border: 'none',
                   borderLeft: isActive ? `2px solid ${NAV_ACTIVE_BORDER}` : '2px solid transparent',
                   cursor: 'pointer',
-                  transition: 'all 150ms ease',
+                  transition: 'all 180ms cubic-bezier(0.4,0,0.2,1)',
                   textAlign: 'left',
+                  boxShadow: isActive ? 'inset 0 0 28px rgba(124,58,237,0.07)' : 'none',
                 }}
                 onMouseEnter={(e) => {
-                  if (!isActive) e.currentTarget.style.backgroundColor = NAV_HOVER_BG;
+                  if (!isActive) {
+                    e.currentTarget.style.backgroundColor = NAV_HOVER_BG;
+                    e.currentTarget.style.transform = 'translateX(3px)';
+                  }
                 }}
                 onMouseLeave={(e) => {
-                  if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
+                  if (!isActive) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.transform = 'translateX(0)';
+                  }
                 }}
               >
                 <Icon
                   size={17}
-                  strokeWidth={1.5}
+                  strokeWidth={isActive ? 2 : 1.5}
                   color={isActive ? NAV_ACTIVE_TEXT : NAV_INACTIVE}
+                  style={{ filter: isActive ? `drop-shadow(0 0 6px ${NAV_ACTIVE_TEXT}90)` : 'none', transition: 'all 180ms ease' }}
                 />
                 <span style={{
                   fontSize: tokens.typography.sizes.base,

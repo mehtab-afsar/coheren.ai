@@ -28,7 +28,7 @@ import type {
   Phase,
   Roadmap,
 } from '@types-app/agents';
-import { callReasoning } from '@lib/ai-router';
+import { callPremium as callReasoning } from '@lib/ai-router'; // Sonnet for curriculum quality
 import { retrieveKnowledgeSemantic } from '@core/rag/semantic-retriever';
 
 // ─── Domain Pedagogy Map ──────────────────────────────────────────────────────
@@ -278,6 +278,21 @@ Risks: ${g.risksDetected.join(', ') || 'None'}
 Typical Realistic Timeline: ${g.typicalTimeline.realistic}
 Key Milestones Agent 1 Identified: ${g.keyMilestones.join(' | ')}
 Common Obstacles: ${g.commonObstacles.join(' | ')}
+
+## Behavioral Signals (from Shadow Extractor)
+${context.behavioralFlags && context.behavioralFlags.length > 0
+  ? context.behavioralFlags.map(f => {
+      const notes: Record<string, string> = {
+        past_failure_mentioned: '⚠️ past_failure_mentioned — Begin with very small wins; avoid ambitious starts that mirror previous attempts.',
+        conditional_availability: '⚠️ conditional_availability — Build in buffer days and avoid rigid daily streaks; make recovery easy.',
+        external_accountability_needed: '⚠️ external_accountability_needed — Include explicit checkpoint milestones and social/sharing moments in the roadmap.',
+        low_confidence: '⚠️ low_confidence — Start below the user\'s actual skill level; rapid early wins matter more than efficiency.',
+        time_scarcity: '⚠️ time_scarcity — Cap daily tasks strictly at stated time; eliminate any "optional" extensions.',
+        perfectionist_tendency: '⚠️ perfectionist_tendency — Introduce "good enough" criteria explicitly; reward completion over quality in early phases.',
+      };
+      return notes[f] ?? `⚠️ ${f}`;
+    }).join('\n')
+  : '(No behavioral flags detected — standard delivery applies)'}
 
 ## User Psychology (from Agent 2)
 Archetype: ${sp.userArchetype}

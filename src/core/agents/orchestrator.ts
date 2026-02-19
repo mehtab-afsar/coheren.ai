@@ -35,12 +35,15 @@ interface Task {
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
- * Run Agents 1 and 2: Analyze goal and identify required stones
+ * Run Agents 1 and 2: Analyze goal and identify required stones.
+ * NOTE: Agent 2 (stone-identifier) requires Agent 1's output — they are inherently sequential.
+ * Parallelization opportunity lives in generateTaskBatch (see below).
  */
 export async function runOnboardingAgents(
   goal: string,
   timeline: number = 90,
-  dailyTime: number = 30
+  dailyTime: number = 30,
+  behavioralFlags: string[] = []
 ): Promise<{
   goalAnalysis: Agent1Output;
   stones: Agent2Output;
@@ -49,7 +52,8 @@ export async function runOnboardingAgents(
     userId: 'temp', // Will be replaced with actual user ID
     goal,
     timeline,
-    dailyTimeAvailable: dailyTime
+    dailyTimeAvailable: dailyTime,
+    behavioralFlags
   };
 
   console.log('🤖 Agent 1: Analyzing goal...');
@@ -118,7 +122,8 @@ export async function generateCompleteRoadmap(
   dailyTime: number,
   stoneAnswers: StoneAnswer[],
   category?: string,
-  skillLevel?: 'beginner' | 'intermediate' | 'advanced'
+  skillLevel?: 'beginner' | 'intermediate' | 'advanced',
+  behavioralFlags: string[] = []
 ): Promise<{
   goalAnalysis: Agent1Output;
   roadmap: Agent3Output;
@@ -131,7 +136,8 @@ export async function generateCompleteRoadmap(
     userId: 'temp',
     goal,
     timeline,
-    dailyTimeAvailable: dailyTime
+    dailyTimeAvailable: dailyTime,
+    behavioralFlags
   };
 
   const goalAnalysis = await analyzeGoal(context);
@@ -173,28 +179,35 @@ export async function generateTaskBatch(
   category?: string,
   skillLevel?: 'beginner' | 'intermediate' | 'advanced'
 ): Promise<DailyTask[]> {
-  console.log(`📋 Generating tasks for days ${startDay} to ${endDay}...`);
+  console.log(`📋 Generating tasks for days ${startDay} to ${endDay} (parallel batches)...`);
 
-  const tasks: DailyTask[] = [];
+  const days = Array.from({ length: endDay - startDay + 1 }, (_, i) => startDay + i);
+  const BATCH_SIZE = 3; // Run 3 tasks concurrently to stay well within rate limits
+  const allTasks: DailyTask[] = [];
 
-  for (let day = startDay; day <= endDay; day++) {
-    const task = await generateTask(
-      day,
-      roadmap,
-      stoneProfile,
-      dailyTimeAvailable,
-      undefined,
-      category,
-      skillLevel || 'beginner'
+  for (let i = 0; i < days.length; i += BATCH_SIZE) {
+    const batch = days.slice(i, i + BATCH_SIZE);
+    const batchResults = await Promise.all(
+      batch.map(day => generateTask(
+        day,
+        roadmap,
+        stoneProfile,
+        dailyTimeAvailable,
+        undefined,
+        category,
+        skillLevel || 'beginner'
+      ))
     );
-    tasks.push(task);
+    allTasks.push(...batchResults);
 
-    // Small delay to avoid rate limiting
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // Brief pause between batches to respect rate limits
+    if (i + BATCH_SIZE < days.length) {
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
   }
 
-  console.log(`✅ Generated ${tasks.length} tasks`);
-  return tasks;
+  console.log(`✅ Generated ${allTasks.length} tasks`);
+  return allTasks;
 }
 
 /**
@@ -277,33 +290,32 @@ PEDAGOGICAL CHANGES:
 Generate tasks that reflect these adjustments.
 `;
 
-  for (let day = startDay; day <= endDay; day++) {
-    // Check if this is a rest/review day
-    const isRestDay = recalibration.recalibratedSprint.pedagogicalChanges.restDaysAdded.includes(day);
-    const isReviewDay = recalibration.recalibratedSprint.pedagogicalChanges.reviewDaysAdded.includes(day);
+  const days = Array.from({ length: endDay - startDay + 1 }, (_, i) => startDay + i);
+  const BATCH_SIZE = 3;
 
-    if (isRestDay || isReviewDay) {
-      const lightTask = await generateTask(
-        day,
-        roadmap,
-        stoneProfile,
-        Math.floor(dailyTimeAvailable * 0.5),
-        modificationsContext + `\nThis is a ${isRestDay ? 'REST' : 'REVIEW'} day - keep it light and restorative.`
-      );
-      tasks.push(lightTask);
-    } else {
-      const task = await generateTask(
-        day,
-        roadmap,
-        stoneProfile,
-        dailyTimeAvailable,
-        modificationsContext
-      );
-      tasks.push(task);
+  for (let i = 0; i < days.length; i += BATCH_SIZE) {
+    const batch = days.slice(i, i + BATCH_SIZE);
+    const batchResults = await Promise.all(
+      batch.map(day => {
+        const isRestDay = recalibration.recalibratedSprint.pedagogicalChanges.restDaysAdded.includes(day);
+        const isReviewDay = recalibration.recalibratedSprint.pedagogicalChanges.reviewDaysAdded.includes(day);
+        if (isRestDay || isReviewDay) {
+          return generateTask(
+            day,
+            roadmap,
+            stoneProfile,
+            Math.floor(dailyTimeAvailable * 0.5),
+            modificationsContext + `\nThis is a ${isRestDay ? 'REST' : 'REVIEW'} day - keep it light and restorative.`
+          );
+        }
+        return generateTask(day, roadmap, stoneProfile, dailyTimeAvailable, modificationsContext);
+      })
+    );
+    tasks.push(...batchResults);
+
+    if (i + BATCH_SIZE < days.length) {
+      await new Promise(resolve => setTimeout(resolve, 300));
     }
-
-    // Small delay to avoid rate limiting
-    await new Promise(resolve => setTimeout(resolve, 500));
   }
 
   console.log(`✅ Generated ${tasks.length} adapted tasks for sprint ${recalibration.recalibratedSprint.sprintNumber}`);

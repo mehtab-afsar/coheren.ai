@@ -379,6 +379,7 @@ export interface AgentContext {
   goal: string;
   timeline: number; // in days
   dailyTimeAvailable: number; // in minutes
+  behavioralFlags?: string[]; // Obstacle signals from Shadow Extractor
 }
 
 export interface AgentPipeline {

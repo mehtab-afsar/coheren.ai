@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-type ViewType = 'today' | 'journey' | 'profile' | 'progress' | 'goals' | 'settings';
+type ViewType = 'today' | 'journey' | 'profile' | 'progress' | 'goals' | 'library';
 
 export function useDashboardNav() {
   const [currentView, setCurrentView] = useState<ViewType>('today');

@@ -3,21 +3,10 @@ import { Icons } from '@shared/components/ui/icons';
 import { CoherenLoader } from '@shared/components/ui/coheren-loader';
 import { DitheringShader } from '@shared/components/ui/dithering-shader';
 
-/** Full-bleed sphere shader for the auth gate left panel */
-const AuthShaderPanel = () => (
-  <DitheringShader
-    shape="sphere"
-    type="random"
-    colorBack="#0f0f0f"
-    colorFront="#7c3aed"
-    pxSize={3}
-    speed={1.2}
-    style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }}
-  />
-);
+
 import { useStore } from '@core/store/useStore';
 import { callReasoning, callEconomy } from '@lib/ai-router';
-import { tokens, button } from '@core/design-system';
+import { tokens } from '@core/design-system';
 import { detectCategory } from '@shared/utils/categoryDetection';
 import { retrieveKnowledge, type UserContext } from '@core/rag';
 import type { GoalCategory } from '@types-app/index';
@@ -155,6 +144,7 @@ export default function ChatOnboarding({ onLoginSuccess }: ChatOnboardingProps) 
     skillLevel: 'beginner' | 'intermediate' | 'advanced' | '';
     subGoals: string[];
     timeline: { target: string; milestones: string[] } | null;
+    behavioralFlags: string[];
   }>({
     goal: initialGoal || '',
     category: initialGoal ? detectCategory(initialGoal) : null,
@@ -164,7 +154,8 @@ export default function ChatOnboarding({ onLoginSuccess }: ChatOnboardingProps) 
     dailyTime: '',
     skillLevel: '',
     subGoals: [],
-    timeline: null
+    timeline: null,
+    behavioralFlags: []
   });
 
   // Agent system state
@@ -291,6 +282,7 @@ Extract these fields based on conversation context:
 - timeline: When they want to achieve it (e.g., "3 months", "by 2027", "6 weeks")
 - dailyTime: How much time per day (e.g., "30 minutes", "1 hour", "2 hours")
 - energyPattern: Peak energy time - one of: "morning", "afternoon", "evening", "night"
+- behavioralFlags: Array of obstacle signals detected. Include any that apply: "past_failure_mentioned" (user references previous failed attempts), "conditional_availability" (availability depends on external factors like "if work allows"), "external_accountability_needed" (user wants a partner, deadline, or accountability), "low_confidence" (user expresses doubt about ability), "time_scarcity" (user emphasizes they have very little time), "perfectionist_tendency" (user wants everything to be perfect before starting). Return [] if none apply.
 
 CRITICAL RULES:
 1. Use conversation context to understand what each response refers to
@@ -321,6 +313,11 @@ Current Data Already Collected: ${JSON.stringify(collectedData)}`
         if (newData.dailyTime) merged.dailyTime = newData.dailyTime;
         if (newData.category) merged.category = newData.category;
         if (newData.energyPattern) merged.energyPattern = newData.energyPattern;
+        // Accumulate behavioral flags — never overwrite, only add new ones
+        if (Array.isArray(newData.behavioralFlags) && newData.behavioralFlags.length > 0) {
+          const combined = new Set([...merged.behavioralFlags, ...newData.behavioralFlags]);
+          merged.behavioralFlags = Array.from(combined);
+        }
 
         // Final safety check: if category is still missing, try detection
         if (!merged.category && merged.goal) {
@@ -337,7 +334,8 @@ Current Data Already Collected: ${JSON.stringify(collectedData)}`
             Timeline: merged.timeline || '❌ missing',
             'Daily Time': merged.dailyTime || '❌ missing',
             Category: merged.category || '❌ missing',
-            'Energy Pattern': merged.energyPattern || '❌ missing'
+            'Energy Pattern': merged.energyPattern || '❌ missing',
+            'Behavioral Flags': merged.behavioralFlags.length > 0 ? merged.behavioralFlags.join(', ') : '(none)'
           }
         });
 
@@ -401,8 +399,6 @@ The system will automatically detect when the data is complete and transition to
       const whisper = missingFields.length > 0
         ? `\n\n(SYSTEM WHISPER: You still need to find out: ${missingFields.join(', ')}. Please ask about ONE of these naturally in your next response.)`
         : `\n\n(SYSTEM WHISPER: You have all the data! Wrap up the conversation warmly and let them know the plan is ready.)`;
-
-      console.log('💬 AI Whisper:', whisper.trim());
 
       // Inject the whisper into the system prompt
       const { content: aiResponse = "Tell me more!" } = await callReasoning({
@@ -495,7 +491,8 @@ The system will automatically detect when the data is complete and transition to
       const { goalAnalysis: analysis, stones: identifiedStones } = await runOnboardingAgents(
         collectedData.goal,
         timelineDays,
-        dailyMinutes
+        dailyMinutes,
+        collectedData.behavioralFlags
       );
 
       console.log('✅ Agents completed successfully');
@@ -599,7 +596,8 @@ The system will automatically detect when the data is complete and transition to
         dailyMinutes,
         answers,
         collectedData.category || undefined,
-        collectedData.skillLevel || 'beginner'
+        collectedData.skillLevel || 'beginner',
+        collectedData.behavioralFlags
       );
 
       console.log('✅ Roadmap and first task generated');
@@ -1137,116 +1135,186 @@ The system will automatically detect when the data is complete and transition to
         </div>
       )}
 
-      {/* Auth Gate — centered card overlay */}
+      {/* Auth Gate — full-page, matches AuthPage design */}
       {showAuthGate && (
-        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4"
-          style={{ backdropFilter: 'blur(14px)', backgroundColor: 'rgba(15,15,15,0.5)' }}>
+        <div className="fixed inset-0 z-[2000] flex" style={{ background: '#fff' }}>
 
-          {/* Card */}
-          <div className="flex w-full overflow-hidden rounded-2xl shadow-2xl"
-            style={{ maxWidth: '820px', minHeight: '480px', background: '#fff' }}>
+          {/* Left panel — dark, sphere, brand */}
+          <div
+            className="hidden lg:flex flex-col flex-shrink-0"
+            style={{ width: '46%', background: '#08080f', position: 'relative', overflow: 'hidden' }}
+          >
+            {/* Noise texture overlay */}
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 1, opacity: 0.035,
+              backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+              backgroundSize: '180px',
+            }} />
 
-            {/* Left — sphere shader */}
-            <div className="hidden md:block relative w-[42%] flex-shrink-0 overflow-hidden rounded-l-2xl">
-              <AuthShaderPanel />
+            {/* Brand mark */}
+            <div className="relative z-10 flex items-center gap-2.5 p-10">
+              <div style={{
+                width: 30, height: 30, borderRadius: 9,
+                background: 'rgba(124,58,237,0.2)',
+                border: '1px solid rgba(124,58,237,0.35)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                  <line x1="3" y1="21" x2="21" y2="3" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round"/>
+                  <line x1="12" y1="21" x2="21" y2="12" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round"/>
+                </svg>
+              </div>
+              <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: 15, fontWeight: 500, letterSpacing: '-0.02em' }}>
+                coheren.ai
+              </span>
             </div>
 
-            {/* Right — form */}
-            <div className="flex flex-1 flex-col justify-center px-10 py-10">
+            {/* Sphere + copy + stats */}
+            <div className="relative z-10 flex flex-col items-center justify-center flex-1 px-12 pb-10 gap-8">
+              <div style={{ position: 'relative', width: 420, height: 420, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}>
+                <DitheringShader
+                  shape="sphere"
+                  type="random"
+                  colorBack="#060612"
+                  colorFront="#7c3aed"
+                  pxSize={2}
+                  speed={0.9}
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+                />
+                <div style={{
+                  position: 'absolute', inset: 0, borderRadius: '50%',
+                  boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.15)',
+                  background: 'radial-gradient(circle at 68% 28%, rgba(167,139,250,0.08) 0%, transparent 60%)',
+                }} />
+              </div>
+              <div style={{
+                position: 'absolute',
+                width: 480, height: 140, borderRadius: '50%',
+                background: 'radial-gradient(ellipse, rgba(124,58,237,0.18) 0%, transparent 70%)',
+                filter: 'blur(24px)', pointerEvents: 'none',
+              }} />
+              <div style={{ textAlign: 'center' }}>
+                <h3 style={{ color: 'rgba(255,255,255,0.88)', fontSize: 22, fontWeight: 300, letterSpacing: '-0.03em', lineHeight: 1.4, margin: 0 }}>
+                  Turn any goal into<br />one task per day.
+                </h3>
+                <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13, marginTop: 12, lineHeight: 1.6, fontWeight: 300 }}>
+                  AI-built roadmap. Adapts as you grow.
+                </p>
+              </div>
+              <div className="flex items-center gap-6">
+                {[['10k+', 'Goals built'], ['91%', 'Completion rate'], ['4.9', 'Avg rating']].map(([val, lbl]) => (
+                  <div key={lbl} style={{ textAlign: 'center' }}>
+                    <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 18, fontWeight: 500, letterSpacing: '-0.03em', margin: 0 }}>{val}</p>
+                    <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: 11, margin: '2px 0 0', fontWeight: 300 }}>{lbl}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
 
-              <h2 className="text-2xl font-medium tracking-tight mb-1" style={{ color: tokens.colors.text.primary }}>
-                {authGateMode === 'signup' ? 'Get Started' : 'Welcome back'}
-              </h2>
-              <p className="text-sm mb-6" style={{ color: tokens.colors.text.secondary, lineHeight: 1.6 }}>
-                {authGateMode === 'signup'
-                  ? 'Create a free account to save your personalized plan and start today.'
-                  : 'Sign in to your account to access your roadmap.'}
-              </p>
+          {/* Right — form */}
+          <div className="flex flex-1 flex-col" style={{ background: '#fff', overflowY: 'auto' }}>
+            {/* Back button */}
+            <div className="flex items-center px-10 pt-9">
+              <button
+                onClick={() => setShowAuthGate(false)}
+                className="flex items-center gap-1.5 transition-opacity hover:opacity-60"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#9ca3af', fontSize: 13 }}
+              >
+                ← Back
+              </button>
+            </div>
 
-              {/* Error */}
-              {authError && (
-                <div className="text-sm rounded-lg px-4 py-3 mb-4"
-                  style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>
-                  {authError}
-                </div>
-              )}
+            {/* Form centered */}
+            <div className="flex flex-1 items-center justify-center px-8 py-10">
+              <div style={{ width: '100%', maxWidth: 360 }}>
 
-              {/* Form */}
-              <form onSubmit={handleAuthGateSubmit} className="flex flex-col gap-3">
-                {authGateMode === 'signup' && (
-                  <div>
-                    <label className="block text-sm mb-1.5" style={{ color: tokens.colors.text.primary }}>Your name</label>
-                    <input
-                      type="text"
-                      placeholder="Alex"
-                      value={authName}
-                      onChange={(e) => setAuthName(e.target.value)}
-                      required
-                      className="w-full px-3 py-2.5 text-sm rounded-lg outline-none"
-                      style={{ border: `1.5px solid ${tokens.colors.border}`, color: tokens.colors.text.primary }}
-                      onFocus={(e) => e.currentTarget.style.borderColor = tokens.colors.primary}
-                      onBlur={(e) => e.currentTarget.style.borderColor = tokens.colors.border}
-                    />
+                <h1 style={{ fontSize: 26, fontWeight: 600, letterSpacing: '-0.04em', color: '#0d0d10', margin: '0 0 6px' }}>
+                  {authGateMode === 'signup' ? 'Create your account' : 'Welcome back'}
+                </h1>
+                <p style={{ fontSize: 14, color: '#9ca3af', lineHeight: 1.6, margin: '0 0 32px' }}>
+                  {authGateMode === 'signup' ? 'Free forever · No credit card required' : 'Sign in to access your roadmap'}
+                </p>
+
+                {authError && (
+                  <div style={{ fontSize: 13, borderRadius: 10, padding: '10px 14px', marginBottom: 20, background: '#fef2f2', color: '#b91c1c' }}>
+                    {authError}
                   </div>
                 )}
 
-                <div>
-                  <label className="block text-sm mb-1.5" style={{ color: tokens.colors.text.primary }}>Your email</label>
-                  <input
-                    type="email"
-                    placeholder="you@example.com"
-                    value={authEmail}
-                    onChange={(e) => setAuthEmail(e.target.value)}
-                    required
-                    className="w-full px-3 py-2.5 text-sm rounded-lg outline-none"
-                    style={{ border: `1.5px solid ${tokens.colors.border}`, color: tokens.colors.text.primary }}
-                    onFocus={(e) => e.currentTarget.style.borderColor = tokens.colors.primary}
-                    onBlur={(e) => e.currentTarget.style.borderColor = tokens.colors.border}
-                  />
-                </div>
+                <form onSubmit={handleAuthGateSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {authGateMode === 'signup' && (
+                    <div>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 500, letterSpacing: '0.04em', color: '#6b7280', marginBottom: 7, textTransform: 'uppercase' as const }}>
+                        Full name
+                      </label>
+                      <input
+                        type="text" placeholder="Alex Chen" value={authName} required
+                        onChange={(e) => setAuthName(e.target.value)}
+                        style={authGateInputStyle}
+                        onFocus={(e) => applyAuthGateFocus(e.currentTarget)}
+                        onBlur={(e) => applyAuthGateBlur(e.currentTarget)}
+                      />
+                    </div>
+                  )}
 
-                <div>
-                  <label className="block text-sm mb-1.5" style={{ color: tokens.colors.text.primary }}>
-                    {authGateMode === 'signup' ? 'Create a password' : 'Password'}
-                  </label>
-                  <input
-                    type="password"
-                    placeholder="••••••••"
-                    value={authPassword}
-                    onChange={(e) => setAuthPassword(e.target.value)}
-                    required
-                    minLength={6}
-                    className="w-full px-3 py-2.5 text-sm rounded-lg outline-none"
-                    style={{ border: `1.5px solid ${tokens.colors.border}`, color: tokens.colors.text.primary }}
-                    onFocus={(e) => e.currentTarget.style.borderColor = tokens.colors.primary}
-                    onBlur={(e) => e.currentTarget.style.borderColor = tokens.colors.border}
-                  />
-                </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 500, letterSpacing: '0.04em', color: '#6b7280', marginBottom: 7, textTransform: 'uppercase' as const }}>
+                      Email
+                    </label>
+                    <input
+                      type="email" placeholder="you@example.com" value={authEmail} required
+                      onChange={(e) => setAuthEmail(e.target.value)}
+                      style={authGateInputStyle}
+                      onFocus={(e) => applyAuthGateFocus(e.currentTarget)}
+                      onBlur={(e) => applyAuthGateBlur(e.currentTarget)}
+                    />
+                  </div>
 
-                <button
-                  type="submit"
-                  disabled={authLoading}
-                  className="w-full py-2.5 rounded-lg text-sm font-medium mt-1 transition-opacity"
-                  style={{
-                    ...button.primary,
-                    opacity: authLoading ? 0.7 : 1,
-                    cursor: authLoading ? 'not-allowed' : 'pointer',
-                  }}
-                >
-                  {authLoading ? 'Saving your roadmap...' : authGateMode === 'signup' ? 'Create a new account' : 'Sign In & Continue'}
-                </button>
-              </form>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 500, letterSpacing: '0.04em', color: '#6b7280', marginBottom: 7, textTransform: 'uppercase' as const }}>
+                      Password
+                    </label>
+                    <input
+                      type="password" placeholder="••••••••" value={authPassword} required minLength={6}
+                      onChange={(e) => setAuthPassword(e.target.value)}
+                      style={authGateInputStyle}
+                      onFocus={(e) => applyAuthGateFocus(e.currentTarget)}
+                      onBlur={(e) => applyAuthGateBlur(e.currentTarget)}
+                    />
+                  </div>
 
-              <p className="text-center text-sm mt-4" style={{ color: tokens.colors.text.secondary }}>
-                {authGateMode === 'signup' ? 'Already have an account?' : "Don't have an account?"}{' '}
-                <button
-                  onClick={() => { setAuthGateMode(authGateMode === 'signup' ? 'login' : 'signup'); setAuthError(null); }}
-                  className="font-medium underline cursor-pointer bg-transparent border-none"
-                  style={{ color: tokens.colors.text.primary }}
-                >
-                  {authGateMode === 'signup' ? 'Login' : 'Sign Up'}
-                </button>
-              </p>
+                  <button
+                    type="submit" disabled={authLoading}
+                    style={{
+                      width: '100%', padding: '12px 0', marginTop: 4,
+                      borderRadius: 11, border: 'none',
+                      cursor: authLoading ? 'not-allowed' : 'pointer',
+                      fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em',
+                      background: authLoading ? '#ddd6fe' : 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+                      color: authLoading ? '#7c3aed' : '#fff',
+                      boxShadow: authLoading ? 'none' : '0 4px 18px rgba(109,40,217,0.3)',
+                      transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={(e) => { if (!authLoading) { e.currentTarget.style.boxShadow = '0 6px 24px rgba(109,40,217,0.42)'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
+                    onMouseLeave={(e) => { e.currentTarget.style.boxShadow = authLoading ? 'none' : '0 4px 18px rgba(109,40,217,0.3)'; e.currentTarget.style.transform = 'none'; }}
+                  >
+                    {authLoading
+                      ? (authGateMode === 'signup' ? 'Creating account...' : 'Signing in...')
+                      : (authGateMode === 'signup' ? 'Create account' : 'Sign in')}
+                  </button>
+                </form>
+
+                <p style={{ textAlign: 'center', fontSize: 13, marginTop: 24, color: '#9ca3af' }}>
+                  {authGateMode === 'signup' ? 'Already have an account? ' : "Don't have an account? "}
+                  <button
+                    onClick={() => { setAuthGateMode(authGateMode === 'signup' ? 'login' : 'signup'); setAuthError(null); }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#7c3aed', padding: 0 }}
+                  >
+                    {authGateMode === 'signup' ? 'Sign in' : 'Sign up free'}
+                  </button>
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -1271,4 +1339,22 @@ The system will automatically detect when the data is complete and transition to
       `}</style>
     </div>
   );
+}
+
+const authGateInputStyle: React.CSSProperties = {
+  width: '100%', padding: '11px 14px', fontSize: 14, borderRadius: 10,
+  border: '1.5px solid #e5e7eb', outline: 'none', color: '#111827',
+  background: '#fafafa', boxSizing: 'border-box', transition: 'border-color 0.15s, background 0.15s',
+};
+
+function applyAuthGateFocus(el: HTMLInputElement) {
+  el.style.borderColor = '#7c3aed';
+  el.style.background = '#fff';
+  el.style.boxShadow = '0 0 0 3px rgba(124,58,237,0.08)';
+}
+
+function applyAuthGateBlur(el: HTMLInputElement) {
+  el.style.borderColor = '#e5e7eb';
+  el.style.background = '#fafafa';
+  el.style.boxShadow = 'none';
 }

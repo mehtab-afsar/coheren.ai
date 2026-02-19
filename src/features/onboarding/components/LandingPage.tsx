@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { motion, useScroll, useTransform } from 'framer-motion';
+import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import {
   CheckCircle2,
   X,
@@ -7,6 +7,16 @@ import {
   Cpu,
   RefreshCw,
   Zap,
+  Bot,
+  Flame,
+  TrendingUp,
+  BookOpen,
+  Send,
+  LayoutDashboard,
+  Target,
+  Map,
+  BarChart2,
+  ChevronRight,
 } from 'lucide-react';
 import { useStore } from '@core/store/useStore';
 import { tokens } from '@core/design-system';
@@ -200,6 +210,583 @@ function ScienceSection({ wrapperRef }: { wrapperRef: React.RefObject<HTMLDivEle
   );
 }
 
+// ─── Coheren Demo Section (Chat + Agent Panel) ───────────────────────────────
+
+const CHAT_MESSAGES = [
+  { role: 'user' as const, text: "I want to learn guitar — I'm a complete beginner." },
+  { role: 'ai'   as const, text: "Love that goal. How much time can you give it each day, and when's your deadline?" },
+  { role: 'user' as const, text: "About 30 minutes a day. I'd like to be decent in 3 months." },
+  { role: 'ai'   as const, text: "Perfect — 90 days, 30 min/day. I'm mapping your obstacles and building your roadmap now 🎸" },
+];
+
+const AGENT_STEPS = [
+  { label: 'Goal analyzed',       detail: 'Guitar · Beginner · 90 days',  triggerAt: 2 },
+  { label: 'Obstacles mapped',    detail: 'Finger pain · Consistency',     triggerAt: 3 },
+  { label: '90-day plan built',   detail: '4 phases · 90 daily tasks',     triggerAt: 4 },
+  { label: 'Day 1 task ready',    detail: 'PRACTICE · 15 min',             triggerAt: 'task' as const },
+];
+
+function CoherenDemoSection() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [inView, setInView]           = useState(false);
+  const [visibleMsg, setVisibleMsg]   = useState(0);
+  const [taskVisible, setTaskVisible] = useState(false);
+  const [activeScreen, setActiveScreen] = useState(0); // 0 = chat, 1 = dashboard
+
+  // Scroll-into-view trigger
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setInView(true); },
+      { threshold: 0.2 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  // Message cascade
+  useEffect(() => {
+    if (!inView) return;
+    if (visibleMsg >= CHAT_MESSAGES.length) {
+      const t = setTimeout(() => setTaskVisible(true), 700);
+      return () => clearTimeout(t);
+    }
+    const t = setTimeout(() => setVisibleMsg(v => v + 1), 1400);
+    return () => clearTimeout(t);
+  }, [inView, visibleMsg]);
+
+  // Slide to dashboard 5 s after task strip appears
+  useEffect(() => {
+    if (!taskVisible) return;
+    const t = setTimeout(() => setActiveScreen(1), 5000);
+    return () => clearTimeout(t);
+  }, [taskVisible]);
+
+  const isLastAI = (i: number) =>
+    CHAT_MESSAGES[i].role === 'ai' && i === CHAT_MESSAGES.length - 1;
+
+  const stepDone = (step: typeof AGENT_STEPS[number]) =>
+    step.triggerAt === 'task' ? taskVisible : visibleMsg >= step.triggerAt;
+
+  // ── Sidebar nav for the dashboard screen ──
+  const DASH_NAV = [
+    { label: 'Today',    Icon: LayoutDashboard, active: true },
+    { label: 'Goals',    Icon: Target,          active: false },
+    { label: 'Journey',  Icon: Map,             active: false },
+    { label: 'Progress', Icon: BarChart2,        active: false },
+  ];
+
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '3fr 1fr',
+        gap: '20px',
+        alignItems: 'stretch',
+      }}
+    >
+      {/* ══════════════════ LEFT — card with sliding screens ══════════════════ */}
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        style={{
+          backgroundColor: '#FDFCFA',
+          border: '1px solid #E2DDD5',
+          borderRadius: '1.5rem',
+          overflow: 'hidden',
+          boxShadow: '0 12px 48px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.04)',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        {/* Window bar */}
+        <div style={{
+          display: 'flex', alignItems: 'center',
+          padding: '13px 18px',
+          borderBottom: '1px solid #EBE7E0',
+          backgroundColor: '#F5F2EE',
+          gap: '12px',
+          flexShrink: 0,
+        }}>
+          {/* Traffic lights */}
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {['#E8C4B8', '#E8DDB8', '#B8E8C4'].map((c, i) => (
+              <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: c }} />
+            ))}
+          </div>
+          {/* Centre: logo + name */}
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px' }}>
+            <div style={{
+              width: 20, height: 20, borderRadius: '6px',
+              background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Bot size={11} color="#fff" />
+            </div>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: '#3a3028', letterSpacing: '-0.02em' }}>
+              Coheren
+            </span>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#22c55e', display: 'inline-block' }} />
+          </div>
+          {/* Screen indicator dots */}
+          <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+            {[0, 1].map(s => (
+              <motion.div
+                key={s}
+                animate={{ backgroundColor: activeScreen === s ? '#7c3aed' : 'rgba(0,0,0,0.15)', scale: activeScreen === s ? 1.2 : 1 }}
+                transition={{ duration: 0.4 }}
+                style={{ width: 6, height: 6, borderRadius: '50%' }}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* ── Sliding content area ── */}
+        <div style={{ flex: 1, overflow: 'hidden', position: 'relative', height: '620px' }}>
+          <AnimatePresence mode="wait" initial={false}>
+            {activeScreen === 0 ? (
+
+              /* ── Screen 0: Chat ── */
+              <motion.div
+                key="chat"
+                initial={{ x: 0 }}
+                animate={{ x: 0 }}
+                exit={{ x: '-100%' }}
+                transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+                style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}
+              >
+                {/* Messages */}
+                <div style={{
+                  padding: '28px 24px',
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px',
+                  overflowY: 'auto',
+                }}>
+                  <AnimatePresence>
+                    {CHAT_MESSAGES.slice(0, visibleMsg).map((msg, i) => (
+                      <motion.div
+                        key={i}
+                        initial={{ opacity: 0, y: 12, scale: 0.97 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                        style={{
+                          display: 'flex',
+                          justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                          alignItems: 'flex-end',
+                          gap: '9px',
+                        }}
+                      >
+                        {msg.role === 'ai' && (
+                          <div style={{
+                            width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+                            background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            boxShadow: '0 3px 8px rgba(124,58,237,0.28)',
+                          }}>
+                            <Bot size={14} color="#fff" />
+                          </div>
+                        )}
+                        <div style={{
+                          maxWidth: '72%',
+                          padding: '10px 15px',
+                          borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                          backgroundColor: msg.role === 'user' ? '#18160F' : '#F0EDE6',
+                          color: msg.role === 'user' ? '#F5F0E8' : '#2D2720',
+                          fontSize: '14.5px',
+                          lineHeight: 1.55,
+                          letterSpacing: '-0.015em',
+                          position: 'relative' as const,
+                        }}>
+                          {msg.text}
+                          {isLastAI(i) && (
+                            <motion.span
+                              animate={{ opacity: [1, 0, 1] }}
+                              transition={{ duration: 0.85, repeat: Infinity }}
+                              style={{
+                                display: 'inline-block', width: '2px', height: '14px',
+                                backgroundColor: '#7c3aed', marginLeft: '3px',
+                                verticalAlign: 'text-bottom', borderRadius: '1px',
+                              }}
+                            />
+                          )}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+
+                  {/* Typing dots */}
+                  {inView && visibleMsg < CHAT_MESSAGES.length && CHAT_MESSAGES[visibleMsg].role === 'ai' && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                      style={{ display: 'flex', gap: '6px', paddingLeft: '39px', alignItems: 'center' }}
+                    >
+                      {[0, 0.18, 0.36].map((delay, i) => (
+                        <motion.div key={i}
+                          animate={{ y: [0, -5, 0] }}
+                          transition={{ duration: 0.55, repeat: Infinity, delay }}
+                          style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#c4b5fd' }}
+                        />
+                      ))}
+                    </motion.div>
+                  )}
+                </div>
+
+                {/* Input row */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  padding: '12px 16px',
+                  borderTop: '1px solid #EBE7E0',
+                  backgroundColor: '#FAF9F7',
+                  flexShrink: 0,
+                }}>
+                  <input readOnly placeholder="Tell Coheren your goal…" style={{
+                    flex: 1, border: 'none', outline: 'none',
+                    fontSize: '13.5px', color: '#b0a89e',
+                    backgroundColor: 'transparent', cursor: 'default',
+                  }} />
+                  <div style={{
+                    padding: '7px 13px', borderRadius: '10px',
+                    background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'default', boxShadow: '0 2px 8px rgba(124,58,237,0.3)',
+                  }}>
+                    <Send size={13} color="#fff" />
+                  </div>
+                </div>
+
+                {/* Task output strip */}
+                <AnimatePresence>
+                  {taskVisible && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                      style={{
+                        borderTop: '1px solid rgba(124,58,237,0.15)',
+                        background: 'linear-gradient(135deg, rgba(124,58,237,0.05) 0%, rgba(109,40,217,0.02) 100%)',
+                        flexShrink: 0,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', padding: '16px 20px 10px' }}>
+                        <div style={{
+                          width: 40, height: 40, borderRadius: '12px', flexShrink: 0,
+                          background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          boxShadow: '0 4px 14px rgba(124,58,237,0.4)',
+                        }}>
+                          <BookOpen size={18} color="#fff" />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '5px', flexWrap: 'wrap' as const }}>
+                            <span style={{ fontSize: '9.5px', fontWeight: 700, letterSpacing: '0.07em', padding: '2px 8px', borderRadius: '5px', background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff' }}>PRACTICE</span>
+                            <span style={{ fontSize: '9.5px', fontWeight: 600, letterSpacing: '0.04em', padding: '2px 8px', borderRadius: '5px', backgroundColor: 'rgba(124,58,237,0.1)', color: '#7c3aed', border: '1px solid rgba(124,58,237,0.2)' }}>FOUNDATION PHASE</span>
+                            <span style={{ fontSize: '11px', color: '#9c8f84' }}>Day 1 of 90</span>
+                          </div>
+                          <p style={{ fontSize: '15px', color: '#1a1410', fontWeight: 700, margin: 0, letterSpacing: '-0.02em', lineHeight: 1.35 }}>
+                            Hold the G, C, D chord shapes — no switching yet
+                          </p>
+                        </div>
+                        <div style={{ flexShrink: 0, textAlign: 'center', padding: '6px 12px', borderRadius: '10px', backgroundColor: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)' }}>
+                          <p style={{ fontSize: '15px', color: '#7c3aed', fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>15</p>
+                          <p style={{ fontSize: '9px', color: '#9c8f84', margin: '1px 0 0', letterSpacing: '0.04em', textTransform: 'uppercase' as const }}>min</p>
+                        </div>
+                      </div>
+                      <div style={{ margin: '0 20px 10px', padding: '10px 12px', backgroundColor: 'rgba(255,255,255,0.6)', border: '1px solid rgba(124,58,237,0.1)', borderRadius: '10px' }}>
+                        <p style={{ fontSize: '12px', color: '#5a4f45', margin: 0, lineHeight: 1.55, letterSpacing: '-0.01em' }}>
+                          <span style={{ fontWeight: 600, color: '#7c3aed' }}>Coach note:</span> Don't worry about switching yet — just feel where each finger sits. Muscle memory starts here.
+                        </p>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', padding: '0 20px 16px', flexWrap: 'wrap' as const }}>
+                        {['Hand position', 'Fret pressure', 'String clarity'].map((item) => (
+                          <div key={item} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 10px', borderRadius: '99px', backgroundColor: 'rgba(255,255,255,0.7)', border: '1px solid #E2DDD5' }}>
+                            <CheckCircle2 size={11} color="#10b981" strokeWidth={2.5} />
+                            <span style={{ fontSize: '11px', color: '#5a4f45', fontWeight: 500 }}>{item}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+
+            ) : (
+
+              /* ── Screen 1: Dashboard ── */
+              <motion.div
+                key="dashboard"
+                initial={{ x: '100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '100%' }}
+                transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+                style={{ position: 'absolute', inset: 0, display: 'flex' }}
+              >
+                {/* Sidebar */}
+                <div style={{
+                  width: '148px', flexShrink: 0,
+                  background: 'linear-gradient(180deg, #0F0D0A 0%, #1A1610 100%)',
+                  borderRight: '1px solid rgba(255,255,255,0.06)',
+                  display: 'flex', flexDirection: 'column',
+                  padding: '20px 12px',
+                }}>
+                  {/* Logo */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '28px', paddingLeft: '4px' }}>
+                    <div style={{ width: 22, height: 22, borderRadius: '7px', background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Bot size={12} color="#fff" />
+                    </div>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' }}>Coheren</span>
+                  </div>
+
+                  {/* Nav */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    {DASH_NAV.map(({ label, Icon, active }) => (
+                      <div key={label} style={{
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        padding: '8px 10px', borderRadius: '8px',
+                        backgroundColor: active ? 'rgba(124,58,237,0.15)' : 'transparent',
+                        border: active ? '1px solid rgba(124,58,237,0.25)' : '1px solid transparent',
+                      }}>
+                        <Icon size={13} color={active ? '#a78bfa' : 'rgba(255,255,255,0.3)'} />
+                        <span style={{ fontSize: '12.5px', fontWeight: active ? 600 : 400, color: active ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)', letterSpacing: '-0.01em' }}>{label}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Streak chip at bottom */}
+                  <div style={{ marginTop: 'auto', padding: '10px', borderRadius: '10px', backgroundColor: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.2)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '3px' }}>
+                      <Flame size={11} color="#f97316" />
+                      <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', fontWeight: 500 }}>Streak</span>
+                    </div>
+                    <p style={{ fontSize: '22px', fontWeight: 800, color: '#fff', margin: 0, letterSpacing: '-0.03em' }}>8</p>
+                    <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', margin: '1px 0 0' }}>days running</p>
+                  </div>
+                </div>
+
+                {/* Main content */}
+                <div style={{ flex: 1, backgroundColor: '#FAF9F6', padding: '22px 20px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto' }}>
+                  {/* Header */}
+                  <div>
+                    <p style={{ fontSize: '11px', color: '#9c8f84', margin: '0 0 2px', letterSpacing: '-0.01em' }}>Good morning ☀️</p>
+                    <h3 style={{ fontSize: '20px', fontWeight: 800, color: '#1a1410', margin: 0, letterSpacing: '-0.04em' }}>Day 1 of 90</h3>
+                  </div>
+
+                  {/* Task card */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.2 }}
+                    style={{
+                      background: 'linear-gradient(135deg, #1e0a3c 0%, #2d1060 50%, #1a0a2e 100%)',
+                      borderRadius: '16px',
+                      padding: '18px',
+                      boxShadow: '0 8px 32px rgba(124,58,237,0.3)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', flexWrap: 'wrap' as const }}>
+                      <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.07em', padding: '2px 7px', borderRadius: '4px', background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff' }}>PRACTICE</span>
+                      <span style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.04em', padding: '2px 7px', borderRadius: '4px', backgroundColor: 'rgba(124,58,237,0.2)', color: '#c4b5fd', border: '1px solid rgba(124,58,237,0.3)' }}>FOUNDATION PHASE</span>
+                    </div>
+                    <p style={{ fontSize: '14px', fontWeight: 700, color: '#fff', margin: '0 0 12px', letterSpacing: '-0.02em', lineHeight: 1.35 }}>
+                      Hold the G, C, D chord shapes — no switching yet
+                    </p>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' as const }}>
+                        {['Hand position', 'Fret pressure'].map(item => (
+                          <span key={item} style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '99px', backgroundColor: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.1)' }}>{item}</span>
+                        ))}
+                      </div>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#a78bfa', flexShrink: 0, marginLeft: '8px' }}>15 min</span>
+                    </div>
+                  </motion.div>
+
+                  {/* Coach note */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.35 }}
+                    style={{ padding: '12px 14px', backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #E2DDD5' }}
+                  >
+                    <p style={{ fontSize: '11.5px', color: '#5a4f45', margin: 0, lineHeight: 1.6, letterSpacing: '-0.01em' }}>
+                      <span style={{ fontWeight: 600, color: '#7c3aed' }}>Coach note:</span> Don't worry about switching yet — just feel where each finger sits. Muscle memory starts here.
+                    </p>
+                  </motion.div>
+
+                  {/* Progress bar */}
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.5, delay: 0.5 }}
+                    style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '11px', color: '#9c8f84', fontWeight: 500 }}>90-day roadmap</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <TrendingUp size={11} color="#7c3aed" />
+                        <span style={{ fontSize: '11px', color: '#7c3aed', fontWeight: 600 }}>1% complete</span>
+                      </div>
+                    </div>
+                    <div style={{ height: '6px', backgroundColor: 'rgba(124,58,237,0.1)', borderRadius: '99px', overflow: 'hidden' }}>
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: '1%' }}
+                        transition={{ duration: 0.8, delay: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                        style={{ height: '100%', background: 'linear-gradient(90deg, #7c3aed, #a78bfa)', borderRadius: '99px' }}
+                      />
+                    </div>
+                    <p style={{ fontSize: '10px', color: '#b0a89e', margin: 0 }}>89 days remaining · Guitar</p>
+                  </motion.div>
+
+                  {/* CTA hint */}
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.5, delay: 0.65 }}
+                    style={{
+                      marginTop: 'auto',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '12px 14px',
+                      borderRadius: '12px',
+                      background: 'linear-gradient(135deg, rgba(124,58,237,0.07) 0%, rgba(109,40,217,0.03) 100%)',
+                      border: '1px solid rgba(124,58,237,0.15)',
+                      cursor: 'default',
+                    }}
+                  >
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#7c3aed', letterSpacing: '-0.01em' }}>Start today's session</span>
+                    <ChevronRight size={15} color="#7c3aed" />
+                  </motion.div>
+                </div>
+              </motion.div>
+
+            )}
+          </AnimatePresence>
+        </div>
+      </motion.div>
+
+      {/* ══════════════════ RIGHT — Agent panel (1/4) ══════════════ */}
+      <motion.div
+        initial={{ opacity: 0, x: 16 }}
+        whileInView={{ opacity: 1, x: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.6, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+        style={{
+          backgroundColor: '#0D0C0A',
+          border: '1px solid rgba(255,255,255,0.07)',
+          borderRadius: '1.5rem',
+          padding: '22px 18px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0',
+          boxShadow: '0 12px 48px rgba(0,0,0,0.3)',
+          position: 'relative' as const,
+          overflow: 'hidden' as const,
+        }}
+      >
+        {/* Subtle purple radial glow top */}
+        <div style={{
+          position: 'absolute', top: '-40px', right: '-20px',
+          width: '160px', height: '160px',
+          background: 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 70%)',
+          pointerEvents: 'none',
+        }} />
+
+        {/* Header */}
+        <div style={{ marginBottom: '20px', position: 'relative' as const }}>
+          <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(167,139,250,0.6)', textTransform: 'uppercase' as const, margin: '0 0 6px' }}>
+            Under the hood
+          </p>
+          <p style={{ fontSize: '13px', fontWeight: 600, color: 'rgba(255,255,255,0.85)', margin: 0, letterSpacing: '-0.02em', lineHeight: 1.3 }}>
+            5 agents working<br />in parallel
+          </p>
+        </div>
+
+        {/* Agent steps */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1, position: 'relative' as const }}>
+          {AGENT_STEPS.map((step, i) => {
+            const done = stepDone(step);
+            const active = !done && (
+              step.triggerAt === 'task'
+                ? visibleMsg >= CHAT_MESSAGES.length
+                : visibleMsg === (step.triggerAt as number) - 1
+            );
+            return (
+              <motion.div
+                key={i}
+                animate={done ? { opacity: 1 } : active ? { opacity: 0.65 } : { opacity: 0.3 }}
+                transition={{ duration: 0.5 }}
+                style={{
+                  display: 'flex', gap: '10px', alignItems: 'flex-start',
+                  padding: '10px 10px',
+                  borderRadius: '10px',
+                  backgroundColor: done ? 'rgba(124,58,237,0.08)' : 'transparent',
+                  border: done ? '1px solid rgba(124,58,237,0.2)' : '1px solid transparent',
+                  transition: 'background-color 0.4s, border-color 0.4s',
+                }}
+              >
+                <div style={{
+                  width: 20, height: 20, borderRadius: '50%', flexShrink: 0, marginTop: '1px',
+                  background: done ? 'linear-gradient(135deg, #7c3aed, #6d28d9)' : active ? 'rgba(124,58,237,0.2)' : 'rgba(255,255,255,0.06)',
+                  border: done ? 'none' : active ? '1px solid rgba(124,58,237,0.5)' : '1px solid rgba(255,255,255,0.1)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: done ? '0 2px 8px rgba(124,58,237,0.4)' : 'none',
+                  transition: 'all 0.4s',
+                }}>
+                  {done ? (
+                    <CheckCircle2 size={12} color="#fff" strokeWidth={2.5} />
+                  ) : active ? (
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+                      style={{ width: 8, height: 8, borderRadius: '50%', border: '1.5px solid rgba(167,139,250,0.8)', borderTopColor: 'transparent' }}
+                    />
+                  ) : (
+                    <div style={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.2)' }} />
+                  )}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: '12px', fontWeight: 600, color: done ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.45)', margin: '0 0 2px', letterSpacing: '-0.01em', transition: 'color 0.4s' }}>
+                    {step.label}
+                  </p>
+                  <p style={{ fontSize: '10.5px', color: done ? 'rgba(167,139,250,0.7)' : 'rgba(255,255,255,0.2)', margin: 0, fontFamily: 'monospace', letterSpacing: '0.01em', transition: 'color 0.4s' }}>
+                    {step.detail}
+                  </p>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        {/* Bottom: live stats */}
+        <motion.div
+          animate={taskVisible ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
+          transition={{ duration: 0.5 }}
+          style={{ marginTop: '18px', paddingTop: '14px', borderTop: '1px solid rgba(255,255,255,0.06)' }}
+        >
+          {[
+            { label: 'Streak', value: '8 days', icon: <Flame size={11} color="#f97316" /> },
+            { label: 'Plan',   value: '90 days', icon: <TrendingUp size={11} color="#7c3aed" /> },
+          ].map(({ label, value, icon }) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                {icon}
+                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', letterSpacing: '-0.01em' }}>{label}</span>
+              </div>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.7)', letterSpacing: '-0.01em' }}>{value}</span>
+            </div>
+          ))}
+        </motion.div>
+      </motion.div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 interface LandingPageProps {
   onGetStarted?: (goal: string) => void;
 }
@@ -391,214 +978,37 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
         </div>{/* end floating card */}
       </section>
 
-      {/* Example Roadmap Section - Enhanced */}
+      {/* Interactive Chat Mock — "See an example roadmap" */}
       <section id="roadmap-preview" style={{
         padding: `${tokens.spacing['5xl']} ${tokens.spacing.xl}`,
         background: 'linear-gradient(180deg, #FAFBFC 0%, white 100%)',
         position: 'relative',
         zIndex: 10,
-        scrollMarginTop: '80px'
+        scrollMarginTop: '80px',
       }}>
-        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            style={{ textAlign: 'center', marginBottom: tokens.spacing['3xl'] }}
+            style={{ textAlign: 'center', marginBottom: '56px' }}
           >
             <h2 style={{
               fontSize: tokens.typography.sizes['4xl'],
               fontWeight: tokens.typography.weights.light,
               letterSpacing: '-0.02em',
-              marginBottom: tokens.spacing.lg,
-              color: '#0F172A'
+              marginBottom: tokens.spacing.md,
+              color: '#0F172A',
             }}>
-              See an example roadmap
+              See how it works
             </h2>
-            <p style={{
-              fontSize: tokens.typography.sizes.lg,
-              color: '#64748B',
-              maxWidth: '600px',
-              margin: '0 auto'
-            }}>
-              Goal: "I want to learn guitar"
+            <p style={{ fontSize: tokens.typography.sizes.base, color: '#64748B', margin: 0 }}>
+              A real conversation → a real roadmap, in under 60 seconds.
             </p>
           </motion.div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-            style={{
-              backgroundColor: 'white',
-              borderRadius: tokens.borderRadius['2xl'],
-              padding: tokens.spacing['3xl'],
-              boxShadow: '0 8px 40px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)',
-              border: '1px solid #E2E8F0',
-              position: 'relative',
-              overflow: 'hidden'
-            }}
-          >
-            {/* Decorative gradient overlay */}
-            <div style={{
-              position: 'absolute',
-              top: 0,
-              right: 0,
-              width: '200px',
-              height: '200px',
-              background: 'radial-gradient(circle, rgba(67, 56, 202, 0.06) 0%, transparent 70%)',
-              pointerEvents: 'none'
-            }} />
-            {/* Week 1-2 */}
-            <div style={{ marginBottom: tokens.spacing['2xl'] }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: tokens.spacing.md,
-                marginBottom: tokens.spacing.lg
-              }}>
-                <div style={{
-                  padding: `${tokens.spacing.xs} ${tokens.spacing.md}`,
-                  backgroundColor: tokens.colors.primary + '15',
-                  color: tokens.colors.primary,
-                  borderRadius: tokens.borderRadius.md,
-                  fontSize: tokens.typography.sizes.sm,
-                  fontWeight: tokens.typography.weights.medium
-                }}>
-                  Week 1-2
-                </div>
-                <h3 style={{
-                  fontSize: tokens.typography.sizes.xl,
-                  fontWeight: tokens.typography.weights.medium,
-                  color: '#0F172A'
-                }}>
-                  Foundation
-                </h3>
-              </div>
-
-              <div style={{ paddingLeft: tokens.spacing.xl }}>
-                {[
-                  { day: 1, task: 'Learn to hold guitar correctly', time: '10 min' },
-                  { day: 2, task: 'Practice G, C, D chords', time: '15 min' },
-                  { day: 3, task: 'Chord switching drill', time: '15 min' }
-                ].map((item) => (
-                  <div key={item.day} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: tokens.spacing.md,
-                    padding: `${tokens.spacing.md} 0`,
-                    borderBottom: '1px solid #F1F5F9'
-                  }}>
-                    <CheckCircle2 size={18} color={tokens.colors.primary} />
-                    <span style={{
-                      fontSize: tokens.typography.sizes.sm,
-                      color: '#94A3B8',
-                      minWidth: '60px'
-                    }}>
-                      Day {item.day}
-                    </span>
-                    <span style={{
-                      flex: 1,
-                      fontSize: tokens.typography.sizes.base,
-                      color: '#475569'
-                    }}>
-                      {item.task}
-                    </span>
-                    <span style={{
-                      fontSize: tokens.typography.sizes.sm,
-                      color: '#94A3B8'
-                    }}>
-                      {item.time}
-                    </span>
-                  </div>
-                ))}
-                <div style={{
-                  padding: `${tokens.spacing.md} 0`,
-                  fontSize: tokens.typography.sizes.sm,
-                  color: '#94A3B8',
-                  fontStyle: 'italic'
-                }}>
-                  ...
-                </div>
-              </div>
-            </div>
-
-            {/* Week 3-4 */}
-            <div>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: tokens.spacing.md,
-                marginBottom: tokens.spacing.lg
-              }}>
-                <div style={{
-                  padding: `${tokens.spacing.xs} ${tokens.spacing.md}`,
-                  backgroundColor: tokens.colors.primary + '15',
-                  color: tokens.colors.primary,
-                  borderRadius: tokens.borderRadius.md,
-                  fontSize: tokens.typography.sizes.sm,
-                  fontWeight: tokens.typography.weights.medium
-                }}>
-                  Week 3-4
-                </div>
-                <h3 style={{
-                  fontSize: tokens.typography.sizes.xl,
-                  fontWeight: tokens.typography.weights.medium,
-                  color: '#0F172A'
-                }}>
-                  Your First Song
-                </h3>
-              </div>
-
-              <div style={{ paddingLeft: tokens.spacing.xl }}>
-                {[
-                  { day: 8, task: 'Learn "Horse With No Name" intro', time: '20 min' },
-                  { day: 9, task: 'Practice verse progression', time: '20 min' }
-                ].map((item) => (
-                  <div key={item.day} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: tokens.spacing.md,
-                    padding: `${tokens.spacing.md} 0`,
-                    borderBottom: '1px solid #F1F5F9'
-                  }}>
-                    <CheckCircle2 size={18} color={tokens.colors.primary} />
-                    <span style={{
-                      fontSize: tokens.typography.sizes.sm,
-                      color: '#94A3B8',
-                      minWidth: '60px'
-                    }}>
-                      Day {item.day}
-                    </span>
-                    <span style={{
-                      flex: 1,
-                      fontSize: tokens.typography.sizes.base,
-                      color: '#475569'
-                    }}>
-                      {item.task}
-                    </span>
-                    <span style={{
-                      fontSize: tokens.typography.sizes.sm,
-                      color: '#94A3B8'
-                    }}>
-                      {item.time}
-                    </span>
-                  </div>
-                ))}
-                <div style={{
-                  padding: `${tokens.spacing.md} 0`,
-                  fontSize: tokens.typography.sizes.sm,
-                  color: '#94A3B8',
-                  fontStyle: 'italic'
-                }}>
-                  ...
-                </div>
-              </div>
-            </div>
-
-          </motion.div>
+          <CoherenDemoSection />
         </div>
       </section>
 

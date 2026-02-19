@@ -5,7 +5,8 @@ import JourneyView from './views/JourneyView';
 import ProfileView from './views/ProfileView';
 import ProgressView from './views/ProgressView';
 import GoalsView from './views/GoalsView';
-import SettingsView from './views/SettingsView';
+import LibraryView from './views/LibraryView';
+
 import CheckpointScreen from '@features/dashboard/components/CheckpointScreen';
 import { getSprintNumber } from '@lib/checkpointHelpers';
 import { useStore } from '@core/store/useStore';
@@ -42,8 +43,8 @@ export default function Dashboard() {
         return <ProgressView />;
       case 'goals':
         return <GoalsView />;
-      case 'settings':
-        return <SettingsView />;
+      case 'library':
+        return <LibraryView />;
       default:
         return <TodayView />;
     }

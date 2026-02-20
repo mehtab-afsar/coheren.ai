@@ -18,6 +18,7 @@ import {
   BarChart2,
   ChevronRight,
 } from 'lucide-react';
+import { Icons } from '@shared/components/ui/icons';
 import { useStore } from '@core/store/useStore';
 import { tokens } from '@core/design-system';
 import { HeroSection } from './HeroSection';
@@ -230,7 +231,6 @@ function CoherenDemoSection() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [inView, setInView]           = useState(false);
   const [visibleMsg, setVisibleMsg]   = useState(0);
-  const [taskVisible, setTaskVisible] = useState(false);
   const [activeScreen, setActiveScreen] = useState(0); // 0 = chat, 1 = dashboard
 
   // Scroll-into-view trigger
@@ -249,25 +249,29 @@ function CoherenDemoSection() {
   useEffect(() => {
     if (!inView) return;
     if (visibleMsg >= CHAT_MESSAGES.length) {
-      const t = setTimeout(() => setTaskVisible(true), 700);
+      // After last message, wait 2 seconds then transition to dashboard
+      const t = setTimeout(() => setActiveScreen(1), 2000);
       return () => clearTimeout(t);
     }
     const t = setTimeout(() => setVisibleMsg(v => v + 1), 1400);
     return () => clearTimeout(t);
   }, [inView, visibleMsg]);
 
-  // Slide to dashboard 5 s after task strip appears
+  // Loop back to chat after showing dashboard for 5 seconds
   useEffect(() => {
-    if (!taskVisible) return;
-    const t = setTimeout(() => setActiveScreen(1), 5000);
+    if (!inView || activeScreen !== 1) return;
+    const t = setTimeout(() => {
+      setActiveScreen(0);
+      setVisibleMsg(0); // Reset messages to start over
+    }, 5000);
     return () => clearTimeout(t);
-  }, [taskVisible]);
+  }, [inView, activeScreen]);
 
   const isLastAI = (i: number) =>
     CHAT_MESSAGES[i].role === 'ai' && i === CHAT_MESSAGES.length - 1;
 
   const stepDone = (step: typeof AGENT_STEPS[number]) =>
-    step.triggerAt === 'task' ? taskVisible : visibleMsg >= step.triggerAt;
+    step.triggerAt === 'task' ? activeScreen === 1 : visibleMsg >= step.triggerAt;
 
   // ── Sidebar nav for the dashboard screen ──
   const DASH_NAV = [
@@ -295,42 +299,49 @@ function CoherenDemoSection() {
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
         style={{
           backgroundColor: '#FDFCFA',
-          border: '1px solid #E2DDD5',
-          borderRadius: '1.5rem',
+          border: '1px solid #D4CEC3',
+          borderRadius: '1.75rem',
           overflow: 'hidden',
-          boxShadow: '0 12px 48px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.04)',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.12), 0 8px 24px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.9)',
           display: 'flex',
           flexDirection: 'column',
+          position: 'relative' as const,
         }}
       >
         {/* Window bar */}
         <div style={{
           display: 'flex', alignItems: 'center',
-          padding: '13px 18px',
-          borderBottom: '1px solid #EBE7E0',
-          backgroundColor: '#F5F2EE',
+          padding: '14px 20px',
+          borderBottom: '1px solid rgba(0,0,0,0.08)',
+          background: 'linear-gradient(180deg, #F9F7F5 0%, #F3F0ED 100%)',
           gap: '12px',
           flexShrink: 0,
+          boxShadow: '0 1px 0 rgba(255,255,255,0.5), inset 0 1px 0 rgba(255,255,255,0.8)',
         }}>
           {/* Traffic lights */}
-          <div style={{ display: 'flex', gap: '6px' }}>
-            {['#E8C4B8', '#E8DDB8', '#B8E8C4'].map((c, i) => (
-              <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: c }} />
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {[
+              { bg: 'linear-gradient(135deg, #FC5753 0%, #EC4541 100%)', shadow: 'rgba(252, 87, 83, 0.4)' },
+              { bg: 'linear-gradient(135deg, #FDBC40 0%, #F5A623 100%)', shadow: 'rgba(253, 188, 64, 0.4)' },
+              { bg: 'linear-gradient(135deg, #34C759 0%, #28A745 100%)', shadow: 'rgba(52, 199, 89, 0.4)' }
+            ].map((c, i) => (
+              <div key={i} style={{
+                width: 12,
+                height: 12,
+                borderRadius: '50%',
+                background: c.bg,
+                boxShadow: `0 1px 2px ${c.shadow}, inset 0 1px 0 rgba(255,255,255,0.3)`,
+                border: '0.5px solid rgba(0,0,0,0.1)'
+              }} />
             ))}
           </div>
           {/* Centre: logo + name */}
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px' }}>
-            <div style={{
-              width: 20, height: 20, borderRadius: '6px',
-              background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Bot size={11} color="#fff" />
-            </div>
+            <Icons.logo style={{ width: '20px', height: '20px', color: '#7c3aed' }} />
             <span style={{ fontSize: '13px', fontWeight: 600, color: '#3a3028', letterSpacing: '-0.02em' }}>
               Coheren
             </span>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#22c55e', display: 'inline-block' }} />
+            <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#22c55e', display: 'inline-block', boxShadow: '0 0 8px rgba(34, 197, 94, 0.4)' }} />
           </div>
           {/* Screen indicator dots */}
           <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
@@ -387,21 +398,24 @@ function CoherenDemoSection() {
                             width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
                             background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            boxShadow: '0 3px 8px rgba(124,58,237,0.28)',
+                            boxShadow: '0 3px 12px rgba(124,58,237,0.35)',
                           }}>
-                            <Bot size={14} color="#fff" />
+                            <Icons.logo style={{ width: '16px', height: '16px', color: '#fff' }} />
                           </div>
                         )}
                         <div style={{
                           maxWidth: '72%',
-                          padding: '10px 15px',
-                          borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                          backgroundColor: msg.role === 'user' ? '#18160F' : '#F0EDE6',
+                          padding: '11px 16px',
+                          borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                          backgroundColor: msg.role === 'user' ? '#18160F' : '#FFFFFF',
                           color: msg.role === 'user' ? '#F5F0E8' : '#2D2720',
                           fontSize: '14.5px',
-                          lineHeight: 1.55,
+                          lineHeight: 1.6,
                           letterSpacing: '-0.015em',
                           position: 'relative' as const,
+                          boxShadow: msg.role === 'user'
+                            ? '0 2px 8px rgba(24, 22, 15, 0.3), 0 1px 2px rgba(0,0,0,0.1)'
+                            : '0 2px 10px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(0,0,0,0.03)',
                         }}>
                           {msg.text}
                           {isLastAI(i) && (
@@ -450,69 +464,18 @@ function CoherenDemoSection() {
                     backgroundColor: 'transparent', cursor: 'default',
                   }} />
                   <div style={{
-                    padding: '7px 13px', borderRadius: '10px',
+                    padding: '8px 14px',
+                    borderRadius: '11px',
                     background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: 'default', boxShadow: '0 2px 8px rgba(124,58,237,0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'default',
+                    boxShadow: '0 3px 10px rgba(124,58,237,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
                   }}>
-                    <Send size={13} color="#fff" />
+                    <Send size={14} color="#fff" />
                   </div>
                 </div>
-
-                {/* Task output strip */}
-                <AnimatePresence>
-                  {taskVisible && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-                      style={{
-                        borderTop: '1px solid rgba(124,58,237,0.15)',
-                        background: 'linear-gradient(135deg, rgba(124,58,237,0.05) 0%, rgba(109,40,217,0.02) 100%)',
-                        flexShrink: 0,
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', padding: '16px 20px 10px' }}>
-                        <div style={{
-                          width: 40, height: 40, borderRadius: '12px', flexShrink: 0,
-                          background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          boxShadow: '0 4px 14px rgba(124,58,237,0.4)',
-                        }}>
-                          <BookOpen size={18} color="#fff" />
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '5px', flexWrap: 'wrap' as const }}>
-                            <span style={{ fontSize: '9.5px', fontWeight: 700, letterSpacing: '0.07em', padding: '2px 8px', borderRadius: '5px', background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff' }}>PRACTICE</span>
-                            <span style={{ fontSize: '9.5px', fontWeight: 600, letterSpacing: '0.04em', padding: '2px 8px', borderRadius: '5px', backgroundColor: 'rgba(124,58,237,0.1)', color: '#7c3aed', border: '1px solid rgba(124,58,237,0.2)' }}>FOUNDATION PHASE</span>
-                            <span style={{ fontSize: '11px', color: '#9c8f84' }}>Day 1 of 90</span>
-                          </div>
-                          <p style={{ fontSize: '15px', color: '#1a1410', fontWeight: 700, margin: 0, letterSpacing: '-0.02em', lineHeight: 1.35 }}>
-                            Hold the G, C, D chord shapes — no switching yet
-                          </p>
-                        </div>
-                        <div style={{ flexShrink: 0, textAlign: 'center', padding: '6px 12px', borderRadius: '10px', backgroundColor: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)' }}>
-                          <p style={{ fontSize: '15px', color: '#7c3aed', fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>15</p>
-                          <p style={{ fontSize: '9px', color: '#9c8f84', margin: '1px 0 0', letterSpacing: '0.04em', textTransform: 'uppercase' as const }}>min</p>
-                        </div>
-                      </div>
-                      <div style={{ margin: '0 20px 10px', padding: '10px 12px', backgroundColor: 'rgba(255,255,255,0.6)', border: '1px solid rgba(124,58,237,0.1)', borderRadius: '10px' }}>
-                        <p style={{ fontSize: '12px', color: '#5a4f45', margin: 0, lineHeight: 1.55, letterSpacing: '-0.01em' }}>
-                          <span style={{ fontWeight: 600, color: '#7c3aed' }}>Coach note:</span> Don't worry about switching yet — just feel where each finger sits. Muscle memory starts here.
-                        </p>
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px', padding: '0 20px 16px', flexWrap: 'wrap' as const }}>
-                        {['Hand position', 'Fret pressure', 'String clarity'].map((item) => (
-                          <div key={item} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 10px', borderRadius: '99px', backgroundColor: 'rgba(255,255,255,0.7)', border: '1px solid #E2DDD5' }}>
-                            <CheckCircle2 size={11} color="#10b981" strokeWidth={2.5} />
-                            <span style={{ fontSize: '11px', color: '#5a4f45', fontWeight: 500 }}>{item}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
               </motion.div>
 
             ) : (
@@ -536,9 +499,7 @@ function CoherenDemoSection() {
                 }}>
                   {/* Logo */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '28px', paddingLeft: '4px' }}>
-                    <div style={{ width: 22, height: 22, borderRadius: '7px', background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Bot size={12} color="#fff" />
-                    </div>
+                    <Icons.logo style={{ width: '22px', height: '22px', color: '#a78bfa' }} />
                     <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' }}>Coheren</span>
                   </div>
 
@@ -763,7 +724,7 @@ function CoherenDemoSection() {
 
         {/* Bottom: live stats */}
         <motion.div
-          animate={taskVisible ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
+          animate={activeScreen === 1 ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
           transition={{ duration: 0.5 }}
           style={{ marginTop: '18px', paddingTop: '14px', borderTop: '1px solid rgba(255,255,255,0.06)' }}
         >

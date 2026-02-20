@@ -16,11 +16,11 @@ export const tokens = {
   // COLORS - "Focused Clarity" Palette
   // ============================================
   colors: {
-    // Primary - Muted Indigo (Focus, calm determination)
-    primary: '#6366F1',
-    primaryHover: '#4F46E5',
-    primaryLight: '#818CF8',
-    primarySubtle: '#EEF2FF',
+    // Primary - Muted Green (Focus, calm determination)
+    primary: '#39594D',
+    primaryHover: '#2D4A3E',
+    primaryLight: '#85C99F',
+    primarySubtle: '#E8F3ED',
 
     // Backgrounds - Warm, not pure white
     background: '#FFFCF9',      // Warm white
@@ -60,8 +60,8 @@ export const tokens = {
       hover: '#F8FAFC',
       hoverScale: 1.01,         // Subtle scale on hover
       disabled: '#E2E8F0',
-      focus: '#6366F1',
-      focusRing: 'rgba(99, 102, 241, 0.1)',
+      focus: '#39594D',
+      focusRing: 'rgba(57, 89, 77, 0.1)',
     },
 
     // Text Hierarchy

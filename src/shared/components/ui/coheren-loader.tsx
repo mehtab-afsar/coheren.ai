@@ -2,7 +2,7 @@
  * CoherenLoader — luma-spin adapted for the Coheren // logo design.
  * Two diagonal strokes animate with a staggered stroke-draw loop.
  */
-export const CoherenLoader = ({ size = 56, color = '#7c3aed' }: { size?: number; color?: string }) => {
+export const CoherenLoader = ({ size = 56, color = '#39594D' }: { size?: number; color?: string }) => {
   const s = size;
   // The // logo has two parallel diagonal lines at ~45°
   // Long line: (40,192) → (192,40)  [length ≈ 215 in 256-unit canvas]

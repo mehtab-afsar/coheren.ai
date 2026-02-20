@@ -846,7 +846,7 @@ The system will automatically detect when the data is complete and transition to
           gap: tokens.spacing['3xl'],
         }}>
           {/* Loading Animation */}
-          <CoherenLoader size={72} color="#7c3aed" />
+          <CoherenLoader size={72} color="#39594D" />
 
           {/* Loading Text */}
           <div style={{ textAlign: 'center', maxWidth: '500px', marginTop: tokens.spacing.lg }}>
@@ -917,7 +917,7 @@ The system will automatically detect when the data is complete and transition to
             padding: 0,
           }}
         >
-          <Icons.logo style={{ width: '22px', height: '22px', color: '#7c3aed' }} />
+          <Icons.logo style={{ width: '22px', height: '22px', color: '#39594D' }} />
           <span style={{
             fontSize: tokens.typography.sizes.base,
             fontWeight: tokens.typography.weights.medium,
@@ -958,7 +958,7 @@ The system will automatically detect when the data is complete and transition to
       {/* Transition loader — shown while stones are being fetched */}
       {onboardingPhase === 'stones' && stones.length === 0 && (
         <div className="flex flex-1 items-center justify-center">
-          <CoherenLoader size={64} color="#7c3aed" />
+          <CoherenLoader size={64} color="#39594D" />
         </div>
       )}
 
@@ -1015,7 +1015,7 @@ The system will automatically detect when the data is complete and transition to
                     {/* AI Avatar */}
                     {message.role === 'ai' && (
                       <div className="flex-shrink-0 mt-0.5 w-[30px] h-[30px] rounded-sm flex items-center justify-center">
-                        <Icons.logo style={{ width: '18px', height: '18px', color: '#7c3aed' }} />
+                        <Icons.logo style={{ width: '18px', height: '18px', color: '#39594D' }} />
                       </div>
                     )}
                     {/* Content */}
@@ -1037,7 +1037,7 @@ The system will automatically detect when the data is complete and transition to
                 {isTyping && (
                   <div className="flex gap-4 py-6">
                     <div className="flex-shrink-0 w-[30px] h-[30px] rounded-sm flex items-center justify-center">
-                      <Icons.logo style={{ width: '18px', height: '18px', color: '#7c3aed' }} />
+                      <Icons.logo style={{ width: '18px', height: '18px', color: '#39594D' }} />
                     </div>
                     <div className="flex items-center gap-1.5 mt-1">
                       <div className="w-2 h-2 rounded-full bg-zinc-400" style={{ animation: 'pulse 1.4s infinite ease-in-out both' }} />
@@ -1154,15 +1154,20 @@ The system will automatically detect when the data is complete and transition to
             {/* Brand mark */}
             <div className="relative z-10 flex items-center gap-2.5 p-10">
               <div style={{
-                width: 30, height: 30, borderRadius: 9,
-                background: 'rgba(124,58,237,0.2)',
-                border: '1px solid rgba(124,58,237,0.35)',
+                width: 32, height: 32, borderRadius: 9,
+                background: 'linear-gradient(135deg, #39594D, #2D4A3E)',
+                boxShadow: '0 2px 10px rgba(57, 89, 77, 0.4)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-                  <line x1="3" y1="21" x2="21" y2="3" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round"/>
-                  <line x1="12" y1="21" x2="21" y2="12" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round"/>
-                </svg>
+                <span style={{
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  color: '#D4F4DD',
+                  letterSpacing: '-0.02em',
+                  fontFamily: 'monospace'
+                }}>
+                  co//
+                </span>
               </div>
               <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: 15, fontWeight: 500, letterSpacing: '-0.02em' }}>
                 coheren.ai
@@ -1176,21 +1181,21 @@ The system will automatically detect when the data is complete and transition to
                   shape="sphere"
                   type="random"
                   colorBack="#060612"
-                  colorFront="#7c3aed"
+                  colorFront="#39594D"
                   pxSize={2}
                   speed={0.9}
                   style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
                 />
                 <div style={{
                   position: 'absolute', inset: 0, borderRadius: '50%',
-                  boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.15)',
-                  background: 'radial-gradient(circle at 68% 28%, rgba(167,139,250,0.08) 0%, transparent 60%)',
+                  boxShadow: 'inset 0 0 0 1px rgba(133, 201, 159, 0.15)',
+                  background: 'radial-gradient(circle at 68% 28%, rgba(133, 201, 159, 0.08) 0%, transparent 60%)',
                 }} />
               </div>
               <div style={{
                 position: 'absolute',
                 width: 480, height: 140, borderRadius: '50%',
-                background: 'radial-gradient(ellipse, rgba(124,58,237,0.18) 0%, transparent 70%)',
+                background: 'radial-gradient(ellipse, rgba(57, 89, 77, 0.22) 0%, transparent 70%)',
                 filter: 'blur(24px)', pointerEvents: 'none',
               }} />
               <div style={{ textAlign: 'center' }}>
@@ -1291,13 +1296,13 @@ The system will automatically detect when the data is complete and transition to
                       borderRadius: 11, border: 'none',
                       cursor: authLoading ? 'not-allowed' : 'pointer',
                       fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em',
-                      background: authLoading ? '#ddd6fe' : 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-                      color: authLoading ? '#7c3aed' : '#fff',
-                      boxShadow: authLoading ? 'none' : '0 4px 18px rgba(109,40,217,0.3)',
+                      background: authLoading ? '#D4EAE0' : 'linear-gradient(135deg, #39594D 0%, #2D4A3E 100%)',
+                      color: authLoading ? '#2D4A3E' : '#fff',
+                      boxShadow: authLoading ? 'none' : '0 4px 18px rgba(57, 89, 77, 0.35)',
                       transition: 'all 0.15s',
                     }}
-                    onMouseEnter={(e) => { if (!authLoading) { e.currentTarget.style.boxShadow = '0 6px 24px rgba(109,40,217,0.42)'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
-                    onMouseLeave={(e) => { e.currentTarget.style.boxShadow = authLoading ? 'none' : '0 4px 18px rgba(109,40,217,0.3)'; e.currentTarget.style.transform = 'none'; }}
+                    onMouseEnter={(e) => { if (!authLoading) { e.currentTarget.style.boxShadow = '0 6px 24px rgba(57, 89, 77, 0.5)'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
+                    onMouseLeave={(e) => { e.currentTarget.style.boxShadow = authLoading ? 'none' : '0 4px 18px rgba(57, 89, 77, 0.35)'; e.currentTarget.style.transform = 'none'; }}
                   >
                     {authLoading
                       ? (authGateMode === 'signup' ? 'Creating account...' : 'Signing in...')
@@ -1309,7 +1314,7 @@ The system will automatically detect when the data is complete and transition to
                   {authGateMode === 'signup' ? 'Already have an account? ' : "Don't have an account? "}
                   <button
                     onClick={() => { setAuthGateMode(authGateMode === 'signup' ? 'login' : 'signup'); setAuthError(null); }}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#7c3aed', padding: 0 }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#39594D', padding: 0 }}
                   >
                     {authGateMode === 'signup' ? 'Sign in' : 'Sign up free'}
                   </button>
@@ -1348,9 +1353,9 @@ const authGateInputStyle: React.CSSProperties = {
 };
 
 function applyAuthGateFocus(el: HTMLInputElement) {
-  el.style.borderColor = '#7c3aed';
+  el.style.borderColor = '#39594D';
   el.style.background = '#fff';
-  el.style.boxShadow = '0 0 0 3px rgba(124,58,237,0.08)';
+  el.style.boxShadow = '0 0 0 3px rgba(57, 89, 77, 0.08)';
 }
 
 function applyAuthGateBlur(el: HTMLInputElement) {

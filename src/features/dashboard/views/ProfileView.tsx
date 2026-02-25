@@ -12,6 +12,9 @@ export default function ProfileView() {
     universalProfile,
     currentGoal,
     roadmap,
+    currentDay,
+    streak,
+    completionRate,
     checkInTime,
     setCheckInTime,
     updateUniversalProfile,
@@ -54,17 +57,144 @@ export default function ProfileView() {
     window.location.href = '/';
   };
 
-  // ── Tab bar styles ──────────────────────────────────────────────────────────
+  const initials = (universalProfile.name || 'U')
+    .split(' ')
+    .map((w: string) => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
   const TAB_ACTIVE_BG = `${tokens.colors.primary}12`;
   const TAB_ACTIVE_COLOR = tokens.colors.primary;
   const TAB_INACTIVE_COLOR = tokens.colors.text.tertiary;
 
   return (
     <div>
-      {/* Page header */}
-      <h1 style={{ ...text.h1, marginBottom: tokens.spacing.xl }}>
-        {universalProfile.name || 'Profile'}
-      </h1>
+      {/* ── Header — inline row ──────────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.xl }}>
+        <h1 style={{
+          flex: 1,
+          fontSize: tokens.typography.sizes['2xl'],
+          fontWeight: tokens.typography.weights.semibold,
+          color: tokens.colors.text.primary,
+          letterSpacing: '-0.03em',
+          margin: 0,
+        }}>
+          Profile
+        </h1>
+        <span style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          padding: '3px 10px',
+          background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+          borderRadius: '99px',
+          fontSize: '11px',
+          fontWeight: tokens.typography.weights.medium,
+          color: '#fff',
+          letterSpacing: '0.02em',
+          boxShadow: '0 2px 8px rgba(124,58,237,0.35)',
+          flexShrink: 0,
+        }}>
+          Day {currentDay}
+        </span>
+      </div>
+
+      {/* ── Identity Hero Card ───────────────────────────────────────────── */}
+      <div style={{
+        background: 'linear-gradient(135deg, #1e0a3c 0%, #2d1060 50%, #1a0a2e 100%)',
+        borderRadius: tokens.borderRadius.xl,
+        padding: tokens.spacing['2xl'],
+        marginBottom: tokens.spacing.xl,
+        boxShadow: '0 8px 32px rgba(124,58,237,0.25), 0 0 0 1px rgba(167,139,250,0.12)',
+        position: 'relative' as const,
+        overflow: 'hidden' as const,
+      }}>
+        {/* Background glow */}
+        <div style={{
+          position: 'absolute', top: '-20%', right: '-10%',
+          width: '220px', height: '220px',
+          background: 'radial-gradient(circle, rgba(167,139,250,0.1) 0%, transparent 70%)',
+          pointerEvents: 'none',
+        }} />
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.xl, position: 'relative' as const }}>
+          {/* Initials circle */}
+          <div style={{
+            width: 60, height: 60, borderRadius: '50%', flexShrink: 0,
+            background: 'linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%)',
+            border: '2px solid rgba(167,139,250,0.35)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 22, fontWeight: 700, color: '#fff', letterSpacing: '-0.02em',
+            boxShadow: '0 4px 16px rgba(124,58,237,0.4)',
+          }}>
+            {initials}
+          </div>
+
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h2 style={{
+              fontSize: 'clamp(17px, 5vw, 22px)',
+              fontWeight: tokens.typography.weights.semibold,
+              color: '#f3e8ff',
+              letterSpacing: '-0.025em',
+              margin: '0 0 4px',
+              lineHeight: 1.2,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap' as const,
+            }}>
+              {universalProfile.name || 'Welcome'}
+            </h2>
+            <p style={{
+              fontSize: tokens.typography.sizes.sm,
+              color: 'rgba(196,181,253,0.65)',
+              margin: 0,
+              lineHeight: 1.4,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap' as const,
+            }}>
+              {currentGoal.specificGoal || 'No goal set'}
+            </p>
+          </div>
+        </div>
+
+        {/* Stats strip */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          marginTop: tokens.spacing.xl,
+          paddingTop: tokens.spacing.lg,
+          borderTop: '1px solid rgba(167,139,250,0.12)',
+          position: 'relative' as const,
+        }}>
+          {[
+            { label: 'Streak',  value: streak > 0 ? `${streak}d 🔥` : `${streak}d`, warm: streak > 0 },
+            { label: 'Done',    value: `${Math.round(completionRate)}%`,              warm: false },
+            { label: 'Goal',    value: roadmap?.duration ? `${roadmap.duration}mo` : '—', warm: false },
+          ].map(({ label, value, warm }, idx, arr) => (
+            <div key={label} style={{
+              flex: 1,
+              textAlign: 'center',
+              borderRight: idx < arr.length - 1 ? '1px solid rgba(167,139,250,0.12)' : 'none',
+              padding: '0 8px',
+            }}>
+              <div style={{
+                fontSize: 16, fontWeight: 700,
+                color: warm ? '#fbbf24' : '#e9d5ff',
+                letterSpacing: '-0.02em', lineHeight: 1,
+              }}>
+                {value}
+              </div>
+              <div style={{
+                fontSize: 9, color: 'rgba(196,181,253,0.4)', fontWeight: 600,
+                letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginTop: 3,
+              }}>
+                {label}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* Tab bar */}
       <div style={{
@@ -98,28 +228,9 @@ export default function ProfileView() {
         ))}
       </div>
 
-      {/* ── PROFILE TAB ──────────────────────────────────────────────────────── */}
+      {/* ── PROFILE TAB ──────────────────────────────────────────────────── */}
       {activeTab === 'profile' && (
         <>
-          {/* Avatar + name */}
-          <div style={{ ...card.standard, marginBottom: tokens.spacing.xl, display: 'flex', alignItems: 'center', gap: tokens.spacing.xl }}>
-            <div style={{
-              width: 72, height: 72, borderRadius: '50%',
-              background: `linear-gradient(135deg, ${tokens.colors.primary} 0%, #6d28d9 100%)`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}>
-              <User size={34} color="#fff" strokeWidth={1.5} />
-            </div>
-            <div>
-              <h2 style={{ ...text.h2, marginBottom: tokens.spacing.xs }}>
-                {universalProfile.name || 'User'}
-              </h2>
-              <p style={{ ...text.body, color: tokens.colors.text.secondary, margin: 0 }}>
-                {currentGoal.specificGoal || 'No goal set'}
-              </p>
-            </div>
-          </div>
-
           {/* Info grid */}
           <div style={{
             display: 'grid',
@@ -163,8 +274,8 @@ export default function ProfileView() {
             <h3 style={{ ...text.h3, marginBottom: tokens.spacing.lg }}>Current Goal</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacing.md }}>
               {[
-                { label: 'Goal', value: currentGoal.specificGoal || 'No goal set' },
-                { label: 'Category', value: currentGoal.category || 'Not set', capitalize: true },
+                { label: 'Goal',     value: currentGoal.specificGoal || 'No goal set' },
+                { label: 'Category', value: currentGoal.category || 'Not set',         capitalize: true },
                 { label: 'Duration', value: roadmap?.duration ? `${roadmap.duration} months` : 'Not set' },
               ].map(({ label, value, capitalize }) => (
                 <div key={label}>
@@ -177,7 +288,7 @@ export default function ProfileView() {
         </>
       )}
 
-      {/* ── SETTINGS TAB ─────────────────────────────────────────────────────── */}
+      {/* ── SETTINGS TAB ─────────────────────────────────────────────────── */}
       {activeTab === 'settings' && (
         <>
           <div style={{
@@ -297,7 +408,7 @@ export default function ProfileView() {
             <h2 style={{ ...text.h3, marginBottom: tokens.spacing.lg }}>Profile Details</h2>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: tokens.spacing.xl }}>
               {[
-                { label: 'Wake Time', value: universalProfile.dailyRoutine?.wakeTime || 'Not set' },
+                { label: 'Wake Time',            value: universalProfile.dailyRoutine?.wakeTime || 'Not set' },
                 { label: 'Weekend Availability', value: universalProfile.weekendAvailability || 'Not set', capitalize: true },
               ].map(({ label, value, capitalize }) => (
                 <div key={label}>

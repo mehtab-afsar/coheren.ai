@@ -218,6 +218,57 @@ OVERCOMMITMENT DETECTED — Apply these modifications:
 - Phase adaptationRules.if_completing_easily: "maintain pace, do not add more goals"`,
 };
 
+// ─── Stone × Domain Tiebreakers ──────────────────────────────────────────────
+// Fired when a domain's pedagogical framework and a stone's modification rules
+// directly conflict. Without these, the LLM resolves conflicts arbitrarily —
+// usually by silently ignoring one instruction set.
+//
+// Each entry is keyed by "Domain:Stone" and injected BEFORE the stone
+// modifications in the user prompt, so the LLM reads the resolution first.
+
+const STONE_DOMAIN_TIEBREAKERS: Record<string, string> = {
+  'Career:FearOfFailure': `
+## TIEBREAKER — Career × FearOfFailure (read BEFORE the Stone Modifications below)
+
+CONFLICT: The Career framework requires tangible "proof of work" artifacts starting Phase 2
+and parallel networking throughout — both evaluated/public activities.
+FearOfFailure requires removing assessments from Phase 1 and delaying public/evaluated work
+to Phase 3 minimum. These directly contradict each other.
+
+RESOLUTION — apply ALL of the following:
+1. Redefine "artifact" by phase visibility:
+   - Phase 1 artifacts: private drafts — saved locally, never shown to anyone.
+   - Phase 2 artifacts: portfolio that EXISTS but is not yet published or shared.
+   - Phase 3: first public release (post to LinkedIn, push to GitHub, share portfolio URL).
+   - Phase 4: active outreach, applications, interviews.
+2. Remove "parallel networking" from Phase 1 and Phase 2.
+   Networking begins in Phase 3 only — when the user has something to show.
+3. Replace ALL "proof of work" language with "evidence of effort" —
+   the artifact proves the user showed up and practised, not that they performed well.
+4. Phase 1 and Phase 2 milestones MUST be binary (done / not done), never quality-rated.
+   e.g. "Draft exists and is saved" — NOT "Draft is polished enough to share."
+5. Apply "experiment" framing to every phase: task titles use "Experiment:" prefix
+   through Phase 2. Phase 3+ drops the prefix once public sharing begins.
+6. Phase 2 phaseName and primaryGoals must explicitly state:
+   "Nothing built here is published yet. This is a private rehearsal."`,
+
+  'Career:Perfectionism': `
+## TIEBREAKER — Career × Perfectionism (read BEFORE the Stone Modifications below)
+
+CONFLICT: Career framework requires producing artifacts and signaling competency.
+Perfectionism causes indefinite polish loops, blocking artifact completion and publication.
+
+RESOLUTION — apply ALL of the following:
+1. Every Phase 2 artifact task must have an explicit "ship it" gate:
+   a hard time-box (e.g. "2-hour draft — stop and save at the timer, regardless of quality").
+2. Phase 2 phaseName must signal "rough" — e.g. "Rough Portfolio Sprint" not "Portfolio Building."
+3. keyMilestones for Phases 2–3 must use completion language, never quality language:
+   e.g. "LinkedIn About section exists and is saved" — NOT "LinkedIn profile is polished."
+4. Phase 3 (Signaling) must explicitly state: "Publish the imperfect version. Edit after feedback,
+   not before. Real-world feedback is the only valid quality signal."
+5. adaptationRules.if_completing_easily for all phases: "Publish what you have now — do not refine further."`,
+};
+
 // ─── System Prompt ────────────────────────────────────────────────────────────
 
 function buildSystemPrompt(domain: string): string {
@@ -265,6 +316,12 @@ function buildUserPrompt(
     .filter(Boolean)
     .join('\n');
 
+  // Tiebreakers — fired when a domain + stone combination creates a direct conflict
+  const tiebreakers = sp.stones
+    .map(s => STONE_DOMAIN_TIEBREAKERS[`${g.domain}:${s.type}`] ?? '')
+    .filter(Boolean)
+    .join('\n');
+
   return `Build a ${context.timeline}-day curriculum roadmap with exactly ${phaseCount} phases.
 
 ## Goal Intelligence (from Agent 1)
@@ -302,7 +359,9 @@ Agent 2 Guidance for Curriculum:
 ${sp.agent3Guidance.map(g => `  - ${g}`).join('\n')}
 Agent 5 Prediction: "${sp.agent5Note}"
 
-## MANDATORY Stone Modifications
+${tiebreakers ? `${tiebreakers}
+
+` : ''}## MANDATORY Stone Modifications
 Apply ALL of the following modifications to the curriculum:
 ${stoneInstructions || '(No stones detected — use default curriculum structure)'}
 

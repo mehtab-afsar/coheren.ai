@@ -284,6 +284,7 @@ export function DitheringShader({
   const programRef = useRef<WebGLProgram | null>(null);
   const glRef = useRef<WebGL2RenderingContext | null>(null);
   const uniformLocationsRef = useRef<Record<string, WebGLUniformLocation | null>>({});
+  // eslint-disable-next-line react-hooks/purity
   const startTimeRef = useRef<number>(Date.now());
 
   useEffect(() => {

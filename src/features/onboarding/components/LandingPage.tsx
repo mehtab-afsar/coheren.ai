@@ -7,10 +7,8 @@ import {
   Cpu,
   RefreshCw,
   Zap,
-  Bot,
   Flame,
   TrendingUp,
-  BookOpen,
   Send,
   LayoutDashboard,
   Target,
@@ -30,6 +28,459 @@ import { PricingSection } from '@shared/components/ui/pricing-section';
 
 const TOTAL_FRAMES = 192;
 
+// Animated card components
+function BrainDumpCard() {
+  const [text, setText] = useState('');
+  const [showTags, setShowTags] = useState(false);
+  const fullText = "I want to learn Python in 3 months";
+
+  useEffect(() => {
+    let currentIndex = 0;
+    const typingInterval = setInterval(() => {
+      if (currentIndex <= fullText.length) {
+        setText(fullText.slice(0, currentIndex));
+        currentIndex++;
+      } else {
+        clearInterval(typingInterval);
+        setTimeout(() => setShowTags(true), 300);
+      }
+    }, 50);
+    return () => clearInterval(typingInterval);
+  }, []);
+
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-6">
+      {/* Input bar mockup */}
+      <div className="w-full rounded-xl bg-white/10 border border-white/20 px-4 py-3 flex items-center gap-3">
+        <MessageSquare className="h-4 w-4 text-white/60 flex-shrink-0" />
+        <span className="text-sm text-white/80 font-light">{text}</span>
+        {text.length < fullText.length && (
+          <span className="ml-auto h-4 w-px bg-white/60 animate-pulse" />
+        )}
+      </div>
+      {/* RAG tag row */}
+      <AnimatePresence>
+        {showTags && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="flex gap-2"
+          >
+            {["Intent ✓", "Domain ✓", "Timeline ✓"].map((t, i) => (
+              <motion.span
+                key={t}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: i * 0.1, duration: 0.3 }}
+                className="rounded-full bg-white/15 px-2.5 py-0.5 text-[11px] font-medium text-white/80"
+              >
+                {t}
+              </motion.span>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function AgenticArchitectureCard() {
+  const agents = [
+    { label: "Goal", color: "#8b5cf6", icon: "🎯" },
+    { label: "Time", color: "#ec4899", icon: "⏱️" },
+    { label: "Skill", color: "#06b6d4", icon: "📊" },
+    { label: "Risk", color: "#f59e0b", icon: "⚠️" },
+    { label: "Path", color: "#3b82f6", icon: "🗺️" },
+  ];
+
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center gap-6 px-6">
+      {/* Dynamic agent network */}
+      <div className="relative flex items-center justify-center h-48 w-48">
+        {/* Pulsing glow background */}
+        <motion.div
+          animate={{
+            scale: [1, 1.2, 1],
+            opacity: [0.3, 0.5, 0.3],
+          }}
+          transition={{
+            duration: 3,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+          className="absolute inset-0 rounded-full bg-violet-500/20 blur-xl"
+        />
+
+        {/* Central AI brain */}
+        <motion.div
+          initial={{ scale: 0, rotate: -180 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+          className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/30 to-purple-600/30 border-2 border-violet-400/40 z-20 backdrop-blur-sm"
+        >
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+          >
+            <Cpu className="h-7 w-7 text-violet-200" />
+          </motion.div>
+        </motion.div>
+
+        {/* Orbiting agent nodes */}
+        {agents.map(({ label, color, icon }, i) => {
+          const angle = (i * 360) / agents.length - 90;
+          const radius = 70;
+
+          return (
+            <React.Fragment key={label}>
+              {/* Connecting beam */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{
+                  opacity: [0, 0.6, 0],
+                }}
+                transition={{
+                  delay: 1 + i * 0.15,
+                  duration: 2,
+                  repeat: Infinity,
+                  repeatDelay: 1,
+                }}
+                className="absolute h-[2px] origin-left z-0"
+                style={{
+                  width: `${radius}px`,
+                  background: `linear-gradient(90deg, ${color}80, transparent)`,
+                  transform: `rotate(${angle}deg)`,
+                  left: '50%',
+                  top: '50%',
+                }}
+              />
+
+              {/* Agent node */}
+              <motion.div
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{
+                  scale: 1,
+                  opacity: 1,
+                  y: [0, -4, 0],
+                }}
+                transition={{
+                  scale: { delay: 0.8 + i * 0.1, duration: 0.4 },
+                  opacity: { delay: 0.8 + i * 0.1, duration: 0.4 },
+                  y: {
+                    delay: 2 + i * 0.2,
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }
+                }}
+                className="absolute flex flex-col items-center justify-center gap-0.5 z-10"
+                style={{
+                  left: '50%',
+                  top: '50%',
+                  transform: `translate(-50%, -50%) rotate(${angle}deg) translateX(${radius}px) rotate(${-angle}deg)`,
+                }}
+              >
+                <motion.div
+                  whileHover={{ scale: 1.1 }}
+                  className="h-10 w-10 rounded-full flex items-center justify-center text-base backdrop-blur-sm border shadow-lg"
+                  style={{
+                    background: `${color}25`,
+                    borderColor: `${color}50`,
+                    boxShadow: `0 0 20px ${color}40`,
+                  }}
+                >
+                  {icon}
+                </motion.div>
+                <span className="text-[9px] font-semibold text-white/80 mt-0.5">{label}</span>
+              </motion.div>
+
+              {/* Data pulse particles */}
+              <motion.div
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{
+                  scale: [0, 1, 0],
+                  opacity: [0, 1, 0],
+                  x: [0, Math.cos((angle * Math.PI) / 180) * radius],
+                  y: [0, Math.sin((angle * Math.PI) / 180) * radius],
+                }}
+                transition={{
+                  delay: 2 + i * 0.3,
+                  duration: 1.5,
+                  repeat: Infinity,
+                  repeatDelay: 2,
+                }}
+                className="absolute h-1.5 w-1.5 rounded-full"
+                style={{
+                  left: '50%',
+                  top: '50%',
+                  backgroundColor: color,
+                  boxShadow: `0 0 10px ${color}`,
+                }}
+              />
+            </React.Fragment>
+          );
+        })}
+      </div>
+
+      {/* Status indicators */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 1.5, duration: 0.5 }}
+        className="flex flex-col gap-2 w-full"
+      >
+        <div className="flex items-center justify-between text-[10px] text-white/50">
+          <span>Analyzing dependencies...</span>
+          <motion.div
+            animate={{ opacity: [0.5, 1, 0.5] }}
+            transition={{ duration: 1.5, repeat: Infinity }}
+            className="flex gap-1"
+          >
+            <div className="h-1 w-1 rounded-full bg-violet-400" />
+            <div className="h-1 w-1 rounded-full bg-violet-400" />
+            <div className="h-1 w-1 rounded-full bg-violet-400" />
+          </motion.div>
+        </div>
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 2, duration: 0.5 }}
+          className="text-center text-[11px] text-white/70 tracking-wide uppercase font-semibold"
+        >
+          5 agents · Real-time collaboration
+        </motion.p>
+      </motion.div>
+    </div>
+  );
+}
+
+function DynamicRecalibrationCard() {
+  const [phase, setPhase] = useState<'failed' | 'analyzing' | 'adjusted'>('failed');
+
+  useEffect(() => {
+    const analyzeTimer = setTimeout(() => setPhase('analyzing'), 1200);
+    const adjustTimer = setTimeout(() => setPhase('adjusted'), 2500);
+    return () => {
+      clearTimeout(analyzeTimer);
+      clearTimeout(adjustTimer);
+    };
+  }, []);
+
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center gap-4 px-6">
+      {/* Failed task card */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{
+          opacity: phase === 'failed' ? 1 : 0.5,
+          scale: phase === 'failed' ? 1 : 0.95,
+          x: phase === 'adjusted' ? -10 : 0,
+        }}
+        transition={{ duration: 0.5 }}
+        className="w-full rounded-xl bg-gradient-to-r from-red-500/20 to-rose-500/20 border border-red-400/40 px-4 py-3 relative overflow-hidden"
+      >
+        {/* Scan line effect */}
+        {phase === 'analyzing' && (
+          <motion.div
+            initial={{ x: '-100%' }}
+            animate={{ x: '100%' }}
+            transition={{ duration: 1, repeat: 2, ease: "linear" }}
+            className="absolute inset-y-0 w-16 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+          />
+        )}
+        <div className="flex items-center gap-2 relative z-10">
+          <X className="h-4 w-4 text-red-300 flex-shrink-0" />
+          <div className="flex-1">
+            <span className="text-xs text-white/70 line-through block">Write 500 words</span>
+            <span className="text-[10px] text-white/40">Day 4 · Skipped</span>
+          </div>
+          <span className="text-[10px] font-semibold text-red-300">-2 streak</span>
+        </div>
+      </motion.div>
+
+      {/* AI Analysis Phase */}
+      <AnimatePresence mode="wait">
+        {phase === 'analyzing' && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="w-full space-y-2 overflow-hidden"
+          >
+            {/* AI Thinking indicator */}
+            <div className="flex items-center justify-center gap-2">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+              >
+                <Cpu className="h-3.5 w-3.5 text-violet-400" />
+              </motion.div>
+              <span className="text-[10px] text-white/50">AI analyzing failure pattern...</span>
+            </div>
+
+            {/* Analysis insights */}
+            <div className="space-y-1.5">
+              {[
+                { label: 'Context switch detected', delay: 0 },
+                { label: 'Time constraint identified', delay: 0.2 },
+                { label: 'Micro-habit recommended', delay: 0.4 },
+              ].map(({ label, delay }) => (
+                <motion.div
+                  key={label}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay, duration: 0.3 }}
+                  className="flex items-center gap-2 text-[10px]"
+                >
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: delay + 0.2, duration: 0.2 }}
+                    className="h-1 w-1 rounded-full bg-emerald-400"
+                  />
+                  <span className="text-white/60">{label}</span>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Transformation arrow */}
+      <motion.div
+        animate={{
+          rotate: phase === 'analyzing' ? 360 : 0,
+          scale: phase === 'analyzing' ? 1.2 : 1,
+        }}
+        transition={{ duration: 0.6 }}
+        className="relative"
+      >
+        <RefreshCw className={`h-4 w-4 ${phase === 'analyzing' ? 'text-violet-400' : 'text-white/30'}`} />
+        {phase === 'analyzing' && (
+          <motion.div
+            animate={{ scale: [1, 1.5, 1], opacity: [0.5, 0, 0.5] }}
+            transition={{ duration: 1, repeat: Infinity }}
+            className="absolute inset-0 rounded-full bg-violet-400/30"
+          />
+        )}
+      </motion.div>
+
+      {/* Adjusted task card */}
+      <AnimatePresence>
+        {phase === 'adjusted' && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            className="w-full rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-400/40 px-4 py-3 relative overflow-hidden"
+          >
+            {/* Success shimmer */}
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: '100%' }}
+              transition={{ duration: 1, delay: 0.2 }}
+              className="absolute inset-y-0 w-20 bg-gradient-to-r from-transparent via-emerald-400/20 to-transparent"
+            />
+            <div className="flex items-center gap-2 relative z-10">
+              <CheckCircle2 className="h-4 w-4 text-emerald-300 flex-shrink-0" />
+              <div className="flex-1">
+                <span className="text-xs text-white/90 block font-medium">Write 1 sentence</span>
+                <span className="text-[10px] text-emerald-300/70">2 min · Momentum builder</span>
+              </div>
+              <motion.span
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.3, type: "spring" }}
+                className="text-[10px] font-semibold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-full"
+              >
+                +1
+              </motion.span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Status message */}
+      {phase === 'adjusted' && (
+        <motion.div
+          initial={{ opacity: 0, y: -5 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5, duration: 0.5 }}
+          className="flex items-center gap-2"
+        >
+          <motion.div
+            animate={{ scale: [1, 1.2, 1] }}
+            transition={{ duration: 2, repeat: Infinity }}
+            className="h-1.5 w-1.5 rounded-full bg-emerald-400"
+          />
+          <p className="text-[10px] text-emerald-300/70 tracking-wide font-medium">
+            Roadmap adapted · Streak preserved
+          </p>
+        </motion.div>
+      )}
+    </div>
+  );
+}
+
+function OneFocusCard() {
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center gap-4 px-6">
+      {/* Notification card */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        className="w-full rounded-2xl bg-white/10 border border-white/20 p-4"
+      >
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3, duration: 0.5 }}
+          className="flex items-center gap-2 mb-3"
+        >
+          <motion.div
+            animate={{ scale: [1, 1.2, 1] }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            className="h-6 w-6 rounded-full bg-white/20 flex items-center justify-center"
+          >
+            <Zap className="h-3 w-3 text-yellow-300" />
+          </motion.div>
+          <span className="text-xs font-medium text-white/60 uppercase tracking-wider">Today's focus</span>
+        </motion.div>
+        <motion.p
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5, duration: 0.5 }}
+          className="text-sm font-medium text-white leading-snug"
+        >
+          Write the opening line of Chapter 1.
+        </motion.p>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.7, duration: 0.5 }}
+          className="mt-3 flex items-center gap-1.5"
+        >
+          <motion.span
+            animate={{ scale: [1, 1.3, 1], opacity: [1, 0.7, 1] }}
+            transition={{ duration: 1.5, repeat: Infinity }}
+            className="h-1.5 w-1.5 rounded-full bg-emerald-400"
+          />
+          <span className="text-[10px] text-white/40">Est. 12 min · Day 3 of 90</span>
+        </motion.div>
+      </motion.div>
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1, duration: 0.5 }}
+        className="text-[10px] text-white/30 tracking-wide"
+      >
+        Nothing else. Just this.
+      </motion.p>
+    </div>
+  );
+}
 
 const SCIENCE_CARDS = [
   {
@@ -145,7 +596,7 @@ function ScienceSection({ wrapperRef }: { wrapperRef: React.RefObject<HTMLDivEle
     // Sticky inside the 600vh wrapper — stays pinned to top for the full scroll range
     <section
       id="science"
-      className="sticky top-0 z-10 h-screen scroll-mt-20 flex flex-col items-center justify-center px-6 gap-6 overflow-hidden"
+      className="sticky top-0 z-10 h-screen scroll-mt-20 flex flex-col items-center justify-start pt-16 md:pt-20 px-6 gap-4 overflow-hidden"
       style={{ backgroundColor: '#000000' }}
     >
       {/* Heading */}
@@ -165,7 +616,7 @@ function ScienceSection({ wrapperRef }: { wrapperRef: React.RefObject<HTMLDivEle
       </motion.div>
 
       {/* Brain full-width, cards overlaid on top */}
-      <div className="relative w-full max-w-6xl">
+      <div className="relative w-full max-w-7xl">
 
         {/* Brain — canvas for lag-free GPU frame blitting */}
         <canvas
@@ -284,12 +735,8 @@ function CoherenDemoSection() {
   return (
     <div
       ref={containerRef}
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '3fr 1fr',
-        gap: '20px',
-        alignItems: 'stretch',
-      }}
+      className="grid grid-cols-1 md:grid-cols-[3fr_1fr]"
+      style={{ gap: '20px', alignItems: 'stretch' }}
     >
       {/* ══════════════════ LEFT — card with sliding screens ══════════════════ */}
       <motion.div
@@ -629,19 +1076,18 @@ function CoherenDemoSection() {
         </div>
       </motion.div>
 
-      {/* ══════════════════ RIGHT — Agent panel (1/4) ══════════════ */}
+      {/* ══════════════════ RIGHT — Agent panel (1/4) — hidden on mobile ══════════════ */}
       <motion.div
         initial={{ opacity: 0, x: 16 }}
         whileInView={{ opacity: 1, x: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.6, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+        className="hidden md:flex md:flex-col"
         style={{
           backgroundColor: '#0D0C0A',
           border: '1px solid rgba(255,255,255,0.07)',
           borderRadius: '1.5rem',
           padding: '22px 18px',
-          display: 'flex',
-          flexDirection: 'column',
           gap: '0',
           boxShadow: '0 12px 48px rgba(0,0,0,0.3)',
           position: 'relative' as const,
@@ -840,98 +1286,28 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
                 title: "The Brain Dump",
                 description: "Don't worry about formatting. Speak naturally. Tell Coheren you want to \"Learn Python in 3 months\" or \"Write a Sci-Fi novel.\" Our RAG agents scan your input to understand the intent behind the goal.",
                 content: (
-                  <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-6">
-                    {/* Input bar mockup */}
-                    <div className="w-full rounded-xl bg-white/10 border border-white/20 px-4 py-3 flex items-center gap-3">
-                      <MessageSquare className="h-4 w-4 text-white/60 flex-shrink-0" />
-                      <span className="text-sm text-white/80 font-light">I want to learn Python in 3 months</span>
-                      <span className="ml-auto h-4 w-px bg-white/60 animate-pulse" />
-                    </div>
-                    {/* RAG tag row */}
-                    <div className="flex gap-2">
-                      {["Intent ✓", "Domain ✓", "Timeline ✓"].map(t => (
-                        <span key={t} className="rounded-full bg-white/15 px-2.5 py-0.5 text-[11px] font-medium text-white/80">{t}</span>
-                      ))}
-                    </div>
-                  </div>
+                  <BrainDumpCard />
                 ),
               },
               {
                 title: "Agentic Architecture",
                 description: "This isn't a template. A swarm of AI agents collaborate to break your goal into \"Micro-Habits.\" They check for dependencies, estimate difficulty, and build a timeline that respects your actual free time.",
                 content: (
-                  <div className="flex h-full w-full flex-col items-center justify-center gap-4 px-6">
-                    {/* Agent node diagram */}
-                    <div className="relative flex items-center justify-center">
-                      {/* Central node */}
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 border border-white/30 z-10">
-                        <Cpu className="h-5 w-5 text-white" />
-                      </div>
-                      {/* Satellite nodes */}
-                      {[
-                        { label: "Goal", deg: -90 },
-                        { label: "Time", deg: -10 },
-                        { label: "Risk", deg: 170 },
-                      ].map(({ label, deg }) => (
-                        <div
-                          key={label}
-                          className="absolute flex h-8 w-14 items-center justify-center rounded-full bg-white/10 border border-white/20 text-[10px] font-semibold text-white/70"
-                          style={{
-                            transform: `rotate(${deg}deg) translateX(52px) rotate(${-deg}deg)`,
-                          }}
-                        >
-                          {label}
-                        </div>
-                      ))}
-                    </div>
-                    <p className="text-center text-[11px] text-white/50 tracking-wide uppercase">5 agents · 1 roadmap</p>
-                  </div>
+                  <AgenticArchitectureCard />
                 ),
               },
               {
                 title: "Dynamic Recalibration",
                 description: "Life happens. If you miss a task, Coheren doesn't just show a red \"X\". It shifts the roadmap. Your agents analyze why you stalled and suggest a smaller, 2-minute version of the task to get your momentum back.",
                 content: (
-                  <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-6">
-                    {/* Before row — missed */}
-                    <div className="w-full rounded-lg bg-red-500/20 border border-red-400/30 px-3 py-2 flex items-center gap-2">
-                      <X className="h-3.5 w-3.5 text-red-300 flex-shrink-0" />
-                      <span className="text-xs text-white/60 line-through">Write 500 words · Day 4</span>
-                    </div>
-                    {/* Arrow */}
-                    <RefreshCw className="h-4 w-4 text-white/40" />
-                    {/* After row — adjusted */}
-                    <div className="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 flex items-center gap-2">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300 flex-shrink-0" />
-                      <span className="text-xs text-white/80">Write 1 sentence · 2 min</span>
-                    </div>
-                    <p className="text-[10px] text-white/40 tracking-wide">Roadmap adjusted · Momentum restored</p>
-                  </div>
+                  <DynamicRecalibrationCard />
                 ),
               },
               {
                 title: "The 'One' Focus",
                 description: "Every morning, you get one notification. No list. No overwhelm. Just the single most important move you can make today to stay on track. Focus on the \"now,\" let the AI worry about the \"later.\"",
                 content: (
-                  <div className="flex h-full w-full flex-col items-center justify-center gap-4 px-6">
-                    {/* Notification card */}
-                    <div className="w-full rounded-2xl bg-white/10 border border-white/20 p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="h-6 w-6 rounded-full bg-white/20 flex items-center justify-center">
-                          <Zap className="h-3 w-3 text-yellow-300" />
-                        </div>
-                        <span className="text-xs font-medium text-white/60 uppercase tracking-wider">Today's focus</span>
-                      </div>
-                      <p className="text-sm font-medium text-white leading-snug">
-                        Write the opening line of Chapter 1.
-                      </p>
-                      <div className="mt-3 flex items-center gap-1.5">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                        <span className="text-[10px] text-white/40">Est. 12 min · Day 3 of 90</span>
-                      </div>
-                    </div>
-                    <p className="text-[10px] text-white/30 tracking-wide">Nothing else. Just this.</p>
-                  </div>
+                  <OneFocusCard />
                 ),
               },
             ]}
@@ -1027,9 +1403,8 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
                 whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.5, delay: index * 0.1 }}
+                className="grid grid-cols-1 sm:grid-cols-2"
                 style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
                   gap: tokens.spacing.xl,
                   padding: tokens.spacing.xl,
                   borderRadius: tokens.borderRadius.xl,
@@ -1125,7 +1500,8 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
               WebkitBackdropFilter: 'blur(28px)',
               borderRadius: '3rem 0 0 3rem',
               boxShadow: '-50px 0 100px rgba(0,0,0,0.6)',
-              overflow: 'hidden',
+              overflowX: 'hidden',
+              overflowY: 'auto',
             }}
           >
             <PricingSection />

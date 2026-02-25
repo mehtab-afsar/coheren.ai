@@ -22,10 +22,15 @@ const NAV_HOVER_BG = 'rgba(255,255,255,0.05)';
 
 export default function DashboardSidebar({ currentView, onViewChange, isOpen: controlledIsOpen, onToggle }: DashboardSidebarProps) {
   const setStep = useStore((state) => state.setStep);
+  const { universalProfile, roadmap } = useStore();
   const level = useUserLevel();
-  const [internalIsOpen, setInternalIsOpen] = useState(() => {
-    return window.innerWidth >= 768;
-  });
+
+  const initials = universalProfile?.name
+    ? universalProfile.name.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()
+    : '?';
+  const [internalIsOpen, setInternalIsOpen] = useState(() =>
+    window.matchMedia('(min-width: 768px)').matches
+  );
 
   const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
   const setIsOpen = (open: boolean) => {
@@ -221,11 +226,72 @@ export default function DashboardSidebar({ currentView, onViewChange, isOpen: co
           })}
         </nav>
 
-        {/* Footer — level badge */}
+        {/* Footer */}
         <div style={{
           padding: `${tokens.spacing.lg} ${tokens.spacing.xl}`,
           borderTop: `1px solid ${SIDEBAR_BORDER}`,
         }}>
+          {/* User identity row */}
+          {universalProfile?.name && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: tokens.spacing.md,
+              marginBottom: tokens.spacing.lg,
+              padding: `${tokens.spacing.sm} ${tokens.spacing.md}`,
+              backgroundColor: 'rgba(124,58,237,0.07)',
+              border: '1px solid rgba(124,58,237,0.15)',
+              borderRadius: tokens.borderRadius.md,
+            }}>
+              {/* Initials circle */}
+              <div style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '12px',
+                fontWeight: 700,
+                color: '#fff',
+                flexShrink: 0,
+                letterSpacing: '-0.01em',
+              }}>
+                {initials}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{
+                  fontSize: tokens.typography.sizes.sm,
+                  fontWeight: tokens.typography.weights.medium,
+                  color: 'rgba(255,255,255,0.85)',
+                  margin: 0,
+                  letterSpacing: '-0.01em',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {universalProfile.name}
+                </p>
+                {roadmap?.title && (
+                  <p style={{
+                    fontSize: '10px',
+                    color: 'rgba(167,139,250,0.55)',
+                    margin: '1px 0 0',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    fontWeight: tokens.typography.weights.light,
+                    letterSpacing: '0.01em',
+                  }}>
+                    {roadmap.title}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Level badge */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
             <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', fontWeight: tokens.typography.weights.light, letterSpacing: '0.04em' }}>
               LEVEL
@@ -267,11 +333,9 @@ export default function DashboardSidebar({ currentView, onViewChange, isOpen: co
             left: 0,
             width: '100vw',
             height: '100vh',
-            backgroundColor: 'rgba(0,0,0,0.6)',
+            backgroundColor: 'rgba(0,0,0,0.45)',
             zIndex: 998,
-            backdropFilter: 'blur(4px)',
-            WebkitBackdropFilter: 'blur(4px)',
-            display: window.innerWidth < 768 ? 'block' : 'none',
+            display: 'block',
           }}
         />
       )}

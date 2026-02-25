@@ -1,12 +1,18 @@
-import { Flame, Calendar, TrendingUp, CheckCircle2, Clock, ArrowRight, Sparkles, SkipForward, X, Zap, BookOpen, FileText } from 'lucide-react';
+import { CheckCircle2, Clock, ArrowRight, Sparkles, SkipForward, X, Zap, BookOpen, FileText } from 'lucide-react';
 import { useStore } from '@core/store/useStore';
 import { tokens, text, card } from '@core/design-system';
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { useCinemaMode } from '../hooks/useCinemaMode';
 import { useTaskActions } from '../hooks/useTaskActions';
 import { useBreakpoint } from '@hooks/useBreakpoint';
+import TaskFeedbackModal from '../components/TaskFeedbackModal';
+import SwipeableCard from '../components/SwipeableCard';
 
-export default function TodayView() {
+export default function TodayView({
+  onNavigate,
+}: {
+  onNavigate?: (view: string) => void;
+}) {
   const {
     universalProfile,
     roadmap,
@@ -22,8 +28,8 @@ export default function TodayView() {
   const { isMobile } = useBreakpoint();
   const completeTask = useStore((state) => state.completeTask);
   const skipTask = useStore((state) => state.skipTask);
-  const { completingTaskId, skippingTaskId, skipReasonTaskId, setSkipReasonTaskId, particles, showSkipMessage, handleCompleteTask, handleSkipTask, confirmSkip } = useTaskActions(completeTask, skipTask);
-  const progressCardRef = useRef<HTMLDivElement>(null);
+  const setTaskFeedback = useStore((state) => state.setTaskFeedback);
+  const { completingTaskId, skippingTaskId, skipReasonTaskId, setSkipReasonTaskId, particles, showSkipMessage, pendingFeedbackTaskId, submitFeedback, dismissFeedback, handleCompleteTask, handleSkipTask, confirmSkip } = useTaskActions(completeTask, skipTask, setTaskFeedback);
 
   // Quick Mode — surfaces only the single most important incomplete task
   const [quickMode, setQuickMode] = useState(false);
@@ -94,6 +100,32 @@ export default function TodayView() {
     setWeekRecapDismissed(true);
   };
 
+  // Streak milestone banner (Day 3, 7, 14, 30, 60, 90)
+  const STREAK_MILESTONES = [3, 7, 14, 30, 60, 90];
+  const STREAK_MESSAGES: Record<number, string> = {
+    3:  "The first 3 days are the hardest. You did it.",
+    7:  "One full week. You're officially consistent.",
+    14: "Two weeks. Your brain is already rewiring.",
+    30: "30 days. This is who you are now.",
+    60: "60 days. Most people never make it here.",
+    90: "90 days. You are unstoppable.",
+  };
+  const milestoneKey = `streak-milestone-${streak}`;
+  const [milestoneDismissed, setMilestoneDismissed] = useState(
+    () => { try { return Boolean(localStorage.getItem(milestoneKey)); } catch { return false; } }
+  );
+  const showMilestoneBanner = STREAK_MILESTONES.includes(streak) && !milestoneDismissed;
+  const dismissMilestone = () => {
+    try { localStorage.setItem(milestoneKey, '1'); } catch { /* ignore */ }
+    setMilestoneDismissed(true);
+  };
+  useEffect(() => {
+    if (!showMilestoneBanner) return;
+    const tid = setTimeout(dismissMilestone, 8000);
+    return () => clearTimeout(tid);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showMilestoneBanner]);
+
   const todaysTasks = tasks.filter(t => t.day === currentDay && !t.skipped);
   const completedTasks = todaysTasks.filter(t => t.completed);
   const allDone = todaysTasks.length > 0 && todaysTasks.every(t => t.completed);
@@ -107,6 +139,10 @@ export default function TodayView() {
   const visibleTasks = (quickMode || (showReEngagement && easeBackMode))
     ? [...completedTasks, ...incompleteTasks.slice(0, 1)]
     : todaysTasks;
+  // Hero task: first incomplete task of the day (shown as the featured focus card)
+  const heroTask = !allDone && incompleteTasks.length > 0 ? incompleteTasks[0] : null;
+  // List tasks: everything except the hero task (still respects quickMode/easeBack filtering)
+  const listTasks = heroTask ? visibleTasks.filter(t => t.id !== heroTask.id) : visibleTasks;
 
   // Weekly recap: first day of a new week (day 8, 15, 22…)
   const isNewWeekStart = currentDay > 7 && currentDay % 7 === 1;
@@ -138,8 +174,6 @@ export default function TodayView() {
   const cinemaTask = cinemaTaskId ? todaysTasks.find(t => t.id === cinemaTaskId) : null;
   const cinemaResource = cinemaTask?.resources?.primary ?? null;
   const cinemaVideoId = cinemaResource?.type === 'video' ? getYouTubeId(cinemaResource.url) : null;
-  // If resource URL is a search URL (no embeddable ID), keep it for direct linking
-  const cinemaSearchUrl = cinemaResource?.url && !cinemaVideoId ? cinemaResource.url : null;
   const cinemaEmbedUrl = cinemaVideoId ? (() => {
     const p = new URLSearchParams();
     // cinemaStartOverride: user chose Resume (specific second) or seek back
@@ -188,6 +222,7 @@ export default function TodayView() {
     setCinemaNote(loadNoteForTask(taskId));
     setCinemaTab('guide');
   };
+
 
   // Close cinema: save current position for future resume, then pause & close
   const closeCinema = () => {
@@ -290,6 +325,11 @@ export default function TodayView() {
           0%   { opacity:0; transform:translateX(24px); }
           100% { opacity:1; transform:translateX(0); }
         }
+        @keyframes milestoneIn {
+          0%   { opacity:0; transform:translateY(-8px) scale(0.97); }
+          60%  { transform:translateY(2px) scale(1.01); }
+          100% { opacity:1; transform:translateY(0) scale(1); }
+        }
       `}</style>
 
       {/* ── Cinema / Focus Mode ─────────────────────────────────────────── */}
@@ -306,7 +346,7 @@ export default function TodayView() {
                   const typeColors: Record<string, { bg: string; text: string }> = {
                     practice: { bg: 'rgba(124,58,237,0.15)', text: '#a78bfa' },
                     learning: { bg: 'rgba(14,165,233,0.15)', text: '#38bdf8' },
-                    reflection: { bg: 'rgba(16,185,129,0.15)', text: '#34d399' },
+                    reflection: { bg: 'rgba(124,58,237,0.15)', text: '#a78bfa' },
                   };
                   const c = typeColors[cinemaTask.type] ?? { bg: 'rgba(255,255,255,0.08)', text: 'rgba(255,255,255,0.5)' };
                   return (
@@ -504,13 +544,16 @@ export default function TodayView() {
           {cinemaTab && (
             <div
               style={{
-                width: 340,
-                borderLeft: '1px solid rgba(255,255,255,0.06)',
+                // Mobile: covers entire cinema screen as an overlay
+                // Desktop: fixed 340px column to the right of the video
+                ...(isMobile
+                  ? { position: 'absolute', inset: 0, zIndex: 10, width: '100%' }
+                  : { width: 340, borderLeft: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }
+                ),
                 backgroundColor: '#0B0C13',
                 display: 'flex',
                 flexDirection: 'column',
                 animation: 'panelSlideIn 0.22s cubic-bezier(0.22,1,0.36,1)',
-                flexShrink: 0,
               }}
             >
               {/* Panel header */}
@@ -533,10 +576,19 @@ export default function TodayView() {
                     </button>
                   ))}
                 </div>
+                {/* Back to video — mobile only (panel covers full screen) */}
+                {isMobile && (
+                  <button
+                    onClick={() => setCinemaTab(null)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.4)', padding: '4px 8px' }}
+                  >
+                    <X size={14} /> Close
+                  </button>
+                )}
               </div>
 
               {/* Panel content */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {cinemaTab === 'guide' && (
                   <>
                     {cinemaTask.description && (
@@ -668,53 +720,48 @@ export default function TodayView() {
         </div>
       )}
 
-      {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div style={{ marginBottom: tokens.spacing['2xl'] }}>
-        <p style={{
-          fontSize: tokens.typography.sizes.sm,
-          fontWeight: tokens.typography.weights.regular,
-          color: tokens.colors.text.tertiary,
-          marginBottom: tokens.spacing.xs,
-          letterSpacing: '0.01em',
-        }}>
-          {getGreeting()}
-        </p>
-        <h1 style={{
-          fontSize: tokens.typography.sizes['3xl'],
-          fontWeight: tokens.typography.weights.semibold,
-          color: tokens.colors.text.primary,
-          letterSpacing: '-0.03em',
-          marginBottom: tokens.spacing.md,
-          lineHeight: 1.15,
-        }}>
-          {universalProfile.name || 'Welcome back'}
-        </h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, flexWrap: 'wrap' as const }}>
-          {roadmap?.title && (
-            <span style={{
-              fontSize: tokens.typography.sizes.sm,
-              fontWeight: tokens.typography.weights.light,
-              color: tokens.colors.text.secondary,
-            }}>
-              {roadmap.title}
-            </span>
-          )}
-          <span style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-            padding: '3px 10px',
-            background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-            borderRadius: '99px',
-            fontSize: '11px',
-            fontWeight: tokens.typography.weights.medium,
-            color: '#fff',
-            letterSpacing: '0.02em',
-            boxShadow: '0 2px 8px rgba(124,58,237,0.35)',
+      {/* ── Header — single inline row ──────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.xl }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{
+            fontSize: tokens.typography.sizes.xs,
+            color: tokens.colors.text.tertiary,
+            margin: 0,
+            letterSpacing: '0.01em',
+            lineHeight: 1,
+            marginBottom: '3px',
           }}>
-            Day {currentDay}
-          </span>
+            {getGreeting()}
+          </p>
+          <h1 style={{
+            fontSize: 'clamp(18px, 5vw, 24px)',
+            fontWeight: tokens.typography.weights.semibold,
+            color: tokens.colors.text.primary,
+            letterSpacing: '-0.03em',
+            margin: 0,
+            lineHeight: 1.1,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap' as const,
+          }}>
+            {universalProfile.name || 'Welcome back'}
+          </h1>
         </div>
+        <span style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          padding: '3px 10px',
+          background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+          borderRadius: '99px',
+          fontSize: '11px',
+          fontWeight: tokens.typography.weights.medium,
+          color: '#fff',
+          letterSpacing: '0.02em',
+          boxShadow: '0 2px 8px rgba(124,58,237,0.35)',
+          flexShrink: 0,
+        }}>
+          Day {currentDay}
+        </span>
       </div>
 
       {/* ── Skip Toast ───────────────────────────────────────────────────── */}
@@ -742,97 +789,39 @@ export default function TodayView() {
         </div>
       )}
 
-      {/* ── Stats Grid ───────────────────────────────────────────────────── */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
-        gap: tokens.spacing.md,
-        marginBottom: tokens.spacing['3xl'],
-      }}>
-        {/* Streak */}
+      {/* ── Streak Milestone Banner ──────────────────────────────────────── */}
+      {showMilestoneBanner && (
         <div style={{
-          background: streak > 0
-            ? 'linear-gradient(135deg, #fff7ed 0%, #fffbf5 100%)'
-            : tokens.colors.surface,
-          border: `1px solid ${streak > 0 ? 'rgba(249,115,22,0.2)' : tokens.colors.borderLight}`,
-          borderLeft: `4px solid ${streak > 0 ? '#f97316' : tokens.colors.gray[200]}`,
+          background: 'linear-gradient(135deg, #fff7ed 0%, #fef3c7 100%)',
+          border: '1px solid rgba(249,115,22,0.3)',
+          borderLeft: '4px solid #f97316',
           borderRadius: tokens.borderRadius.lg,
-          padding: tokens.spacing.lg,
-          boxShadow: streak > 0 ? '0 4px 16px rgba(249,115,22,0.1)' : tokens.shadows.xs,
-          transition: 'all 0.3s ease',
+          padding: `${tokens.spacing.md} ${tokens.spacing.lg}`,
+          marginBottom: tokens.spacing['2xl'],
+          display: 'flex',
+          alignItems: 'center',
+          gap: tokens.spacing.md,
+          boxShadow: '0 4px 20px rgba(249,115,22,0.15)',
+          animation: 'milestoneIn 0.5s cubic-bezier(0.4,0,0.2,1)',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: tokens.spacing.md }}>
-            <Flame size={15} strokeWidth={streak > 0 ? 2 : 1.5} color={streak > 0 ? '#f97316' : tokens.colors.gray[300]} style={{ filter: streak > 0 ? 'drop-shadow(0 0 4px rgba(249,115,22,0.5))' : 'none' }} />
-            <span style={{ fontSize: tokens.typography.sizes.xs, color: streak > 0 ? '#ea580c' : tokens.colors.text.tertiary, fontWeight: tokens.typography.weights.medium, letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>
-              Streak
-            </span>
+          <span style={{ fontSize: '28px', flexShrink: 0 }}>🔥</span>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: tokens.typography.sizes.sm, fontWeight: tokens.typography.weights.semibold, color: '#92400e', margin: '0 0 2px', letterSpacing: '-0.01em' }}>
+              {streak}-day streak!
+            </p>
+            <p style={{ fontSize: tokens.typography.sizes.xs, color: '#b45309', margin: 0 }}>
+              {STREAK_MESSAGES[streak]}
+            </p>
           </div>
-          <div style={{ fontSize: '2.2rem', fontWeight: tokens.typography.weights.semibold, color: streak > 0 ? '#c2410c' : tokens.colors.text.primary, letterSpacing: '-0.04em', lineHeight: 1, marginBottom: '4px' }}>
-            {streak}
-          </div>
-          <div style={{ fontSize: tokens.typography.sizes.xs, color: streak > 0 ? '#ea580c' : tokens.colors.text.tertiary, fontWeight: tokens.typography.weights.regular }}>
-            {streak === 1 ? 'day in a row' : 'days in a row'}
-          </div>
+          <button
+            onClick={dismissMilestone}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#b45309', padding: '4px', flexShrink: 0, display: 'flex', alignItems: 'center' }}
+          >
+            <X size={16} />
+          </button>
         </div>
+      )}
 
-        {/* Progress */}
-        <div
-          ref={progressCardRef}
-          style={{
-            background: 'linear-gradient(135deg, rgba(124,58,237,0.06) 0%, rgba(109,40,217,0.02) 100%)',
-            border: '1px solid rgba(124,58,237,0.18)',
-            borderLeft: '4px solid #7c3aed',
-            borderRadius: tokens.borderRadius.lg,
-            padding: tokens.spacing.lg,
-            boxShadow: '0 4px 16px rgba(124,58,237,0.1)',
-            animation: particles.length > 0 ? 'progressPulse 1s ease-in-out' : 'none',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: tokens.spacing.md }}>
-            <TrendingUp size={15} strokeWidth={2} color="#7c3aed" style={{ filter: 'drop-shadow(0 0 4px rgba(124,58,237,0.4))' }} />
-            <span style={{ fontSize: tokens.typography.sizes.xs, color: '#7c3aed', fontWeight: tokens.typography.weights.medium, letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>
-              Today
-            </span>
-          </div>
-          <div style={{ fontSize: '2.2rem', fontWeight: tokens.typography.weights.semibold, color: '#5b21b6', letterSpacing: '-0.04em', lineHeight: 1, marginBottom: '8px' }}>
-            {Math.round(completionRate)}%
-          </div>
-          {/* Progress bar with gradient */}
-          <div style={{ height: '4px', backgroundColor: 'rgba(124,58,237,0.15)', borderRadius: '99px', overflow: 'hidden' }}>
-            <div style={{
-              height: '100%',
-              width: `${Math.round(completionRate)}%`,
-              background: 'linear-gradient(90deg, #7c3aed 0%, #a78bfa 100%)',
-              borderRadius: '99px',
-              transition: 'width 0.6s cubic-bezier(0.4,0,0.2,1)',
-              boxShadow: '0 0 6px rgba(124,58,237,0.5)',
-            }} />
-          </div>
-        </div>
-
-        {/* Week */}
-        <div style={{
-          background: 'linear-gradient(135deg, #f0f9ff 0%, #fafcff 100%)',
-          border: '1px solid rgba(14,165,233,0.2)',
-          borderLeft: '4px solid #0ea5e9',
-          borderRadius: tokens.borderRadius.lg,
-          padding: tokens.spacing.lg,
-          boxShadow: '0 4px 16px rgba(14,165,233,0.08)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: tokens.spacing.md }}>
-            <Calendar size={15} strokeWidth={2} color="#0ea5e9" style={{ filter: 'drop-shadow(0 0 4px rgba(14,165,233,0.4))' }} />
-            <span style={{ fontSize: tokens.typography.sizes.xs, color: '#0284c7', fontWeight: tokens.typography.weights.medium, letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>
-              Week
-            </span>
-          </div>
-          <div style={{ fontSize: '2.2rem', fontWeight: tokens.typography.weights.semibold, color: '#0369a1', letterSpacing: '-0.04em', lineHeight: 1, marginBottom: '4px' }}>
-            {Math.ceil(currentDay / 7)}
-          </div>
-          <div style={{ fontSize: tokens.typography.sizes.xs, color: '#0284c7', fontWeight: tokens.typography.weights.regular }}>
-            of {Math.ceil((roadmap?.duration || 6) * 4)} weeks
-          </div>
-        </div>
-      </div>
 
       {/* ── Ease Back In Banner ───────────────────────────────────────────── */}
       {showReEngagement && (
@@ -922,7 +911,7 @@ export default function TodayView() {
               Week {Math.ceil((currentDay - 1) / 7)} recap
             </p>
             <p style={{ fontSize: tokens.typography.sizes.base, fontWeight: tokens.typography.weights.light, color: tokens.colors.text.primary, margin: 0, lineHeight: 1.4 }}>
-              You completed <strong style={{ fontWeight: tokens.typography.weights.medium, color: lastWeekRate >= 70 ? '#059669' : tokens.colors.text.primary }}>{lastWeekCompleted} of {lastWeekTasks.length} tasks</strong> last week — {lastWeekRate}% completion rate.
+              You completed <strong style={{ fontWeight: tokens.typography.weights.medium, color: lastWeekRate >= 70 ? '#7c3aed' : tokens.colors.text.primary }}>{lastWeekCompleted} of {lastWeekTasks.length} tasks</strong> last week — {lastWeekRate}% completion rate.
               {lastWeekRate >= 80 && ' Outstanding consistency.'}
               {lastWeekRate >= 50 && lastWeekRate < 80 && ' Keep building on this.'}
               {lastWeekRate < 50 && ' This week, aim for one more.'}
@@ -933,7 +922,7 @@ export default function TodayView() {
             <svg width="48" height="48" viewBox="0 0 48 48" style={{ transform: 'rotate(-90deg)' }}>
               <circle cx="24" cy="24" r="18" fill="none" stroke={tokens.colors.gray[100]} strokeWidth="4" />
               <circle cx="24" cy="24" r="18" fill="none"
-                stroke={lastWeekRate >= 70 ? '#059669' : tokens.colors.primary}
+                stroke={lastWeekRate >= 70 ? '#7c3aed' : tokens.colors.primary}
                 strokeWidth="4"
                 strokeDasharray={`${2 * Math.PI * 18 * lastWeekRate / 100} ${2 * Math.PI * 18}`}
                 strokeLinecap="round"
@@ -949,16 +938,178 @@ export default function TodayView() {
         </div>
       )}
 
+      {/* ── Hero Focus Card ──────────────────────────────────────────────── */}
+      {heroTask && (
+        <div style={{
+          background: 'linear-gradient(135deg, #1e0a3c 0%, #2d1060 50%, #1a0a2e 100%)',
+          borderRadius: tokens.borderRadius.xl,
+          padding: tokens.spacing['2xl'],
+          marginBottom: tokens.spacing['3xl'],
+          boxShadow: '0 8px 40px rgba(124,58,237,0.3), 0 0 0 1px rgba(167,139,250,0.15)',
+          position: 'relative' as const,
+          overflow: 'hidden' as const,
+        }}>
+          {/* Background glow */}
+          <div style={{
+            position: 'absolute', top: '-30%', right: '-10%',
+            width: '240px', height: '240px',
+            background: 'radial-gradient(circle, rgba(167,139,250,0.12) 0%, transparent 70%)',
+            pointerEvents: 'none',
+          }} />
+
+          {/* Badge row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, position: 'relative' as const }}>
+            {(() => {
+              const tg: Record<string, { bg: string; label: string }> = {
+                practice:   { bg: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', label: 'Practice' },
+                learning:   { bg: 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)', label: 'Learning' },
+                reflection: { bg: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', label: 'Reflect' },
+              };
+              const g = tg[heroTask.type] ?? { bg: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)', label: heroTask.type };
+              return (
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: g.bg, padding: '3px 10px', borderRadius: 99, textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>
+                  {g.label}
+                </span>
+              );
+            })()}
+            {hasResumePosition(heroTask) && (
+              <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', padding: '3px 10px', borderRadius: 99, letterSpacing: '0.07em', textTransform: 'uppercase' as const }}>
+                ↩ Resume
+              </span>
+            )}
+            <span style={{ fontSize: 11, color: 'rgba(196,181,253,0.5)', display: 'flex', alignItems: 'center', gap: 3, marginLeft: 'auto' }}>
+              <Clock size={11} strokeWidth={1.5} />
+              {formatDuration(heroTask.duration)}
+            </span>
+          </div>
+
+          {/* Title */}
+          <h2 style={{
+            fontSize: 'clamp(17px, 5vw, 22px)',
+            fontWeight: tokens.typography.weights.semibold,
+            color: '#f3e8ff',
+            letterSpacing: '-0.025em',
+            lineHeight: 1.25,
+            margin: '0 0 8px',
+            position: 'relative' as const,
+          }}>
+            {heroTask.title}
+          </h2>
+
+          {/* Description */}
+          {heroTask.description && (
+            <p style={{
+              fontSize: tokens.typography.sizes.sm,
+              color: 'rgba(196,181,253,0.6)',
+              lineHeight: 1.6,
+              margin: '0 0 20px',
+              position: 'relative' as const,
+              maxHeight: '3.2em',
+              overflow: 'hidden',
+            }}>
+              {heroTask.description}
+            </p>
+          )}
+
+          {/* Adjusted badge */}
+          {heroTask.adjustedDifficulty === 'easier' && heroTask.rescheduledFrom && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 16, padding: '3px 10px', backgroundColor: 'rgba(167,139,250,0.15)', borderRadius: 99, fontSize: 11, color: '#c4b5fd', position: 'relative' as const }}>
+              ✨ Adjusted for today
+            </div>
+          )}
+
+          {/* Actions */}
+          {skipReasonTaskId === heroTask.id ? (
+            <div style={{ position: 'relative' as const }}>
+              <p style={{ fontSize: 12, color: 'rgba(196,181,253,0.55)', marginBottom: 10 }}>What's getting in the way?</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                {([
+                  { reason: 'time'       as const, emoji: '⏱️', label: 'No time' },
+                  { reason: 'health'     as const, emoji: '😓', label: 'Not well' },
+                  { reason: 'difficulty' as const, emoji: '😕', label: 'Too hard' },
+                  { reason: 'external'   as const, emoji: '📅', label: 'Came up' },
+                ]).map(({ reason, emoji, label }) => (
+                  <button
+                    key={reason}
+                    onClick={() => confirmSkip(heroTask.id, reason, setCinemaTaskId)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.6)', transition: 'all 120ms ease' }}
+                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; }}
+                  >
+                    <span>{emoji}</span><span>{label}</span>
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => setSkipReasonTaskId(null)} style={{ width: '100%', background: 'none', border: 'none', fontSize: 12, color: 'rgba(255,255,255,0.2)', cursor: 'pointer', padding: '6px 0' }}>
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' as const, position: 'relative' as const }}>
+              {hasCinemaMode(heroTask) && (
+                <button
+                  onClick={() => openCinema(heroTask.id)}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 7,
+                    padding: '11px 22px',
+                    background: 'linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)',
+                    color: '#fff', border: 'none', borderRadius: tokens.borderRadius.md,
+                    fontSize: tokens.typography.sizes.sm, fontWeight: tokens.typography.weights.semibold,
+                    cursor: 'pointer', boxShadow: '0 4px 18px rgba(124,58,237,0.45)',
+                    transition: 'all 0.2s ease', letterSpacing: '-0.01em',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(124,58,237,0.55)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(124,58,237,0.45)'; }}
+                >
+                  <Zap size={14} strokeWidth={2} /> Focus
+                </button>
+              )}
+              <button
+                onClick={e => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  handleCompleteTask(heroTask.id, rect.left + rect.width / 2, rect.top + rect.height / 2);
+                }}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 7,
+                  padding: '11px 22px',
+                  background: hasCinemaMode(heroTask) ? 'rgba(255,255,255,0.08)' : 'linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)',
+                  color: hasCinemaMode(heroTask) ? 'rgba(255,255,255,0.75)' : '#fff',
+                  border: hasCinemaMode(heroTask) ? '1px solid rgba(255,255,255,0.12)' : 'none',
+                  borderRadius: tokens.borderRadius.md,
+                  fontSize: tokens.typography.sizes.sm, fontWeight: tokens.typography.weights.medium,
+                  cursor: 'pointer', transition: 'all 0.2s ease', letterSpacing: '-0.01em',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.14)'; e.currentTarget.style.color = '#fff'; }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = hasCinemaMode(heroTask) ? 'rgba(255,255,255,0.08)' : 'linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)';
+                  e.currentTarget.style.color = hasCinemaMode(heroTask) ? 'rgba(255,255,255,0.75)' : '#fff';
+                }}
+              >
+                <CheckCircle2 size={14} strokeWidth={2} /> Done
+              </button>
+              <button
+                onClick={e => handleSkipTask(heroTask.id, e)}
+                style={{ background: 'none', border: 'none', fontSize: 12, color: 'rgba(196,181,253,0.35)', cursor: 'pointer', padding: '4px 6px', marginLeft: 'auto', transition: 'color 150ms ease' }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'rgba(196,181,253,0.65)'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'rgba(196,181,253,0.35)'; }}
+              >
+                Not today
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Tasks Section ────────────────────────────────────────────────── */}
       <div>
-        <div style={{
+        {(!heroTask || listTasks.length > 0) && <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           marginBottom: tokens.spacing.lg,
           gap: tokens.spacing.md,
         }}>
-          <h2 style={text.h2}>Today's Tasks</h2>
+          <h2 style={text.h2}>{heroTask ? 'Also today' : "Today's Tasks"}</h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm }}>
             {/* Quick Mode toggle */}
             {incompleteTasks.length > 1 && (
@@ -985,10 +1136,12 @@ export default function TodayView() {
               </button>
             )}
             <span style={{ ...text.caption, color: tokens.colors.text.secondary, whiteSpace: 'nowrap' as const }}>
-              {completedTasks.length} of {todaysTasks.length} done
+              {heroTask
+                ? `${listTasks.filter(t => !t.completed).length} remaining`
+                : `${completedTasks.length} of ${todaysTasks.length} done`}
             </span>
           </div>
-        </div>
+        </div>}
 
         {/* Quick Mode active banner */}
         {quickMode && incompleteTasks.length > 0 && (
@@ -1018,14 +1171,21 @@ export default function TodayView() {
         )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacing.xl }}>
-          {visibleTasks.map((task) => {
+          {listTasks.map((task) => {
             const isCompleting = completingTaskId === task.id;
             const hasCinema = hasCinemaMode(task);
 
             return (
-              <div
+              <SwipeableCard
                 key={task.id}
                 data-task-card
+                swipeDisabled={!isMobile || task.completed || isCompleting}
+                onSwipeLeft={() => {
+                  if (!task.completed && !isCompleting) setSkipReasonTaskId(task.id);
+                }}
+                onSwipeRight={() => {
+                  if (!task.completed && !isCompleting && hasCinema) openCinema(task.id);
+                }}
                 style={{
                   ...card.standard,
                   backgroundColor: task.completed
@@ -1091,6 +1251,8 @@ export default function TodayView() {
                       flexShrink: 0,
                       marginTop: '2px',
                       animation: isCompleting ? 'checkPop 0.4s cubic-bezier(0.4,0,0.2,1)' : 'none',
+                      // Larger tap target on mobile
+                      ...(isMobile && { width: '40px', height: '40px' }),
                     }}
                     onMouseEnter={e => {
                       if (!task.completed) {
@@ -1121,7 +1283,7 @@ export default function TodayView() {
                         const typeGradients: Record<string, { bg: string; shadow: string; label: string }> = {
                           practice:   { bg: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', shadow: 'rgba(124,58,237,0.35)', label: 'Practice' },
                           learning:   { bg: 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)', shadow: 'rgba(14,165,233,0.35)', label: 'Learning' },
-                          reflection: { bg: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', shadow: 'rgba(16,185,129,0.35)', label: 'Reflect' },
+                          reflection: { bg: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', shadow: 'rgba(124,58,237,0.35)', label: 'Reflect' },
                         };
                         const g = typeGradients[task.type] ?? { bg: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)', shadow: 'rgba(107,114,128,0.35)', label: task.type };
                         return (
@@ -1382,7 +1544,7 @@ export default function TodayView() {
                     )}
                   </div>
                 </div>
-              </div>
+              </SwipeableCard>
             );
           })}
         </div>
@@ -1469,25 +1631,126 @@ export default function TodayView() {
 
         {todaysTasks.length === 0 && (
           <div style={{
-            ...card.standard,
-            backgroundColor: tokens.colors.surface,
+            background: 'linear-gradient(135deg, #1a0533 0%, #2d1060 50%, #1a0533 100%)',
+            borderRadius: tokens.borderRadius.xl,
+            padding: `${tokens.spacing['4xl']} ${tokens.spacing['3xl']}`,
             textAlign: 'center',
-            padding: tokens.spacing['4xl'],
-            boxShadow: tokens.shadows.sm,
-            border: `1px solid ${tokens.colors.borderLight}`,
-            borderRadius: tokens.borderRadius.lg,
+            border: '1px solid rgba(124,58,237,0.25)',
+            boxShadow: '0 8px 32px rgba(124,58,237,0.15)',
+            position: 'relative',
+            overflow: 'hidden',
           }}>
-            <p style={{
-              fontSize: tokens.typography.sizes.base,
-              fontWeight: tokens.typography.weights.light,
-              color: tokens.colors.text.secondary,
-              lineHeight: tokens.typography.lineHeights.relaxed,
+            {/* Background glow */}
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: '200px',
+              height: '200px',
+              background: 'radial-gradient(circle, rgba(124,58,237,0.2) 0%, transparent 70%)',
+              pointerEvents: 'none',
+            }} />
+            {/* Icon */}
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              background: 'rgba(124,58,237,0.2)',
+              border: '1px solid rgba(124,58,237,0.35)',
+              marginBottom: tokens.spacing.lg,
+              position: 'relative',
             }}>
-              No tasks for today. Check back tomorrow!
+              <Sparkles size={24} color="#a78bfa" strokeWidth={1.5} />
+            </div>
+            {/* Heading */}
+            <h3 style={{
+              fontSize: tokens.typography.sizes.xl,
+              fontWeight: tokens.typography.weights.semibold,
+              color: '#e9d8fd',
+              margin: 0,
+              marginBottom: tokens.spacing.sm,
+              letterSpacing: '-0.02em',
+            }}>
+              Your slate is clear
+            </h3>
+            {/* Subtext */}
+            <p style={{
+              fontSize: tokens.typography.sizes.sm,
+              fontWeight: tokens.typography.weights.light,
+              color: 'rgba(196,167,253,0.7)',
+              lineHeight: tokens.typography.lineHeights.relaxed,
+              margin: 0,
+              marginBottom: tokens.spacing['2xl'],
+              maxWidth: '280px',
+              marginLeft: 'auto',
+              marginRight: 'auto',
+            }}>
+              Use this time to revisit your goals or explore resources to stay inspired.
             </p>
+            {/* CTA buttons */}
+            <div style={{ display: 'flex', gap: tokens.spacing.sm, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => onNavigate?.('goals')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: `${tokens.spacing.sm} ${tokens.spacing.lg}`,
+                  borderRadius: tokens.borderRadius.full,
+                  background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+                  border: 'none',
+                  color: '#fff',
+                  fontSize: tokens.typography.sizes.sm,
+                  fontWeight: tokens.typography.weights.medium,
+                  cursor: 'pointer',
+                  letterSpacing: '-0.01em',
+                  boxShadow: '0 4px 16px rgba(124,58,237,0.4)',
+                }}
+              >
+                Review Goals <ArrowRight size={14} strokeWidth={2} />
+              </button>
+              <button
+                onClick={() => onNavigate?.('library')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: `${tokens.spacing.sm} ${tokens.spacing.lg}`,
+                  borderRadius: tokens.borderRadius.full,
+                  background: 'rgba(124,58,237,0.12)',
+                  border: '1px solid rgba(124,58,237,0.3)',
+                  color: '#a78bfa',
+                  fontSize: tokens.typography.sizes.sm,
+                  fontWeight: tokens.typography.weights.medium,
+                  cursor: 'pointer',
+                  letterSpacing: '-0.01em',
+                }}
+              >
+                <BookOpen size={14} strokeWidth={2} /> Explore Library
+              </button>
+            </div>
           </div>
         )}
       </div>
+
+      {/* Post-task feedback modal */}
+      {pendingFeedbackTaskId && (() => {
+        const feedbackTask = tasks.find(t => t.id === pendingFeedbackTaskId);
+        if (!feedbackTask) return null;
+        return (
+          <TaskFeedbackModal
+            isOpen={true}
+            taskTitle={feedbackTask.title}
+            estimatedMinutes={feedbackTask.duration}
+            onSubmit={(feedback) => submitFeedback(pendingFeedbackTaskId, feedback)}
+            onClose={dismissFeedback}
+          />
+        );
+      })()}
     </div>
   );
 }

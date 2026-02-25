@@ -34,6 +34,44 @@ export default function ProgressView() {
   const daysToCheckpoint = nextCheckpointDay - currentDay;
   const checkpointToday = shouldTriggerCheckpoint(currentDay, 14);
 
+  // 14-day activity chart — group completed tasks by calendar date
+  const todayDate = new Date();
+  const todayDateStr = todayDate.toISOString().split('T')[0];
+  const last14Dates = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(todayDate);
+    d.setDate(d.getDate() - 13 + i);
+    return d.toISOString().split('T')[0];
+  });
+  const completedByDate: Record<string, number> = {};
+  tasks.forEach(t => {
+    if (t.completed && t.completedAt) {
+      const dateStr = t.completedAt.split('T')[0];
+      completedByDate[dateStr] = (completedByDate[dateStr] ?? 0) + 1;
+    }
+  });
+  const last14DaysData = last14Dates.map(dateStr => {
+    const d = new Date(dateStr + 'T12:00:00');
+    const dayNames = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+    return {
+      dateStr,
+      label: dayNames[d.getDay()],
+      completed: completedByDate[dateStr] ?? 0,
+      isToday: dateStr === todayDateStr,
+    };
+  });
+  const maxDayBar = Math.max(1, ...last14DaysData.map(d => d.completed));
+
+  // Task type breakdown
+  const typeBreakdown = [
+    { label: 'Practice', type: 'practice', color: '#7c3aed', gradient: 'linear-gradient(90deg, #7c3aed 0%, #a78bfa 100%)' },
+    { label: 'Learning', type: 'learning', color: '#0ea5e9', gradient: 'linear-gradient(90deg, #0ea5e9 0%, #38bdf8 100%)' },
+    { label: 'Reflection', type: 'reflection', color: '#7c3aed', gradient: 'linear-gradient(90deg, #7c3aed 0%, #a78bfa 100%)' },
+  ].map(({ label, type, color, gradient }) => {
+    const count = tasks.filter(t => t.completed && t.type === type).length;
+    const pct = completedTasks > 0 ? Math.round((count / completedTasks) * 100) : 0;
+    return { label, color, gradient, count, pct };
+  });
+
   const statCards = [
     {
       icon: Flame,
@@ -82,88 +120,130 @@ export default function ProgressView() {
       label: 'Day',
       value: String(currentDay),
       sub: `of ${totalWeeks * 7} days`,
-      bg: 'linear-gradient(135deg, #f0fdf4 0%, #fafffe 100%)',
-      border: 'rgba(16,185,129,0.2)',
-      accentColor: '#10b981',
-      labelColor: '#059669',
-      valueColor: '#047857',
-      shadow: '0 4px 16px rgba(16,185,129,0.08)',
-      iconColor: '#10b981',
-      iconFilter: 'drop-shadow(0 0 4px rgba(16,185,129,0.4))',
+      bg: 'linear-gradient(135deg, #f5f3ff 0%, #fdfcff 100%)',
+      border: 'rgba(124,58,237,0.2)',
+      accentColor: '#7c3aed',
+      labelColor: '#7c3aed',
+      valueColor: '#5b21b6',
+      shadow: '0 4px 16px rgba(124,58,237,0.08)',
+      iconColor: '#7c3aed',
+      iconFilter: 'drop-shadow(0 0 4px rgba(124,58,237,0.4))',
     },
   ];
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ marginBottom: tokens.spacing['2xl'] }}>
-        <p style={{ fontSize: tokens.typography.sizes.sm, color: tokens.colors.text.tertiary, marginBottom: tokens.spacing.xs, letterSpacing: '0.01em' }}>
-          Your stats
-        </p>
+      {/* Header — single inline row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.xl }}>
         <h1 style={{
-          fontSize: tokens.typography.sizes['3xl'],
+          fontSize: tokens.typography.sizes['2xl'],
           fontWeight: tokens.typography.weights.semibold,
           color: tokens.colors.text.primary,
           letterSpacing: '-0.03em',
-          marginBottom: tokens.spacing.md,
-          lineHeight: 1.15,
+          margin: 0,
+          lineHeight: 1,
+          flex: 1,
         }}>
           Progress
         </h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm }}>
-          {roadmap?.title && (
-            <span style={{ fontSize: tokens.typography.sizes.sm, color: tokens.colors.text.secondary, fontWeight: tokens.typography.weights.light }}>
-              {roadmap.title}
-            </span>
-          )}
-          <span style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            padding: '3px 10px',
-            background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-            borderRadius: '99px',
-            fontSize: '11px',
-            fontWeight: tokens.typography.weights.medium,
-            color: '#fff',
-            letterSpacing: '0.02em',
-            boxShadow: '0 2px 8px rgba(124,58,237,0.35)',
-          }}>
-            Week {currentWeek}
+        {roadmap?.title && (
+          <span style={{ fontSize: tokens.typography.sizes.xs, color: tokens.colors.text.tertiary, fontWeight: tokens.typography.weights.light, whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' }}>
+            {roadmap.title}
           </span>
-        </div>
+        )}
+        <span style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          padding: '3px 10px',
+          background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+          borderRadius: '99px',
+          fontSize: '11px',
+          fontWeight: tokens.typography.weights.medium,
+          color: '#fff',
+          letterSpacing: '0.02em',
+          boxShadow: '0 2px 8px rgba(124,58,237,0.35)',
+          flexShrink: 0,
+        }}>
+          Week {currentWeek}
+        </span>
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats Strip — 4 items in one row */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(2, 1fr)',
-        gap: tokens.spacing.md,
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: 0,
         marginBottom: tokens.spacing['2xl'],
+        backgroundColor: tokens.colors.surface,
+        border: `1px solid ${tokens.colors.borderLight}`,
+        borderRadius: tokens.borderRadius.lg,
+        overflow: 'hidden',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
       }}>
-        {statCards.map(({ icon: Icon, label, value, sub, bg, border, accentColor, labelColor, valueColor, shadow, iconColor, iconFilter }) => (
+        {statCards.map(({ icon: Icon, label, value, accentColor, iconColor, iconFilter }, idx) => (
           <div key={label} style={{
-            background: bg,
-            border: `1px solid ${border}`,
-            borderLeft: `4px solid ${accentColor}`,
-            borderRadius: tokens.borderRadius.lg,
-            padding: tokens.spacing.lg,
-            boxShadow: shadow,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '4px',
+            padding: `${tokens.spacing.md} ${tokens.spacing.sm}`,
+            borderRight: idx < statCards.length - 1 ? `1px solid ${tokens.colors.borderLight}` : 'none',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: tokens.spacing.md }}>
-              <Icon size={15} strokeWidth={2} color={iconColor} style={{ filter: iconFilter }} />
-              <span style={{ fontSize: tokens.typography.sizes.xs, color: labelColor, fontWeight: tokens.typography.weights.medium, letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>
-                {label}
-              </span>
-            </div>
-            <div style={{ fontSize: '2.2rem', fontWeight: tokens.typography.weights.semibold, color: valueColor, letterSpacing: '-0.04em', lineHeight: 1, marginBottom: '4px' }}>
+            <div style={{ fontSize: '1.35rem', fontWeight: tokens.typography.weights.semibold, color: accentColor, letterSpacing: '-0.04em', lineHeight: 1 }}>
               {value}
             </div>
-            <div style={{ fontSize: tokens.typography.sizes.xs, color: labelColor, fontWeight: tokens.typography.weights.regular }}>
-              {sub}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+              <Icon size={11} strokeWidth={2} color={iconColor} style={{ filter: iconFilter }} />
+              <span style={{ fontSize: '9px', color: tokens.colors.text.tertiary, fontWeight: tokens.typography.weights.medium, letterSpacing: '0.05em', textTransform: 'uppercase' as const }}>
+                {label}
+              </span>
             </div>
           </div>
         ))}
       </div>
+
+      {/* Task Type Breakdown */}
+      {completedTasks > 0 && (
+        <div style={{
+          backgroundColor: tokens.colors.surface,
+          border: `1px solid ${tokens.colors.borderLight}`,
+          borderRadius: tokens.borderRadius.lg,
+          padding: tokens.spacing.xl,
+          marginBottom: tokens.spacing['2xl'],
+          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.xl }}>
+            <Zap size={15} strokeWidth={2} color="#7c3aed" style={{ filter: 'drop-shadow(0 0 4px rgba(124,58,237,0.4))' }} />
+            <h3 style={{ fontSize: tokens.typography.sizes.base, fontWeight: tokens.typography.weights.semibold, color: tokens.colors.text.primary, margin: 0, letterSpacing: '-0.01em' }}>
+              Activity Breakdown
+            </h3>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacing.lg }}>
+            {typeBreakdown.map(({ label, color, gradient, count, pct }) => (
+              <div key={label}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <span style={{ fontSize: tokens.typography.sizes.sm, color: tokens.colors.text.secondary, fontWeight: tokens.typography.weights.medium }}>
+                    {label}
+                  </span>
+                  <span style={{ fontSize: tokens.typography.sizes.xs, color, fontWeight: tokens.typography.weights.medium }}>
+                    {count} done · {pct}%
+                  </span>
+                </div>
+                <div style={{ height: '6px', backgroundColor: tokens.colors.gray[100], borderRadius: '99px', overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${pct}%`,
+                    background: gradient,
+                    borderRadius: '99px',
+                    transition: 'width 0.5s cubic-bezier(0.4,0,0.2,1)',
+                  }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Journey Context Card */}
       <div style={{
@@ -195,7 +275,7 @@ export default function ProgressView() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: tokens.spacing.md }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: tokens.spacing.md }}>
           {/* Current Phase */}
           <div style={{
             padding: tokens.spacing.md,
@@ -231,24 +311,6 @@ export default function ProgressView() {
             </p>
             <p style={{ fontSize: tokens.typography.sizes.xs, color: tokens.colors.text.secondary, lineHeight: 1.5, margin: 0 }}>
               {checkpointToday ? 'Your Coach will recalibrate your sprint today.' : 'Your Coach reviews progress every 14 days and adapts your plan.'}
-            </p>
-          </div>
-
-          {/* Behavioral Profile */}
-          <div style={{
-            padding: tokens.spacing.md,
-            backgroundColor: 'rgba(255,255,255,0.6)',
-            borderRadius: tokens.borderRadius.md,
-            border: `1px solid ${tokens.colors.borderLight}`,
-          }}>
-            <p style={{ fontSize: '10px', color: tokens.colors.text.tertiary, fontWeight: tokens.typography.weights.medium, letterSpacing: '0.06em', textTransform: 'uppercase' as const, marginBottom: '6px' }}>
-              Profile
-            </p>
-            <p style={{ fontSize: tokens.typography.sizes.base, fontWeight: tokens.typography.weights.semibold, color: tokens.colors.text.primary, marginBottom: '4px' }}>
-              Personalised
-            </p>
-            <p style={{ fontSize: tokens.typography.sizes.xs, color: tokens.colors.text.secondary, lineHeight: 1.5, margin: 0 }}>
-              Tasks shaped by your behavioral profile. Complete a checkpoint to see details.
             </p>
           </div>
         </div>
@@ -306,7 +368,7 @@ export default function ProgressView() {
                   <span style={{
                     fontSize: tokens.typography.sizes.xs,
                     fontWeight: tokens.typography.weights.medium,
-                    color: isDone ? '#059669' : isCurrentWeek ? '#7c3aed' : tokens.colors.text.secondary,
+                    color: isDone ? '#6d28d9' : isCurrentWeek ? '#7c3aed' : tokens.colors.text.secondary,
                   }}>
                     {Math.round(weekProgress)}%
                   </span>
@@ -316,7 +378,7 @@ export default function ProgressView() {
                     height: '100%',
                     width: `${weekProgress}%`,
                     background: isDone
-                      ? 'linear-gradient(90deg, #10b981 0%, #34d399 100%)'
+                      ? 'linear-gradient(90deg, #6d28d9 0%, #a78bfa 100%)'
                       : isCurrentWeek
                         ? 'linear-gradient(90deg, #7c3aed 0%, #a78bfa 100%)'
                         : 'linear-gradient(90deg, #6b7280 0%, #9ca3af 100%)',
@@ -328,6 +390,79 @@ export default function ProgressView() {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* 14-Day Activity Chart */}
+      <div style={{
+        backgroundColor: tokens.colors.surface,
+        border: `1px solid ${tokens.colors.borderLight}`,
+        borderRadius: tokens.borderRadius.lg,
+        padding: tokens.spacing.xl,
+        marginTop: tokens.spacing['2xl'],
+        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.xl }}>
+          <Calendar size={15} strokeWidth={2} color="#0ea5e9" style={{ filter: 'drop-shadow(0 0 4px rgba(14,165,233,0.4))' }} />
+          <h3 style={{ fontSize: tokens.typography.sizes.base, fontWeight: tokens.typography.weights.semibold, color: tokens.colors.text.primary, margin: 0, letterSpacing: '-0.01em' }}>
+            Last 14 Days
+          </h3>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '72px' }}>
+          {last14DaysData.map(({ dateStr, label, completed, isToday }) => {
+            const barHeight = completed === 0 ? 4 : Math.max(10, (completed / maxDayBar) * 56);
+            return (
+              <div
+                key={dateStr}
+                title={`${dateStr}: ${completed} task${completed === 1 ? '' : 's'} completed`}
+                style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}
+              >
+                <div style={{
+                  width: '100%',
+                  height: '56px',
+                  display: 'flex',
+                  alignItems: 'flex-end',
+                  backgroundColor: tokens.colors.gray[100],
+                  borderRadius: '4px',
+                  overflow: 'hidden',
+                  outline: isToday ? '2px solid #7c3aed' : 'none',
+                  outlineOffset: '1px',
+                }}>
+                  <div style={{
+                    width: '100%',
+                    height: `${barHeight}px`,
+                    background: isToday
+                      ? 'linear-gradient(180deg, #7c3aed 0%, #6d28d9 100%)'
+                      : completed === 0
+                        ? 'transparent'
+                        : 'linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%)',
+                    borderRadius: '3px',
+                    transition: 'height 0.5s cubic-bezier(0.4,0,0.2,1)',
+                  }} />
+                </div>
+                <span style={{
+                  fontSize: '9px',
+                  color: isToday ? '#7c3aed' : tokens.colors.text.tertiary,
+                  fontWeight: isToday ? tokens.typography.weights.semibold : tokens.typography.weights.regular,
+                  lineHeight: 1,
+                }}>
+                  {label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ display: 'flex', gap: tokens.spacing.lg, marginTop: tokens.spacing.lg }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: 'linear-gradient(135deg, #0ea5e9, #0284c7)' }} />
+            <span style={{ fontSize: tokens.typography.sizes.xs, color: tokens.colors.text.tertiary }}>Tasks done</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: '#7c3aed', outline: '2px solid #7c3aed', outlineOffset: '1px' }} />
+            <span style={{ fontSize: tokens.typography.sizes.xs, color: tokens.colors.text.tertiary }}>Today</span>
+          </div>
         </div>
       </div>
     </div>

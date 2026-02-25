@@ -1,23 +1,55 @@
-import { Target, TrendingUp, CheckCircle2, Circle, ArrowRight } from 'lucide-react';
+import { Target, TrendingUp, CheckCircle2, Circle, ArrowRight, Brain, Layers } from 'lucide-react';
 import { useStore } from '@core/store/useStore';
 import { tokens } from '@core/design-system';
+import type { StoneType, StoneSeverity } from '@types-app/agents';
 
-export default function GoalsView() {
-  const { roadmap, currentDay } = useStore();
+interface GoalsViewProps {
+  onNavigate?: (view: string) => void;
+}
+
+const STONE_LABELS: Record<StoneType, string> = {
+  TimeConstraint: 'Time Constraint',
+  ResourceGap: 'Resource Gap',
+  EnvironmentFriction: 'Environment Friction',
+  Inconsistency: 'Inconsistency',
+  FearOfFailure: 'Fear of Failure',
+  Perfectionism: 'Perfectionism',
+  LowConfidence: 'Low Confidence',
+  UnrealisticExpectations: 'Unrealistic Expectations',
+  FocusFragility: 'Focus Fragility',
+  CognitiveFatigue: 'Cognitive Fatigue',
+  SkillGap: 'Skill Gap',
+  ProcrastinationPattern: 'Procrastination Pattern',
+  Overcommitment: 'Overcommitment',
+};
+
+const SEVERITY_STYLE: Record<StoneSeverity, { color: string; bg: string; label: string }> = {
+  Low:      { color: '#a78bfa', bg: 'rgba(167,139,250,0.1)', label: 'Low' },
+  Moderate: { color: '#d97706', bg: 'rgba(245,158,11,0.1)',  label: 'Moderate' },
+  High:     { color: '#dc2626', bg: 'rgba(239,68,68,0.1)',   label: 'High' },
+  Critical: { color: '#7c3aed', bg: 'rgba(124,58,237,0.12)', label: 'Critical' },
+};
+
+export default function GoalsView({ onNavigate }: GoalsViewProps) {
+  const { roadmap, currentDay, stoneProfile } = useStore();
+
+  const profile = stoneProfile?.stoneProfile ?? null;
 
   if (!roadmap) {
     return (
       <div>
-        <h1 style={{
-          fontSize: tokens.typography.sizes['3xl'],
-          fontWeight: tokens.typography.weights.semibold,
-          color: tokens.colors.text.primary,
-          letterSpacing: '-0.03em',
-          marginBottom: tokens.spacing['2xl'],
-          lineHeight: 1.15,
-        }}>
-          Your Roadmap
-        </h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing['2xl'] }}>
+          <h1 style={{
+            flex: 1,
+            fontSize: tokens.typography.sizes['2xl'],
+            fontWeight: tokens.typography.weights.semibold,
+            color: tokens.colors.text.primary,
+            letterSpacing: '-0.03em',
+            margin: 0,
+          }}>
+            Goals
+          </h1>
+        </div>
         <div style={{
           backgroundColor: tokens.colors.surface,
           border: `1px solid ${tokens.colors.borderLight}`,
@@ -39,40 +71,36 @@ export default function GoalsView() {
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ marginBottom: tokens.spacing['2xl'] }}>
-        <p style={{ fontSize: tokens.typography.sizes.sm, color: tokens.colors.text.tertiary, marginBottom: tokens.spacing.xs, letterSpacing: '0.01em' }}>
-          Your goal
-        </p>
+      {/* Header — inline row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing['2xl'] }}>
         <h1 style={{
-          fontSize: tokens.typography.sizes['3xl'],
+          flex: 1,
+          fontSize: tokens.typography.sizes['2xl'],
           fontWeight: tokens.typography.weights.semibold,
           color: tokens.colors.text.primary,
           letterSpacing: '-0.03em',
-          marginBottom: tokens.spacing.md,
-          lineHeight: 1.15,
+          margin: 0,
         }}>
-          Roadmap
+          Goals
         </h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm }}>
-          <span style={{ fontSize: tokens.typography.sizes.sm, color: tokens.colors.text.secondary, fontWeight: tokens.typography.weights.light }}>
-            {roadmap.duration} months
-          </span>
-          <span style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            padding: '3px 10px',
-            background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-            borderRadius: '99px',
-            fontSize: '11px',
-            fontWeight: tokens.typography.weights.medium,
-            color: '#fff',
-            letterSpacing: '0.02em',
-            boxShadow: '0 2px 8px rgba(124,58,237,0.35)',
-          }}>
-            {progressPercent}% complete
-          </span>
-        </div>
+        <span style={{ fontSize: tokens.typography.sizes.xs, color: tokens.colors.text.tertiary, whiteSpace: 'nowrap' as const }}>
+          {roadmap.duration}mo
+        </span>
+        <span style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          padding: '3px 10px',
+          background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+          borderRadius: '99px',
+          fontSize: '11px',
+          fontWeight: tokens.typography.weights.medium,
+          color: '#fff',
+          letterSpacing: '0.02em',
+          boxShadow: '0 2px 8px rgba(124,58,237,0.35)',
+          flexShrink: 0,
+        }}>
+          {progressPercent}%
+        </span>
       </div>
 
       {/* Goal Hero Card — dark gradient */}
@@ -164,6 +192,122 @@ export default function GoalsView() {
         </div>
       </div>
 
+      {/* Behavioral Profile */}
+      {profile && (
+        <div style={{
+          backgroundColor: tokens.colors.surface,
+          border: `1px solid ${tokens.colors.borderLight}`,
+          borderLeft: '4px solid #7c3aed',
+          borderRadius: tokens.borderRadius.lg,
+          padding: tokens.spacing.xl,
+          marginBottom: tokens.spacing['2xl'],
+          boxShadow: '0 4px 16px rgba(124,58,237,0.06)',
+        }}>
+          {/* Section header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.xl }}>
+            <div style={{
+              width: '32px', height: '32px',
+              background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+              borderRadius: tokens.borderRadius.md,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 10px rgba(124,58,237,0.3)',
+            }}>
+              <Brain size={16} color="#fff" />
+            </div>
+            <div>
+              <h3 style={{ fontSize: tokens.typography.sizes.base, fontWeight: tokens.typography.weights.semibold, color: tokens.colors.text.primary, margin: '0 0 1px', letterSpacing: '-0.01em' }}>
+                Your Behavioral Profile
+              </h3>
+              <p style={{ fontSize: tokens.typography.sizes.xs, color: tokens.colors.text.tertiary, margin: 0 }}>
+                Identified during your onboarding session
+              </p>
+            </div>
+          </div>
+
+          {/* Archetype card */}
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(124,58,237,0.06) 0%, rgba(109,40,217,0.02) 100%)',
+            border: '1px solid rgba(124,58,237,0.16)',
+            borderRadius: tokens.borderRadius.md,
+            padding: tokens.spacing.lg,
+            marginBottom: tokens.spacing.lg,
+            display: 'flex',
+            alignItems: 'center',
+            gap: tokens.spacing.md,
+          }}>
+            <Layers size={18} color="#7c3aed" strokeWidth={2} />
+            <div>
+              <p style={{ fontSize: '10px', color: '#7c3aed', fontWeight: tokens.typography.weights.medium, letterSpacing: '0.06em', textTransform: 'uppercase' as const, margin: '0 0 3px' }}>
+                Your Archetype
+              </p>
+              <p style={{ fontSize: tokens.typography.sizes.base, fontWeight: tokens.typography.weights.semibold, color: tokens.colors.text.primary, margin: 0, letterSpacing: '-0.01em' }}>
+                {profile.userArchetype}
+              </p>
+            </div>
+          </div>
+
+          {/* Primary challenge */}
+          <p style={{ fontSize: '10px', color: tokens.colors.text.tertiary, fontWeight: tokens.typography.weights.medium, letterSpacing: '0.06em', textTransform: 'uppercase' as const, marginBottom: tokens.spacing.sm }}>
+            Identified Friction Points
+          </p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacing.sm }}>
+            {profile.stones.slice(0, 4).map((stone, i) => {
+              const sev = SEVERITY_STYLE[stone.severity];
+              const isPrimary = stone.type === profile.primaryStone;
+              return (
+                <div
+                  key={i}
+                  style={{
+                    padding: tokens.spacing.md,
+                    backgroundColor: isPrimary ? 'rgba(124,58,237,0.03)' : tokens.colors.background,
+                    border: `1px solid ${isPrimary ? 'rgba(124,58,237,0.15)' : tokens.colors.borderLight}`,
+                    borderRadius: tokens.borderRadius.md,
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: tokens.spacing.md,
+                  }}
+                >
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flexShrink: 0, paddingTop: '2px' }}>
+                    <div style={{
+                      width: '8px', height: '8px',
+                      borderRadius: '50%',
+                      backgroundColor: sev.color,
+                      boxShadow: `0 0 4px ${sev.color}60`,
+                    }} />
+                    {isPrimary && (
+                      <span style={{ fontSize: '8px', color: '#7c3aed', fontWeight: tokens.typography.weights.semibold, letterSpacing: '0.04em', whiteSpace: 'nowrap' as const }}>
+                        PRIMARY
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: '3px' }}>
+                      <span style={{ fontSize: tokens.typography.sizes.sm, fontWeight: tokens.typography.weights.semibold, color: tokens.colors.text.primary }}>
+                        {STONE_LABELS[stone.type] ?? stone.type}
+                      </span>
+                      <span style={{
+                        fontSize: '10px',
+                        padding: '1px 6px',
+                        borderRadius: '99px',
+                        backgroundColor: sev.bg,
+                        color: sev.color,
+                        fontWeight: tokens.typography.weights.medium,
+                      }}>
+                        {sev.label}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: tokens.typography.sizes.xs, color: tokens.colors.text.secondary, margin: 0, lineHeight: 1.5 }}>
+                      {stone.trigger}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Phases */}
       <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.lg }}>
         <h2 style={{ fontSize: tokens.typography.sizes.xl, fontWeight: tokens.typography.weights.semibold, color: tokens.colors.text.primary, margin: 0, letterSpacing: '-0.02em' }}>
@@ -185,11 +329,11 @@ export default function GoalsView() {
               key={index}
               style={{
                 backgroundColor: isActive ? 'rgba(124,58,237,0.03)' : tokens.colors.surface,
-                border: `1px solid ${isActive ? 'rgba(124,58,237,0.2)' : isCompleted ? 'rgba(16,185,129,0.15)' : tokens.colors.borderLight}`,
+                border: `1px solid ${isActive ? 'rgba(124,58,237,0.2)' : isCompleted ? 'rgba(124,58,237,0.15)' : tokens.colors.borderLight}`,
                 borderLeft: isActive
                   ? '4px solid #7c3aed'
                   : isCompleted
-                  ? '4px solid #10b981'
+                  ? '4px solid #6d28d9'
                   : `4px solid ${tokens.colors.gray[200]}`,
                 borderRadius: tokens.borderRadius.lg,
                 padding: tokens.spacing.xl,
@@ -205,11 +349,11 @@ export default function GoalsView() {
                   background: isActive
                     ? 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)'
                     : isCompleted
-                    ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                    ? 'linear-gradient(135deg, #6d28d9 0%, #5b21b6 100%)'
                     : tokens.colors.gray[100],
                   borderRadius: tokens.borderRadius.md,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: isActive ? '0 4px 12px rgba(124,58,237,0.3)' : isCompleted ? '0 4px 12px rgba(16,185,129,0.2)' : 'none',
+                  boxShadow: isActive ? '0 4px 12px rgba(124,58,237,0.3)' : isCompleted ? '0 4px 12px rgba(109,40,217,0.2)' : 'none',
                 }}>
                   {isCompleted ? (
                     <CheckCircle2 size={18} color="#fff" />
@@ -270,6 +414,7 @@ export default function GoalsView() {
           );
         })}
       </div>
+
     </div>
   );
 }

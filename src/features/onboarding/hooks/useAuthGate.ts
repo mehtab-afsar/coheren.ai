@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '@core/store/useStore';
-import { signIn, signUp, supabase } from '@lib/supabase';
+import { signIn, signUp } from '@lib/supabase';
 import { syncCompleteRoadmap } from '@lib/database';
 import { generateInitialTasks } from '@shared/utils/taskGenerator';
 import type { Agent1Output, StoneAnswer } from '@core/agents';
@@ -20,14 +20,12 @@ interface UseAuthGateParams {
   };
   setInitialGoal: (goal: string | null) => void;
   setStep: (step: number) => void;
-  onLoginSuccess?: () => void;
 }
 
 export function useAuthGate({
   collectedData,
   setInitialGoal,
   setStep,
-  onLoginSuccess,
 }: UseAuthGateParams) {
   const [showAuthGate, setShowAuthGate] = useState(false);
   const [authGateMode, setAuthGateMode] = useState<'signup' | 'login'>('signup');
@@ -50,23 +48,19 @@ export function useAuthGate({
         const { data, error } = await signUp(authEmail, authPassword, { full_name: authName });
         if (error) { setAuthError(error.message); setAuthLoading(false); return; }
         userId = data.user?.id ?? null;
+        // Set user in store directly from response — don't rely on getSession() which can be null
+        if (data.user) useStore.setState({ user: data.user, isAuthenticated: true });
       } else {
         const { data, error } = await signIn(authEmail, authPassword);
         if (error) { setAuthError(error.message); setAuthLoading(false); return; }
         userId = data.user?.id ?? null;
+        if (data.user) useStore.setState({ user: data.user, isAuthenticated: true });
       }
 
       if (!userId) {
         setAuthError('Authentication failed. Please try again.');
         setAuthLoading(false);
         return;
-      }
-
-      // Update the store with the new user
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        useStore.setState({ user: session.user, isAuthenticated: true });
-        if (onLoginSuccess) onLoginSuccess();
       }
 
       // Clear initialGoal from store

@@ -17,18 +17,22 @@ export default defineConfig({
       '@utils': path.resolve(__dirname, 'src/utils'),
       '@hooks': path.resolve(__dirname, 'src/hooks'),
       '@types-app': path.resolve(__dirname, 'src/types'),
+      '@config':    path.resolve(__dirname, 'src/config'),
     }
   },
   plugins: [
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       includeAssets: ['icon-192.png', 'icon-512.png'],
       manifest: {
         name: 'Coheren.ai - AI Goal Coach',
         short_name: 'Coheren',
         description: 'Your AI-powered coach that turns any goal into a personalized action plan',
-        theme_color: '#000000',
+        theme_color: '#7c3aed',
         background_color: '#ffffff',
         display: 'standalone',
         scope: '/',
@@ -49,24 +53,8 @@ export default defineConfig({
           }
         ]
       },
-      workbox: {
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          }
-        ]
       }
     })
   ],

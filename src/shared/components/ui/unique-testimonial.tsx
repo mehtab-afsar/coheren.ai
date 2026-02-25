@@ -52,6 +52,7 @@ export function Testimonials() {
       handleSelect(next)
     }, 4000)
     return () => clearInterval(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIndex, isAnimating])
 
   return (

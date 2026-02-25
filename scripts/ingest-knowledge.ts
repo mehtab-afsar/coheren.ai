@@ -1,68 +1,56 @@
-#!/usr/bin/env tsx
+#!/usr/bin/env node
 /**
- * Coheren Knowledge Ingestion Script
+ * scripts/ingest-knowledge.ts
  *
- * Reads all .md and .txt files from src/knowledge/frameworks/ and
- * src/knowledge/domain-specific/, chunks them by ## headings,
- * generates Jina AI v3 embeddings, and upserts into Supabase knowledge_chunks.
+ * Embeds all knowledge chunks via Jina AI v3 (retrieval.passage) and upserts
+ * them into the Supabase knowledge_chunks table.
  *
- * Idempotent: upserts on chunk_id, so re-running is safe.
+ * Prerequisites:
+ *   - knowledge_chunks table exists (migration 20260212000001_pgvector_knowledge.sql)
+ *   - VITE_JINA_API_KEY    — get a free key at https://jina.ai (1M tokens/month)
+ *   - VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY pointing to your Supabase instance
  *
- * Requirements (.env):
- *   VITE_SUPABASE_URL
- *   SUPABASE_SERVICE_ROLE_KEY   ← from Supabase dashboard → Settings → API
- *   VITE_JINA_API_KEY           ← free at https://jina.ai
+ * Usage (Node 20+ built-in env-file loading):
+ *   node --env-file=.env node_modules/.bin/tsx scripts/ingest-knowledge.ts
  *
- * Run: npx tsx scripts/ingest-knowledge.ts
+ * Or add the npm script (already added):
+ *   npm run rag:ingest
+ *
+ * The script is fully idempotent — re-running it updates existing rows via
+ * ON CONFLICT (chunk_id) DO UPDATE, so embeddings stay current with content edits.
  */
 
-import { readFileSync, readdirSync, statSync } from 'fs';
-import { resolve, join, basename, extname } from 'path';
 import { createClient } from '@supabase/supabase-js';
+import { readFileSync, readdirSync, existsSync } from 'fs';
+import { join, basename, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-// ─── .env loader (no dotenv dependency) ──────────────────────────────────────
+// ─── Env ─────────────────────────────────────────────────────────────────────
 
-function loadEnv(): Record<string, string> {
-  try {
-    const raw = readFileSync(resolve(process.cwd(), '.env'), 'utf-8');
-    const env: Record<string, string> = {};
-    for (const line of raw.split('\n')) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#')) continue;
-      const eq = trimmed.indexOf('=');
-      if (eq < 1) continue;
-      const key = trimmed.slice(0, eq).trim();
-      const val = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
-      env[key] = val;
-    }
-    return env;
-  } catch {
-    return {};
-  }
-}
+const JINA_KEY     = process.env.VITE_JINA_API_KEY;
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY;
 
-const env = loadEnv();
-const SUPABASE_URL  = env.VITE_SUPABASE_URL          ?? process.env.VITE_SUPABASE_URL ?? '';
-const SERVICE_KEY   = env.SUPABASE_SERVICE_ROLE_KEY  ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
-const JINA_API_KEY  = env.VITE_JINA_API_KEY          ?? process.env.VITE_JINA_API_KEY ?? '';
+if (!JINA_KEY)     { console.error('❌ VITE_JINA_API_KEY is not set'); process.exit(1); }
+if (!SUPABASE_URL) { console.error('❌ VITE_SUPABASE_URL is not set');  process.exit(1); }
+if (!SUPABASE_KEY) { console.error('❌ VITE_SUPABASE_ANON_KEY is not set'); process.exit(1); }
 
-if (!SUPABASE_URL || !SERVICE_KEY || !JINA_API_KEY) {
-  console.error('\n❌  Missing required environment variables:');
-  if (!SUPABASE_URL)  console.error('   • VITE_SUPABASE_URL');
-  if (!SERVICE_KEY)   console.error('   • SUPABASE_SERVICE_ROLE_KEY  (Supabase dashboard → Settings → API)');
-  if (!JINA_API_KEY)  console.error('   • VITE_JINA_API_KEY          (free at https://jina.ai)');
-  process.exit(1);
-}
+// ─── Supabase client ─────────────────────────────────────────────────────────
 
-// ─── Supabase service-role client (bypasses RLS for upsert) ──────────────────
-
-const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
+const supabase = createClient(SUPABASE_URL!, SUPABASE_KEY!, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Paths ───────────────────────────────────────────────────────────────────
 
-interface Chunk {
+const __filename   = fileURLToPath(import.meta.url);
+const __dirname_ts = dirname(__filename);
+const ROOT         = join(__dirname_ts, '..');
+const FRAMEWORKS   = join(ROOT, 'src/knowledge/frameworks');
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface RawChunk {
   chunk_id:   string;
   content:    string;
   source:     string;
@@ -70,234 +58,408 @@ interface Chunk {
   keywords:   string[];
 }
 
-interface ChunkWithEmbedding extends Chunk {
-  embedding: number[];
-}
+// ─── Static chunks (mirrored from src/core/rag/knowledge-base.ts) ────────────
+// These are the curated, hand-written knowledge chunks that form the foundation
+// of the knowledge base. Keep them in sync with knowledge-base.ts.
 
-// ─── Utilities ────────────────────────────────────────────────────────────────
+const STATIC_CHUNKS: RawChunk[] = [
+  // ── Self-Determination Theory ──────────────────────────────────────────────
+  {
+    chunk_id: 'sdt-core',
+    content: `Self-Determination Theory (Ryan & Deci): Humans have three innate psychological needs:
+1. AUTONOMY - feeling of choice and self-direction ("I choose to do this")
+2. COMPETENCE - feeling effective and capable, experiencing mastery
+3. RELATEDNESS - feeling connected to others, sense of belonging
+When these needs are satisfied, motivation and well-being increase.`,
+    source: 'Ryan & Deci (2000)',
+    categories: ['motivation', 'behavior-change'],
+    keywords: ['motivation', 'autonomy', 'competence', 'relatedness', 'self-determination'],
+  },
+  {
+    chunk_id: 'sdt-application',
+    content: `To enhance motivation: Give choice in task timing/order (autonomy), start with achievable tasks and celebrate progress (competence), use warm supportive tone (relatedness). Avoid controlling language like "you must" - instead say "you might consider" or "when you're ready".`,
+    source: 'Self-Determination Theory',
+    categories: ['motivation', 'behavior-change'],
+    keywords: ['motivation', 'coaching', 'language', 'support'],
+  },
+
+  // ── Habit Loop ────────────────────────────────────────────────────────────
+  {
+    chunk_id: 'habit-loop-core',
+    content: `The Habit Loop (Charles Duhigg): Every habit follows CUE → ROUTINE → REWARD.
+- CUE: Trigger that initiates behavior (location, time, emotion, people, preceding action)
+- ROUTINE: The behavior itself (physical, mental, or emotional)
+- REWARD: The benefit that reinforces the loop (pleasure, relief, satisfaction)
+Golden Rule: You can't extinguish a habit, only change it. Keep same cue and reward, change the routine.`,
+    source: 'The Power of Habit',
+    categories: ['habit-formation', 'behavior-change'],
+    keywords: ['habit', 'cue', 'routine', 'reward', 'trigger', 'loop'],
+  },
+  {
+    chunk_id: 'habit-loop-keystone',
+    content: `Keystone Habits: Certain habits create ripple effects. Exercise often leads to better eating, sleep, and productivity. Making your bed creates a sense of control. Family dinners improve children's grades. Identify if the user's goal could be a keystone habit that transforms other areas.`,
+    source: 'The Power of Habit',
+    categories: ['habit-formation'],
+    keywords: ['keystone', 'ripple', 'exercise', 'cornerstone'],
+  },
+
+  // ── Four Laws of Behavior Change ──────────────────────────────────────────
+  {
+    chunk_id: 'four-laws-core',
+    content: `Four Laws of Behavior Change (James Clear):
+1. MAKE IT OBVIOUS (Cue) - Use implementation intentions: "I will [BEHAVIOR] at [TIME] in [LOCATION]"
+2. MAKE IT ATTRACTIVE (Craving) - Temptation bundling, join supportive culture
+3. MAKE IT EASY (Response) - Reduce friction, use 2-minute rule
+4. MAKE IT SATISFYING (Reward) - Immediate rewards, habit tracking, never miss twice
+To break bad habits, invert: make it invisible, unattractive, difficult, unsatisfying.`,
+    source: 'Atomic Habits',
+    categories: ['habit-formation', 'behavior-change'],
+    keywords: ['obvious', 'attractive', 'easy', 'satisfying', 'atomic', 'laws'],
+  },
+  {
+    chunk_id: 'two-minute-rule',
+    content: `The Two-Minute Rule: When starting a new habit, scale it down to 2 minutes or less.
+"Read before bed" → "Read one page"
+"Run 5km" → "Put on running shoes"
+"Study for exam" → "Open your notes"
+This removes the motivation barrier. Master showing up first, then optimize.`,
+    source: 'Atomic Habits',
+    categories: ['habit-formation', 'beginner'],
+    keywords: ['two-minute', 'tiny', 'small', 'start', 'beginner', 'easy'],
+  },
+  {
+    chunk_id: 'habit-stacking',
+    content: `Habit Stacking: Link new habits to existing ones using: "After [CURRENT HABIT], I will [NEW HABIT]"
+Examples:
+- After I pour my morning coffee, I will write one sentence in my journal
+- After I sit at my desk, I will write my #1 priority
+- After I brush my teeth, I will meditate for 2 minutes
+The existing habit serves as a reliable cue for the new one.`,
+    source: 'Atomic Habits',
+    categories: ['habit-formation', 'behavior-change'],
+    keywords: ['stacking', 'anchor', 'after', 'link', 'chain'],
+  },
+  {
+    chunk_id: 'identity-habits',
+    content: `Identity-Based Habits: The most effective change comes from identity, not outcomes.
+"I want to lose weight" → "I am a healthy person"
+"I want to read more" → "I am a reader"
+"I want to run" → "I am a runner"
+Every action is a vote for the type of person you want to become. Focus on who you wish to become, not what you want to achieve.`,
+    source: 'Atomic Habits',
+    categories: ['habit-formation', 'mindset'],
+    keywords: ['identity', 'become', 'type of person', 'belief'],
+  },
+  {
+    chunk_id: 'one-percent',
+    content: `The 1% Rule: Getting 1% better each day compounds to 37x improvement over a year. Small habits seem insignificant in the moment but compound into remarkable results. Progress is not linear - it's exponential. Trust the process even when results aren't visible yet.`,
+    source: 'Atomic Habits',
+    categories: ['habit-formation', 'motivation'],
+    keywords: ['compound', 'percent', 'better', 'growth', 'patience'],
+  },
+
+  // ── Tiny Habits ───────────────────────────────────────────────────────────
+  {
+    chunk_id: 'tiny-habits-core',
+    content: `Tiny Habits (BJ Fogg): Behavior = Motivation × Ability × Prompt (B=MAP)
+Formula: "After I [ANCHOR], I will [TINY BEHAVIOR], then I [CELEBRATE]"
+Make the behavior so tiny (30 seconds) that motivation isn't required. Attach to existing routine. Celebrate immediately to wire in the habit. People change best by feeling good, not feeling bad.`,
+    source: 'Tiny Habits',
+    categories: ['habit-formation', 'beginner', 'behavior-change'],
+    keywords: ['tiny', 'anchor', 'celebrate', 'small', 'motivation', 'prompt'],
+  },
+  {
+    chunk_id: 'celebration-importance',
+    content: `Celebration (BJ Fogg): Immediate positive emotion after completing a behavior is crucial for habit formation. Say "Yes!" or "Awesome!", do a small fist pump, smile genuinely. This creates positive emotional association and releases dopamine, wiring the habit into your brain. Fake celebrations don't work - feel genuine positive emotion.`,
+    source: 'Tiny Habits',
+    categories: ['celebration', 'habit-formation'],
+    keywords: ['celebrate', 'reward', 'emotion', 'positive', 'dopamine'],
+  },
+
+  // ── Neuroscience ──────────────────────────────────────────────────────────
+  {
+    chunk_id: 'neuroscience-basics',
+    content: `Neuroscience of Habits: The basal ganglia stores automated behavioral patterns. When learning new behaviors, prefrontal cortex is active (conscious effort). With repetition, basal ganglia takes over (automatic). Dopamine reinforces behaviors by signaling "this was good, do it again." Each successful habit execution releases dopamine, tagging the behavior for repetition.`,
+    source: 'Neuroscience of Habit Formation (Wyatt 2024)',
+    categories: ['neuroscience', 'habit-formation'],
+    keywords: ['brain', 'basal ganglia', 'dopamine', 'automatic', 'neural'],
+  },
+  {
+    chunk_id: 'neuroplasticity',
+    content: `Neuroplasticity: The brain rewires itself throughout life. "Neurons that fire together wire together." Factors that enhance neuroplasticity: Sleep (consolidates learning), Exercise (releases BDNF), Meditation (increases cortical thickness), Morning sunlight (syncs circadian rhythm). Each repetition of a habit strengthens its neural pathway.`,
+    source: 'The Brain That Changes Itself',
+    categories: ['neuroscience'],
+    keywords: ['neuroplasticity', 'brain', 'rewire', 'sleep', 'exercise', 'bdnf'],
+  },
+  {
+    chunk_id: 'sleep-habits',
+    content: `Sleep and Habit Formation: Memory consolidation happens during REM sleep. Sleep strengthens new neural pathways and prunes unused connections. Poor sleep = poor habit formation. Recommendations: consistent sleep/wake times, 7-9 hours, avoid screens before bed. Tell users: "Sleep is when your brain locks in today's progress."`,
+    source: 'Neuroscience Research',
+    categories: ['neuroscience'],
+    keywords: ['sleep', 'memory', 'consolidation', 'rem', 'rest'],
+  },
+  {
+    chunk_id: 'habit-timeline',
+    content: `Habit Formation Timeline: Average time is 66 days, but ranges from 18 to 254 days depending on complexity and consistency. Simple habits form faster. What matters: daily consistency (not sporadic), same context/cue, emotional association through celebration. Missing once won't reset progress, but try not to miss twice.`,
+    source: 'Research (Lally et al.)',
+    categories: ['habit-formation', 'neuroscience'],
+    keywords: ['days', 'time', 'how long', '66', 'timeline', 'duration'],
+  },
+
+  // ── Mindset ───────────────────────────────────────────────────────────────
+  {
+    chunk_id: 'growth-mindset',
+    content: `Growth Mindset (Carol Dweck): Believing abilities can be developed through effort vs. fixed mindset (abilities are static). Growth mindset people: embrace challenges, persist through setbacks, see effort as path to mastery, learn from criticism, find inspiration in others' success. Praise effort and process, not innate ability.`,
+    source: 'Mindset',
+    categories: ['mindset', 'motivation'],
+    keywords: ['growth', 'mindset', 'fixed', 'effort', 'learn', 'ability'],
+  },
+  {
+    chunk_id: 'grit',
+    content: `Grit (Angela Duckworth): Passion + Perseverance for long-term goals. Grit predicts success more than talent. Components: Interest (enjoying what you do), Practice (deliberate improvement), Purpose (believing work matters), Hope (persisting despite setbacks). Grit can be developed through experience and environment.`,
+    source: 'Grit',
+    categories: ['mindset', 'motivation'],
+    keywords: ['grit', 'perseverance', 'passion', 'long-term', 'persist'],
+  },
+
+  // ── Struggling / Recovery ─────────────────────────────────────────────────
+  {
+    chunk_id: 'missing-days',
+    content: `When users miss days: Missing once doesn't erase progress - neural pathways don't disappear. The "never miss twice" rule: one miss is an accident, two is a new pattern. Don't guilt-trip. Say: "Everyone misses sometimes. What matters is getting back on track today." The Fresh Start Effect: new weeks/months are good restart points.`,
+    source: 'Atomic Habits + Research',
+    categories: ['struggling', 'motivation'],
+    keywords: ['miss', 'skip', 'fail', 'restart', 'recovery', 'back'],
+  },
+  {
+    chunk_id: 'low-motivation',
+    content: `For low motivation: Don't rely on motivation - it's unreliable. Instead: 1) Make the task tinier (2-minute rule), 2) Improve the cue (make it obvious), 3) Add immediate reward, 4) Remember identity ("I am someone who..."). Ask: "What's the smallest version you could do right now?"`,
+    source: 'Tiny Habits + Atomic Habits',
+    categories: ['struggling', 'motivation'],
+    keywords: ['motivation', 'unmotivated', 'tired', 'lazy'],
+  },
+  {
+    chunk_id: 'self-compassion',
+    content: `Self-Compassion in Habit Change: Beating yourself up reduces motivation and increases likelihood of giving up. Treat yourself like you'd treat a friend who's struggling. Acknowledge difficulty without judgment. Research shows self-compassion leads to better habit adherence than self-criticism.`,
+    source: 'Psychology Research',
+    categories: ['struggling', 'mindset'],
+    keywords: ['compassion', 'kind', 'forgive', 'guilt', 'shame', 'fail'],
+  },
+
+  // ── Energy & Timing ───────────────────────────────────────────────────────
+  {
+    chunk_id: 'energy-patterns',
+    content: `Energy Patterns for Habits:
+- MORNING: High cortisol, peak alertness → challenging/important tasks
+- AFTERNOON: Post-lunch dip → routine/easier tasks
+- EVENING: Declining willpower → easy habits, reflection
+- Morning light exposure (10-30 min) optimizes circadian rhythm and cognitive function.
+Match task difficulty to energy level for better success.`,
+    source: 'Chronobiology Research',
+    categories: ['productivity', 'neuroscience'],
+    keywords: ['morning', 'evening', 'energy', 'time', 'when', 'schedule'],
+  },
+];
+
+// ─── Markdown chunk extractor ─────────────────────────────────────────────────
+
+const SOURCE_MAP: Record<string, string> = {
+  'atomic-habits':             'Atomic Habits (James Clear)',
+  'tiny-habits':               'Tiny Habits (BJ Fogg)',
+  'habit-loop':                'The Power of Habit (Charles Duhigg)',
+  'self-determination-theory': 'Self-Determination Theory (Ryan & Deci)',
+  'neuroscience-of-habits':    'Neuroscience of Habit Formation',
+  'neuroscience-habits':       'Neuroscience of Habit Formation',
+  'four-laws-behavior-change': 'Atomic Habits — Four Laws',
+  'mindset-and-grit':          'Mindset (Dweck) & Grit (Duckworth)',
+};
+
+const CATEGORY_MAP: Record<string, string[]> = {
+  'atomic-habits':             ['habit-formation', 'behavior-change'],
+  'tiny-habits':               ['habit-formation', 'beginner', 'behavior-change'],
+  'habit-loop':                ['habit-formation', 'behavior-change'],
+  'self-determination-theory': ['motivation', 'behavior-change'],
+  'neuroscience-of-habits':    ['neuroscience', 'habit-formation'],
+  'neuroscience-habits':       ['neuroscience', 'habit-formation'],
+  'four-laws-behavior-change': ['habit-formation', 'behavior-change'],
+  'mindset-and-grit':          ['mindset', 'motivation'],
+};
+
+const STOP_WORDS = new Set([
+  'the','a','an','and','or','but','in','on','at','to','for','of','with',
+  'is','are','was','were','be','been','have','has','had','do','does','did',
+  'will','would','could','should','may','might','this','that','these','those',
+  'it','its','they','their','them','we','our','you','your','i','my','from',
+  'by','as','not','no','so','if','when','then','than','can','also','into',
+]);
+
+function toKeywords(text: string): string[] {
+  const words = text.toLowerCase()
+    .replace(/[^a-z0-9\s'-]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 3 && !STOP_WORDS.has(w));
+  return [...new Set(words)].slice(0, 15);
+}
 
 function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .slice(0, 60);
+  return text.toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 50);
 }
 
-function toTitleCase(slug: string): string {
-  return slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-}
+function extractMarkdownChunks(filePath: string): RawChunk[] {
+  const raw  = readFileSync(filePath, 'utf-8');
+  const name = basename(filePath, '.md');
 
-/** Recursively collect all .md and .txt files under a directory */
-function collectFiles(dir: string): string[] {
-  const entries = readdirSync(dir);
-  const files: string[] = [];
-  for (const entry of entries) {
-    const fullPath = join(dir, entry);
-    if (statSync(fullPath).isDirectory()) {
-      files.push(...collectFiles(fullPath));
-    } else if (['.md', '.txt'].includes(extname(entry))) {
-      files.push(fullPath);
-    }
-  }
-  return files;
-}
+  // Split on ## headings (keep the heading text as the first line of each section)
+  const sections = raw.split(/(?=^## )/m).filter(s => s.trim());
+  const chunks: RawChunk[] = [];
 
-/**
- * Chunk a markdown file by ## headings.
- * Each section (## Heading + body) becomes one chunk.
- * chunk_id = "<filename-slug>_<heading-slug>" — stable and unique.
- */
-function chunkMarkdown(filepath: string): Chunk[] {
-  const filename = basename(filepath).replace(/\.(md|txt)$/, '');
-  const fileSlug = slugify(filename);
+  for (const section of sections) {
+    const lines   = section.trim().split('\n');
+    const heading = lines[0].replace(/^#+\s*/, '').trim();
+    const body    = lines.slice(1).join('\n').trim();
 
-  // Derive source title from the first # heading, or fallback to filename
-  const raw = readFileSync(filepath, 'utf-8');
-  const titleMatch = raw.match(/^#\s+(.+)$/m);
-  const sourceTitle = titleMatch ? titleMatch[1].trim() : toTitleCase(filename);
+    if (!body || body.length < 60) continue; // skip stubs
 
-  const lines = raw.split('\n');
-  const chunks: Chunk[] = [];
-
-  let currentHeading = filename;
-  let buffer: string[] = [];
-
-  const flush = () => {
-    const body = buffer.join('\n').trim();
-    // Skip trivially short sections (likely just whitespace or a single word)
-    if (body.length < 60) {
-      buffer = [];
-      return;
-    }
-    // Trim to 800 chars at sentence boundary to stay within Jina's sweet spot
-    let content = body.length > 800
-      ? body.slice(0, 800).replace(/\s+\S*$/, '') + '…'
-      : body;
-    // Prepend heading for context
-    content = `${currentHeading}\n${content}`;
-
+    const slug = slugify(heading);
     chunks.push({
-      chunk_id:   `${fileSlug}_${slugify(currentHeading)}`,
-      content,
-      source:     sourceTitle,
-      categories: [],
-      keywords:   [],
+      chunk_id:   `md-${name}-${slug}`,
+      content:    `${heading}\n\n${body}`,
+      source:     SOURCE_MAP[name] ?? name,
+      categories: CATEGORY_MAP[name] ?? ['habit-formation'],
+      keywords:   toKeywords(`${heading} ${body}`),
     });
-    buffer = [];
-  };
-
-  for (const line of lines) {
-    if (line.startsWith('## ')) {
-      flush();
-      currentHeading = line.replace(/^##\s+/, '').trim();
-    } else if (!line.startsWith('# ')) {
-      // Skip the top-level # title line — it's included in sourceTitle already
-      buffer.push(line);
-    }
   }
-  flush(); // Final section
 
   return chunks;
 }
 
-// ─── Jina AI batch embedding ──────────────────────────────────────────────────
+// ─── Jina AI embedding ────────────────────────────────────────────────────────
 
-const JINA_BATCH_SIZE = 20; // Stay well within Jina rate limits
+const JINA_URL  = 'https://api.jina.ai/v1/embeddings';
+const JINA_MODEL = 'jina-embeddings-v3';
+const BATCH_SIZE = 8; // stay well within Jina's rate limits
 
 async function embedBatch(texts: string[]): Promise<number[][]> {
-  const response = await fetch('https://api.jina.ai/v1/embeddings', {
+  const res = await fetch(JINA_URL, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${JINA_API_KEY}`,
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${JINA_KEY}`,
     },
     body: JSON.stringify({
-      model:      'jina-embeddings-v3',
+      model:      JINA_MODEL,
       input:      texts,
-      task:       'retrieval.passage',  // MUST be passage for documents, not query
+      task:       'retrieval.passage', // ingestion task — do NOT use retrieval.query here
       dimensions: 1024,
       normalized: true,
     }),
   });
 
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Jina API error ${response.status}: ${body}`);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Jina API error ${res.status}: ${body}`);
   }
 
-  const data = await response.json() as {
-    data: Array<{ embedding: number[]; index: number }>;
-    usage: { total_tokens: number };
-  };
-
-  console.log(`  Tokens used: ${data.usage.total_tokens}`);
+  const data = await res.json() as { data: Array<{ embedding: number[]; index: number }> };
   return data.data
     .sort((a, b) => a.index - b.index)
     .map(d => d.embedding);
 }
 
-async function embedAllChunks(chunks: Chunk[]): Promise<ChunkWithEmbedding[]> {
-  const result: ChunkWithEmbedding[] = [];
-
-  for (let i = 0; i < chunks.length; i += JINA_BATCH_SIZE) {
-    const batch = chunks.slice(i, i + JINA_BATCH_SIZE);
-    process.stdout.write(`  Embedding batch ${Math.floor(i / JINA_BATCH_SIZE) + 1}/${Math.ceil(chunks.length / JINA_BATCH_SIZE)}...`);
-
-    const embeddings = await embedBatch(batch.map(c => c.content));
-    for (let j = 0; j < batch.length; j++) {
-      result.push({ ...batch[j], embedding: embeddings[j] });
-    }
-  }
-
-  return result;
-}
-
 // ─── Supabase upsert ──────────────────────────────────────────────────────────
 
-async function upsertChunks(chunks: ChunkWithEmbedding[]): Promise<void> {
-  const UPSERT_BATCH = 50;
-  for (let i = 0; i < chunks.length; i += UPSERT_BATCH) {
-    const batch = chunks.slice(i, i + UPSERT_BATCH);
-    const { error } = await supabase
-      .from('knowledge_chunks')
-      .upsert(batch, { onConflict: 'chunk_id' });
+async function upsertChunks(chunks: Array<RawChunk & { embedding: number[] }>) {
+  const rows = chunks.map(c => ({
+    chunk_id:   c.chunk_id,
+    content:    c.content,
+    source:     c.source,
+    categories: c.categories,
+    keywords:   c.keywords,
+    embedding:  c.embedding as unknown as string, // supabase-js passes as JSON array; pgvector casts it
+  }));
 
-    if (error) {
-      throw new Error(`Supabase upsert error: ${error.message}`);
-    }
-  }
+  const { error } = await supabase
+    .from('knowledge_chunks')
+    .upsert(rows, { onConflict: 'chunk_id' });
+
+  if (error) throw new Error(`Supabase upsert failed: ${error.message}`);
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const knowledgeRoot = resolve(process.cwd(), 'src/knowledge');
-  console.log('\n════════════════════════════════════════════════════');
-  console.log(' COHEREN — Knowledge Ingestion Pipeline');
-  console.log('════════════════════════════════════════════════════\n');
+  console.log('📚  RAG Knowledge Ingestion\n');
+  console.log(`    Supabase: ${SUPABASE_URL}`);
+  console.log(`    Jina key: ${JINA_KEY!.slice(0, 12)}...\n`);
 
-  // Collect all files
-  let files: string[];
-  try {
-    files = collectFiles(knowledgeRoot).filter(f => !f.includes('README'));
-  } catch {
-    console.error(`❌  Knowledge directory not found: ${knowledgeRoot}`);
-    console.error('   Create src/knowledge/frameworks/ and add .md files.');
-    process.exit(1);
+  // 1. Start with hand-curated static chunks
+  const all: RawChunk[] = [...STATIC_CHUNKS];
+
+  // 2. Parse markdown framework files (richer, long-form content)
+  if (existsSync(FRAMEWORKS)) {
+    const mdFiles = readdirSync(FRAMEWORKS).filter(f => f.endsWith('.md'));
+    for (const file of mdFiles) {
+      const chunks = extractMarkdownChunks(join(FRAMEWORKS, file));
+      console.log(`  📄  ${file}: ${chunks.length} sections`);
+      all.push(...chunks);
+    }
+  } else {
+    console.warn('  ⚠   src/knowledge/frameworks/ not found — using static chunks only\n');
   }
 
-  if (files.length === 0) {
-    console.log('⚠  No .md or .txt files found under src/knowledge/');
-    console.log('   Add knowledge files and re-run.');
-    process.exit(0);
+  // 3. Deduplicate by chunk_id (static chunks take priority)
+  const seen  = new Set<string>();
+  const unique = all.filter(c => {
+    if (seen.has(c.chunk_id)) return false;
+    seen.add(c.chunk_id);
+    return true;
+  });
+
+  console.log(`\n  → ${unique.length} unique chunks to embed\n`);
+
+  // 4. Embed in batches
+  const embedded: Array<RawChunk & { embedding: number[] }> = [];
+  let totalTokens = 0;
+
+  for (let i = 0; i < unique.length; i += BATCH_SIZE) {
+    const batch = unique.slice(i, i + BATCH_SIZE);
+    const end   = Math.min(i + BATCH_SIZE, unique.length);
+
+    process.stdout.write(`  Embedding ${String(i + 1).padStart(3)}–${String(end).padStart(3)} / ${unique.length} ... `);
+
+    const embeddings = await embedBatch(batch.map(c => c.content));
+    batch.forEach((chunk, j) => {
+      embedded.push({ ...chunk, embedding: embeddings[j] });
+      totalTokens += Math.ceil(chunk.content.length / 4); // rough estimate
+    });
+
+    process.stdout.write('✓\n');
+
+    // Polite pause between Jina requests
+    if (i + BATCH_SIZE < unique.length) {
+      await new Promise(r => setTimeout(r, 350));
+    }
   }
 
-  console.log(`Found ${files.length} files:\n`);
+  console.log(`\n  ~${totalTokens.toLocaleString()} tokens estimated (Jina free: 1M/month)\n`);
 
-  // Chunk all files
-  const allChunks: Chunk[] = [];
-  for (const file of files) {
-    const relPath = file.replace(process.cwd() + '/', '');
-    const chunks  = chunkMarkdown(file);
-    console.log(`  ${relPath.padEnd(55)} → ${chunks.length} chunks`);
-    allChunks.push(...chunks);
+  // 5. Upsert to Supabase in pages of 20
+  const PAGE = 20;
+  for (let i = 0; i < embedded.length; i += PAGE) {
+    const batch = embedded.slice(i, i + PAGE);
+    await upsertChunks(batch);
+    const end = Math.min(i + PAGE, embedded.length);
+    console.log(`  Upserted ${String(i + 1).padStart(3)}–${String(end).padStart(3)} / ${embedded.length}`);
   }
 
-  // Deduplicate by chunk_id (in case of overlapping filenames)
-  const deduped = [...new Map(allChunks.map(c => [c.chunk_id, c])).values()];
-  console.log(`\nTotal chunks: ${deduped.length} (${allChunks.length - deduped.length} duplicates removed)\n`);
-
-  // Generate embeddings
-  console.log('Generating Jina AI v3 embeddings (task=retrieval.passage)...\n');
-  let chunksWithEmbeddings: ChunkWithEmbedding[];
-  try {
-    chunksWithEmbeddings = await embedAllChunks(deduped);
-  } catch (err) {
-    console.error(`\n❌  Embedding failed: ${err instanceof Error ? err.message : String(err)}`);
-    process.exit(1);
-  }
-
-  // Upsert to Supabase
-  console.log(`\nUpserting ${chunksWithEmbeddings.length} chunks to Supabase...\n`);
-  try {
-    await upsertChunks(chunksWithEmbeddings);
-  } catch (err) {
-    console.error(`❌  ${err instanceof Error ? err.message : String(err)}`);
-    console.error('\n   Possible causes:');
-    console.error('   • Migration not applied — run: npx supabase db reset');
-    console.error('   • Service role key incorrect');
-    process.exit(1);
-  }
-
-  console.log('════════════════════════════════════════════════════');
-  console.log(` ✓  ${chunksWithEmbeddings.length} chunks ingested successfully`);
-  console.log('════════════════════════════════════════════════════\n');
+  console.log(`\n✅  Done. ${embedded.length} chunks now in knowledge_chunks.\n`);
+  console.log('   Semantic retrieval is live — threshold 0.35, top-4 results.');
+  console.log('   Re-run any time to update embeddings after content edits.\n');
 }
 
 main().catch(err => {
-  console.error('Fatal:', err);
+  console.error('\n❌  Ingestion failed:', (err as Error).message);
   process.exit(1);
 });

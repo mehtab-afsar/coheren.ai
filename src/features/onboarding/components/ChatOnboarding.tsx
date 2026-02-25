@@ -18,6 +18,7 @@ import type { BuildingStone, StoneAnswer, Agent1Output, DailyTask } from '@core/
 import StoneQuestions from '@features/onboarding/components/StoneQuestions';
 import { syncCompleteRoadmap } from '@lib/database';
 import { useAuthGate } from '../hooks/useAuthGate';
+import { track } from '@lib/analytics';
 
 
 // Groq client now imported from groq-client.ts with auto-fallback
@@ -92,7 +93,8 @@ interface ChatOnboardingProps {
   onLoginSuccess?: () => void;
 }
 
-export default function ChatOnboarding({ onLoginSuccess }: ChatOnboardingProps) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: ChatOnboardingProps) {
   // Read initial goal from store (set by landing page)
   const initialGoal = useStore((state) => state.initialGoal);
   const setInitialGoal = useStore((state) => state.setInitialGoal);
@@ -175,7 +177,7 @@ export default function ChatOnboarding({ onLoginSuccess }: ChatOnboardingProps) 
     authError, setAuthError,
     setPendingSyncData,
     handleAuthGateSubmit
-  } = useAuthGate({ collectedData, setInitialGoal, setStep, onLoginSuccess });
+  } = useAuthGate({ collectedData, setInitialGoal, setStep });
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -487,12 +489,18 @@ The system will automatically detect when the data is complete and transition to
       console.log('   Timeline:', timelineDays, 'days');
       console.log('   Daily time:', dailyMinutes, 'minutes');
 
-      // Run Agent 1 & 2
+      // Run Agent 1 & 2 — pass everything from chat so Agent 2 won't re-ask it
       const { goalAnalysis: analysis, stones: identifiedStones } = await runOnboardingAgents(
         collectedData.goal,
         timelineDays,
         dailyMinutes,
-        collectedData.behavioralFlags
+        collectedData.behavioralFlags,
+        {
+          skillLevel: collectedData.skillLevel || undefined,
+          energyPattern: collectedData.energyPattern || undefined,
+          name: collectedData.name || undefined,
+          category: collectedData.category || undefined,
+        }
       );
 
       console.log('✅ Agents completed successfully');
@@ -726,6 +734,7 @@ The system will automatically detect when the data is complete and transition to
           console.warn('⚠️ Background sync issue:', error);
         });
 
+        track({ event: 'onboarding_completed', properties: { goal_category: agentRoadmap?.category ?? undefined } });
         setTimeout(() => setStep(2), 1000);
       } else {
         // Not authenticated — show auth gate overlay (blurred roadmap + signup)
@@ -846,7 +855,7 @@ The system will automatically detect when the data is complete and transition to
           gap: tokens.spacing['3xl'],
         }}>
           {/* Loading Animation */}
-          <CoherenLoader size={72} color="#39594D" />
+          <CoherenLoader size={72} color="#7c3aed" />
 
           {/* Loading Text */}
           <div style={{ textAlign: 'center', maxWidth: '500px', marginTop: tokens.spacing.lg }}>
@@ -917,7 +926,7 @@ The system will automatically detect when the data is complete and transition to
             padding: 0,
           }}
         >
-          <Icons.logo style={{ width: '22px', height: '22px', color: '#39594D' }} />
+          <Icons.logo style={{ width: '22px', height: '22px', color: '#7c3aed' }} />
           <span style={{
             fontSize: tokens.typography.sizes.base,
             fontWeight: tokens.typography.weights.medium,
@@ -958,7 +967,7 @@ The system will automatically detect when the data is complete and transition to
       {/* Transition loader — shown while stones are being fetched */}
       {onboardingPhase === 'stones' && stones.length === 0 && (
         <div className="flex flex-1 items-center justify-center">
-          <CoherenLoader size={64} color="#39594D" />
+          <CoherenLoader size={64} color="#7c3aed" />
         </div>
       )}
 
@@ -1015,7 +1024,7 @@ The system will automatically detect when the data is complete and transition to
                     {/* AI Avatar */}
                     {message.role === 'ai' && (
                       <div className="flex-shrink-0 mt-0.5 w-[30px] h-[30px] rounded-sm flex items-center justify-center">
-                        <Icons.logo style={{ width: '18px', height: '18px', color: '#39594D' }} />
+                        <Icons.logo style={{ width: '18px', height: '18px', color: '#7c3aed' }} />
                       </div>
                     )}
                     {/* Content */}
@@ -1037,7 +1046,7 @@ The system will automatically detect when the data is complete and transition to
                 {isTyping && (
                   <div className="flex gap-4 py-6">
                     <div className="flex-shrink-0 w-[30px] h-[30px] rounded-sm flex items-center justify-center">
-                      <Icons.logo style={{ width: '18px', height: '18px', color: '#39594D' }} />
+                      <Icons.logo style={{ width: '18px', height: '18px', color: '#7c3aed' }} />
                     </div>
                     <div className="flex items-center gap-1.5 mt-1">
                       <div className="w-2 h-2 rounded-full bg-zinc-400" style={{ animation: 'pulse 1.4s infinite ease-in-out both' }} />
@@ -1052,7 +1061,7 @@ The system will automatically detect when the data is complete and transition to
             </div>
 
             {/* Input area — truly floating */}
-            <div className="fixed bottom-0 left-0 right-0 flex justify-center px-6 pb-6 pt-3" style={{ zIndex: 50 }}>
+            <div className="fixed bottom-0 left-0 right-0 flex justify-center px-6 pt-3" style={{ zIndex: 50, paddingBottom: 'max(24px, env(safe-area-inset-bottom))' }}>
               {isTyping || onboardingPhase !== 'conversation' ? (
                 <div className="w-full max-w-2xl mx-auto flex items-center px-5 h-12 rounded-full bg-zinc-100 border border-zinc-200">
                   <span className="text-sm text-zinc-400">
@@ -1155,14 +1164,14 @@ The system will automatically detect when the data is complete and transition to
             <div className="relative z-10 flex items-center gap-2.5 p-10">
               <div style={{
                 width: 32, height: 32, borderRadius: 9,
-                background: 'linear-gradient(135deg, #39594D, #2D4A3E)',
-                boxShadow: '0 2px 10px rgba(57, 89, 77, 0.4)',
+                background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+                boxShadow: '0 2px 10px rgba(124, 58, 237, 0.4)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 <span style={{
                   fontSize: '12px',
                   fontWeight: 800,
-                  color: '#D4F4DD',
+                  color: '#e9d8fd',
                   letterSpacing: '-0.02em',
                   fontFamily: 'monospace'
                 }}>
@@ -1181,21 +1190,21 @@ The system will automatically detect when the data is complete and transition to
                   shape="sphere"
                   type="random"
                   colorBack="#060612"
-                  colorFront="#39594D"
+                  colorFront="#4c1d95"
                   pxSize={2}
                   speed={0.9}
                   style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
                 />
                 <div style={{
                   position: 'absolute', inset: 0, borderRadius: '50%',
-                  boxShadow: 'inset 0 0 0 1px rgba(133, 201, 159, 0.15)',
-                  background: 'radial-gradient(circle at 68% 28%, rgba(133, 201, 159, 0.08) 0%, transparent 60%)',
+                  boxShadow: 'inset 0 0 0 1px rgba(167, 139, 250, 0.15)',
+                  background: 'radial-gradient(circle at 68% 28%, rgba(167, 139, 250, 0.08) 0%, transparent 60%)',
                 }} />
               </div>
               <div style={{
                 position: 'absolute',
                 width: 480, height: 140, borderRadius: '50%',
-                background: 'radial-gradient(ellipse, rgba(57, 89, 77, 0.22) 0%, transparent 70%)',
+                background: 'radial-gradient(ellipse, rgba(124, 58, 237, 0.18) 0%, transparent 70%)',
                 filter: 'blur(24px)', pointerEvents: 'none',
               }} />
               <div style={{ textAlign: 'center' }}>
@@ -1220,7 +1229,7 @@ The system will automatically detect when the data is complete and transition to
           {/* Right — form */}
           <div className="flex flex-1 flex-col" style={{ background: '#fff', overflowY: 'auto' }}>
             {/* Back button */}
-            <div className="flex items-center px-10 pt-9">
+            <div className="flex items-center px-6 pt-8 md:px-10 md:pt-9">
               <button
                 onClick={() => setShowAuthGate(false)}
                 className="flex items-center gap-1.5 transition-opacity hover:opacity-60"
@@ -1231,7 +1240,7 @@ The system will automatically detect when the data is complete and transition to
             </div>
 
             {/* Form centered */}
-            <div className="flex flex-1 items-center justify-center px-8 py-10">
+            <div className="flex flex-1 items-center justify-center px-5 py-8 md:px-8 md:py-10">
               <div style={{ width: '100%', maxWidth: 360 }}>
 
                 <h1 style={{ fontSize: 26, fontWeight: 600, letterSpacing: '-0.04em', color: '#0d0d10', margin: '0 0 6px' }}>
@@ -1296,13 +1305,13 @@ The system will automatically detect when the data is complete and transition to
                       borderRadius: 11, border: 'none',
                       cursor: authLoading ? 'not-allowed' : 'pointer',
                       fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em',
-                      background: authLoading ? '#D4EAE0' : 'linear-gradient(135deg, #39594D 0%, #2D4A3E 100%)',
-                      color: authLoading ? '#2D4A3E' : '#fff',
-                      boxShadow: authLoading ? 'none' : '0 4px 18px rgba(57, 89, 77, 0.35)',
+                      background: authLoading ? '#ede9fe' : 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+                      color: authLoading ? '#6d28d9' : '#fff',
+                      boxShadow: authLoading ? 'none' : '0 4px 18px rgba(124, 58, 237, 0.35)',
                       transition: 'all 0.15s',
                     }}
-                    onMouseEnter={(e) => { if (!authLoading) { e.currentTarget.style.boxShadow = '0 6px 24px rgba(57, 89, 77, 0.5)'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
-                    onMouseLeave={(e) => { e.currentTarget.style.boxShadow = authLoading ? 'none' : '0 4px 18px rgba(57, 89, 77, 0.35)'; e.currentTarget.style.transform = 'none'; }}
+                    onMouseEnter={(e) => { if (!authLoading) { e.currentTarget.style.boxShadow = '0 6px 24px rgba(124, 58, 237, 0.5)'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
+                    onMouseLeave={(e) => { e.currentTarget.style.boxShadow = authLoading ? 'none' : '0 4px 18px rgba(124, 58, 237, 0.35)'; e.currentTarget.style.transform = 'none'; }}
                   >
                     {authLoading
                       ? (authGateMode === 'signup' ? 'Creating account...' : 'Signing in...')
@@ -1314,7 +1323,7 @@ The system will automatically detect when the data is complete and transition to
                   {authGateMode === 'signup' ? 'Already have an account? ' : "Don't have an account? "}
                   <button
                     onClick={() => { setAuthGateMode(authGateMode === 'signup' ? 'login' : 'signup'); setAuthError(null); }}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#39594D', padding: 0 }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#7c3aed', padding: 0 }}
                   >
                     {authGateMode === 'signup' ? 'Sign in' : 'Sign up free'}
                   </button>
@@ -1353,9 +1362,9 @@ const authGateInputStyle: React.CSSProperties = {
 };
 
 function applyAuthGateFocus(el: HTMLInputElement) {
-  el.style.borderColor = '#39594D';
+  el.style.borderColor = '#7c3aed';
   el.style.background = '#fff';
-  el.style.boxShadow = '0 0 0 3px rgba(57, 89, 77, 0.08)';
+  el.style.boxShadow = '0 0 0 3px rgba(124, 58, 237, 0.08)';
 }
 
 function applyAuthGateBlur(el: HTMLInputElement) {

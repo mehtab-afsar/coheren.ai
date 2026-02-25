@@ -5,8 +5,10 @@ import ChatOnboarding from '@features/onboarding/components/ChatOnboarding';
 import Dashboard from '@features/dashboard';
 import Settings from '@features/dashboard/components/Settings';
 import AuthPage from '@features/auth/AuthPage';
+import ErrorBoundary from '@shared/components/ErrorBoundary';
 import { onAuthStateChange, supabase } from '@lib/supabase';
 import { getTasksByRoadmapId, calculateStreak } from '@lib/database';
+import { identifyUser, resetAnalyticsUser } from '@lib/analytics';
 
 function App() {
   const step = useStore((state) => state.step);
@@ -17,7 +19,6 @@ function App() {
   const setInitialGoal = useStore((state) => state.setInitialGoal);
 
   const [authInitialized, setAuthInitialized] = useState(false);
-  const [loginPending, setLoginPending] = useState(false);
 
   // Initialize auth on mount
   useEffect(() => {
@@ -48,8 +49,8 @@ function App() {
         setAuthInitialized(true);
       }
       if (session?.user) {
-        setLoginPending(false);
         setUser(session.user);
+        identifyUser(session.user.id, { email: session.user.email });
 
         // Always read live step (not stale closure) to avoid token-refresh reset
         const liveStep = useStore.getState().step;
@@ -189,12 +190,13 @@ function App() {
           useStore.setState({ step: 1 });
         }
       } else {
+        resetAnalyticsUser();
         // Only reset to landing page if not actively onboarding (step 1 is now pre-auth)
         const currentStep = useStore.getState().step;
-        if (!loginPending && currentStep !== 1) {
+        if (currentStep !== 1) {
           setUser(null);
           useStore.setState({ step: 0 });
-        } else if (!loginPending && currentStep === 1) {
+        } else {
           // Step 1 is intentionally pre-auth — just clear user reference, keep onboarding
           setUser(null);
         }
@@ -257,49 +259,23 @@ function App() {
     );
   }
 
-  // Show loading spinner while waiting for auth after login
-  if (loginPending) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#F9FAFB'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: '48px',
-            height: '48px',
-            border: '4px solid #E5E7EB',
-            borderTopColor: '#6366F1',
-            borderRadius: '50%',
-            margin: '0 auto 16px',
-            animation: 'spin 1s linear infinite'
-          }} />
-          <p style={{ color: '#6B7280', fontSize: '14px' }}>Signing in...</p>
-        </div>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
-  }
-
   return (
-    <>
+    <ErrorBoundary>
       {step === 0 && <LandingPage key="landing" onGetStarted={(goal: string) => {
         setInitialGoal(goal);
         useStore.setState({ step: 1 });
       }} />}
-      {step === 1 && <ChatOnboarding key="chat" onLoginSuccess={() => {
-        setLoginPending(true);
-        setTimeout(() => setLoginPending(false), 8000);
-      }} />}
-      {step === 2 && user && <Dashboard key="dashboard" />}
+      {step === 1 && <ChatOnboarding key="chat" />}
+      {step === 2 && user && (
+        <ErrorBoundary label="dashboard" key="dashboard">
+          <Dashboard />
+        </ErrorBoundary>
+      )}
       {step === 3 && <AuthPage key="signup" mode="signup" />}
       {step === 4 && <AuthPage key="signin" mode="signin" />}
       {step === 10 && user && <Settings key="settings" />}
 
-      {/* Quick reset button - bottom right corner for development */}
+    {/* Quick reset button - bottom right corner for development */}
       <div style={{
         position: 'fixed',
         bottom: '16px',
@@ -332,7 +308,7 @@ function App() {
           Reset
         </button>
       </div>
-    </>
+    </ErrorBoundary>
   );
 }
 

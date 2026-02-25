@@ -1,11 +1,11 @@
 {
-  "name": "CONSIST - Daily Habit Builder",
-  "short_name": "CONSIST",
+  "name": "Coheren",
+  "short_name": "Coheren",
   "description": "Stop planning. Start doing. Build lasting habits with personalized daily tasks.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#000000",
+  "theme_color": "#7c3aed",
   "orientation": "portrait",
   "icons": [
     {

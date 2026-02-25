@@ -175,12 +175,30 @@ export const FloatingNav = ({
                   </button>
                 ))}
                 <div className="mx-4 my-2 h-px bg-slate-100" />
-                <button
-                  onClick={() => { onCtaClick?.(); setMenuOpen(false); }}
-                  className="mx-4 mb-2 rounded-full bg-violet-600 py-2.5 text-sm font-medium text-white hover:bg-violet-700 transition-colors"
-                >
-                  {ctaLabel}
-                </button>
+                {ctaDropdown ? (
+                  <div className="flex flex-col gap-2 mx-4 mb-2">
+                    {ctaDropdown.map((item, i) => (
+                      <button
+                        key={i}
+                        onClick={() => { item.onClick(); setMenuOpen(false); }}
+                        className={`w-full rounded-full py-2.5 text-sm font-medium transition-colors ${
+                          i === 0
+                            ? 'bg-violet-600 text-white hover:bg-violet-700'
+                            : 'border border-violet-200 text-violet-700 hover:bg-violet-50'
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { onCtaClick?.(); setMenuOpen(false); }}
+                    className="mx-4 mb-2 rounded-full bg-violet-600 py-2.5 text-sm font-medium text-white hover:bg-violet-700 transition-colors"
+                  >
+                    {ctaLabel}
+                  </button>
+                )}
               </div>
             </motion.div>
           )}

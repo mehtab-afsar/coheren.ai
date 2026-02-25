@@ -9,6 +9,7 @@
 
 import { ragSupabase, type KnowledgeChunkRow } from '@lib/rag-supabase';
 import { embedQuery } from '@lib/jina-client';
+import { env } from '@config/env';
 
 const SIMILARITY_THRESHOLD = 0.35;
 const MATCH_COUNT          = 4;
@@ -36,7 +37,7 @@ export async function retrieveKnowledgeSemantic(
     matchCount     = MATCH_COUNT,
   } = options;
 
-  const jinaKey = import.meta.env.VITE_JINA_API_KEY as string | undefined;
+  const jinaKey = env.JINA_API_KEY || undefined;
   if (!jinaKey || !query.trim()) return '';
 
   try {

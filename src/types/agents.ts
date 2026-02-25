@@ -380,6 +380,11 @@ export interface AgentContext {
   timeline: number; // in days
   dailyTimeAvailable: number; // in minutes
   behavioralFlags?: string[]; // Obstacle signals from Shadow Extractor
+  // Chat-collected fields — Agent 2 uses these to avoid redundant questions
+  skillLevel?: 'beginner' | 'intermediate' | 'advanced';
+  energyPattern?: string;   // e.g. 'morning', 'evening', 'afternoon', 'night'
+  name?: string;
+  category?: string;
 }
 
 export interface AgentPipeline {

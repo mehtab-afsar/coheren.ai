@@ -4,7 +4,7 @@ import type { OnboardingState, GoalCategory } from '@types-app/index.js';
 import { generateTasksForDay, generateTasksFromAIPlan } from '@shared/utils/taskGenerator.js';
 import type { User } from '@supabase/supabase-js';
 import { getCurrentUser } from '@lib/supabase';
-import { updateTaskCompletion, updateTaskSkip, updateProfile } from '@lib/database';
+import { updateTaskCompletion, updateTaskSkip, updateProfile, saveTaskFeedback } from '@lib/database';
 import type { TaskResource, Agent3Output, Agent2ProfileOutput, DailyTask, TaskStep } from '@types-app/agents.js';
 import { runTaskGenerator } from '@core/agents';
 
@@ -109,6 +109,7 @@ interface AppStore extends OnboardingState {
   setAgentData: (agentRoadmap: Agent3Output, stoneProfile: Agent2ProfileOutput) => void;
   setTasks: (tasks: Task[]) => void;
   completeTask: (taskId: string) => Promise<void>;
+  setTaskFeedback: (taskId: string, difficultyRating: number, feedbackTags?: string[], userComment?: string, actualDuration?: number) => Promise<void>;
   skipTask: (taskId: string, reason?: 'time' | 'health' | 'difficulty' | 'external') => Promise<void>;
   canAdvanceDay: () => boolean;
   advanceDay: () => boolean;
@@ -234,6 +235,40 @@ export const useStore = create<AppStore>()(
 
           return { tasks, completionRate, streak: newStreak };
         });
+      },
+
+      setTaskFeedback: async (taskId, difficultyRating, feedbackTags, userComment, actualDuration) => {
+        // Update task in store
+        set((state) => ({
+          tasks: state.tasks.map((t) =>
+            t.id === taskId
+              ? { ...t, difficultyRating, feedbackTags, userComment, actualDuration }
+              : t
+          ),
+        }));
+
+        const state = get();
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(taskId);
+        if (!state.user || !isUUID) return;
+
+        try {
+          // Update difficulty_rating on the daily_tasks row
+          await updateTaskCompletion(taskId, true, difficultyRating, actualDuration, userComment, feedbackTags);
+
+          // Write to task_feedback table (used by checkpoint recalibration)
+          const goalId = (state.currentGoal as { id?: string }).id;
+          if (goalId) {
+            await saveTaskFeedback(taskId, state.user.id, goalId, {
+              difficultyScore: difficultyRating,
+              actualDurationMins: actualDuration,
+              feedbackTags,
+              userComment,
+              completionStatus: 'completed',
+            });
+          }
+        } catch (err) {
+          console.error('Failed to save task feedback:', err);
+        }
       },
 
       skipTask: async (taskId, reason) => {

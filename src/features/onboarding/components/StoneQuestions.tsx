@@ -135,10 +135,11 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
         </div>
 
         <h3 style={{
-          fontSize: tokens.typography.sizes['2xl'],
+          fontSize: 'clamp(17px, 5vw, 28px)',
           fontWeight: tokens.typography.weights.semibold,
           color: tokens.colors.text.primary,
-          marginBottom: tokens.spacing.sm
+          marginBottom: tokens.spacing.sm,
+          lineHeight: 1.3,
         }}>
           {currentStone.question.text}
         </h3>
@@ -167,6 +168,8 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
               borderRadius: tokens.borderRadius.lg,
               fontWeight: tokens.typography.weights.medium,
               padding: tokens.spacing.lg,
+              minHeight: '52px',
+              fontSize: tokens.typography.sizes.base,
               backgroundColor: answers[currentStone.stoneId]?.answer === option.value
                 ? 'rgba(67, 56, 202, 0.1)'
                 : 'white',
@@ -176,7 +179,7 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
               color: tokens.colors.text.primary,
               textAlign: 'left',
               cursor: 'pointer',
-              transition: 'all 0.2s ease'
+              transition: 'all 0.2s ease',
             }}
             onMouseEnter={(e) => {
               if (answers[currentStone.stoneId]?.answer !== option.value) {
@@ -327,7 +330,8 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
         display: 'flex',
         justifyContent: 'space-between',
         gap: tokens.spacing.md,
-        alignItems: 'center'
+        alignItems: 'center',
+        flexWrap: 'wrap',
       }}>
         <button
           onClick={handleBack}

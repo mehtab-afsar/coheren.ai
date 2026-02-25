@@ -113,7 +113,7 @@ export function HeroSection({
         </p>
 
         {/* AI Input */}
-        <div className="relative z-10 w-full max-w-xl animate-appear opacity-0 delay-300">
+        <div className="relative z-10 w-full max-w-xl" style={{ animation: 'appear 0.5s ease-out 300ms both' }}>
           <AIInput onSubmit={onGoalSubmit} />
           {secondaryAction && (
             <button

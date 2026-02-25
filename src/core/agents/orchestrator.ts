@@ -43,17 +43,24 @@ export async function runOnboardingAgents(
   goal: string,
   timeline: number = 90,
   dailyTime: number = 30,
-  behavioralFlags: string[] = []
+  behavioralFlags: string[] = [],
+  chatContext?: {
+    skillLevel?: 'beginner' | 'intermediate' | 'advanced';
+    energyPattern?: string;
+    name?: string;
+    category?: string;
+  }
 ): Promise<{
   goalAnalysis: Agent1Output;
   stones: Agent2Output;
 }> {
   const context: AgentContext = {
-    userId: 'temp', // Will be replaced with actual user ID
+    userId: 'temp',
     goal,
     timeline,
     dailyTimeAvailable: dailyTime,
-    behavioralFlags
+    behavioralFlags,
+    ...chatContext,
   };
 
   console.log('🤖 Agent 1: Analyzing goal...');

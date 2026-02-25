@@ -55,14 +55,13 @@ export default function AuthPage({ mode }: AuthPageProps) {
         <div className="relative z-10 flex items-center gap-2.5 p-10">
           <div style={{
             width: 30, height: 30, borderRadius: 9,
-            background: 'rgba(124,58,237,0.2)',
-            border: '1px solid rgba(124,58,237,0.35)',
+            background: 'linear-gradient(135deg, #4c1d95, #3b0764)',
+            boxShadow: '0 2px 10px rgba(124,58,237,0.4)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-              <line x1="3" y1="21" x2="21" y2="3" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round"/>
-              <line x1="12" y1="21" x2="21" y2="12" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round"/>
-            </svg>
+            <span style={{ fontSize: '11px', fontWeight: 800, color: '#e9d8fd', letterSpacing: '-0.02em', fontFamily: 'monospace' }}>
+              co//
+            </span>
           </div>
           <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: 15, fontWeight: 500, letterSpacing: '-0.02em' }}>
             coheren.ai
@@ -77,7 +76,7 @@ export default function AuthPage({ mode }: AuthPageProps) {
               shape="sphere"
               type="random"
               colorBack="#060612"
-              colorFront="#7c3aed"
+              colorFront="#4c1d95"
               pxSize={2}
               speed={0.9}
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
@@ -95,7 +94,7 @@ export default function AuthPage({ mode }: AuthPageProps) {
             position: 'absolute',
             width: 480, height: 140,
             borderRadius: '50%',
-            background: 'radial-gradient(ellipse, rgba(124,58,237,0.18) 0%, transparent 70%)',
+            background: 'radial-gradient(ellipse, rgba(124,58,237,0.15) 0%, transparent 70%)',
             filter: 'blur(24px)',
             pointerEvents: 'none',
           }} />
@@ -127,7 +126,7 @@ export default function AuthPage({ mode }: AuthPageProps) {
       <div className="flex flex-1 flex-col" style={{ background: '#fff', overflowY: 'auto' }}>
 
         {/* Back button */}
-        <div className="flex items-center px-10 pt-9">
+        <div className="flex items-center px-6 pt-8 md:px-10 md:pt-9">
           <button
             onClick={() => setStep(0)}
             className="flex items-center gap-1.5 transition-opacity hover:opacity-60"
@@ -139,7 +138,7 @@ export default function AuthPage({ mode }: AuthPageProps) {
         </div>
 
         {/* Form centered */}
-        <div className="flex flex-1 items-center justify-center px-8 py-10">
+        <div className="flex flex-1 items-center justify-center px-5 py-8 md:px-8 md:py-10">
           <div style={{ width: '100%', maxWidth: 360 }}>
 
             <h1 style={{ fontSize: 26, fontWeight: 600, letterSpacing: '-0.04em', color: '#0d0d10', margin: '0 0 6px' }}>
@@ -204,13 +203,13 @@ export default function AuthPage({ mode }: AuthPageProps) {
                   borderRadius: 11, border: 'none',
                   cursor: loading ? 'not-allowed' : 'pointer',
                   fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em',
-                  background: loading ? '#ddd6fe' : 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-                  color: loading ? '#7c3aed' : '#fff',
-                  boxShadow: loading ? 'none' : '0 4px 18px rgba(109,40,217,0.3)',
+                  background: loading ? '#ede9fe' : 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+                  color: loading ? '#5b21b6' : '#fff',
+                  boxShadow: loading ? 'none' : '0 4px 18px rgba(124,58,237,0.35)',
                   transition: 'all 0.15s',
                 }}
-                onMouseEnter={(e) => { if (!loading) { e.currentTarget.style.boxShadow = '0 6px 24px rgba(109,40,217,0.42)'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
-                onMouseLeave={(e) => { e.currentTarget.style.boxShadow = loading ? 'none' : '0 4px 18px rgba(109,40,217,0.3)'; e.currentTarget.style.transform = 'none'; }}
+                onMouseEnter={(e) => { if (!loading) { e.currentTarget.style.boxShadow = '0 6px 24px rgba(124,58,237,0.5)'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
+                onMouseLeave={(e) => { e.currentTarget.style.boxShadow = loading ? 'none' : '0 4px 18px rgba(124,58,237,0.35)'; e.currentTarget.style.transform = 'none'; }}
               >
                 {loading
                   ? (isSignUp ? 'Creating account...' : 'Signing in...')

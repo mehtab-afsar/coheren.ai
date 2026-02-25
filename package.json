@@ -20,7 +20,12 @@
     "supabase:logs": "supabase logs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:smoke": "playwright test e2e/smoke.test.ts",
+    "rag:ingest": "node --env-file=.env node_modules/.bin/tsx scripts/ingest-knowledge.ts",
+    "rag:verify": "node --env-file=.env node_modules/.bin/tsx scripts/verify-rag.ts"
   },
   "dependencies": {
     "@number-flow/react": "^0.5.11",
@@ -33,12 +38,14 @@
     "framer-motion": "^12.33.0",
     "groq-sdk": "^0.37.0",
     "lucide-react": "^0.562.0",
+    "posthog-js": "^1.353.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "zustand": "^5.0.9"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",

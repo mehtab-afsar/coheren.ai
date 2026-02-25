@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { ExternalLink, Play, BookOpen, Wrench, FileText, ThumbsUp, ThumbsDown, X } from 'lucide-react';
 import { tokens } from '@core/design-system';
+import { useBreakpoint } from '@hooks/useBreakpoint';
 
 interface TaskResource {
   type: 'video' | 'article' | 'interactive' | 'image' | 'pdf' | 'tool' | 'playlist';
@@ -71,6 +72,7 @@ export default function ResourceCard({
   onRateHelpful,
   onRateNotHelpful
 }: ResourceCardProps) {
+  const { isMobile } = useBreakpoint();
   const [showVideo, setShowVideo] = useState(false);
   const [helpfulVoted, setHelpfulVoted] = useState(false);
   const [notHelpfulVoted, setNotHelpfulVoted] = useState(false);
@@ -532,19 +534,19 @@ export default function ResourceCard({
             backdropFilter: 'blur(4px)',
           }} />
 
-          {/* Panel */}
+          {/* Panel — full-screen on mobile, 65% slide-in from right on desktop */}
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
               position: 'relative',
-              marginLeft: 'auto',
-              width: '65%',
-              maxWidth: '900px',
+              marginLeft: isMobile ? 0 : 'auto',
+              width: isMobile ? '100%' : '65%',
+              maxWidth: isMobile ? 'none' : '900px',
               height: '100%',
               backgroundColor: tokens.colors.surface,
               display: 'flex',
               flexDirection: 'column',
-              boxShadow: '-8px 0 40px rgba(0,0,0,0.2)',
+              boxShadow: isMobile ? 'none' : '-8px 0 40px rgba(0,0,0,0.2)',
             }}
           >
             {/* Panel Header */}

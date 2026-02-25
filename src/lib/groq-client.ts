@@ -8,13 +8,14 @@
  */
 
 import Groq from 'groq-sdk';
+import { env } from '@config/env';
 
-if (!import.meta.env.VITE_GROQ_API_KEY) {
-  console.warn('⚠️  VITE_GROQ_API_KEY is not set. AI features will not work until this is configured.');
+if (!env.GROQ_API_KEY) {
+  console.warn('⚠️  VITE_GROQ_API_KEY is not set. Groq AI features will not work until this is configured.');
 }
 
 const groq = new Groq({
-  apiKey: import.meta.env.VITE_GROQ_API_KEY || 'placeholder-key',
+  apiKey: env.GROQ_API_KEY || 'placeholder-key',
   dangerouslyAllowBrowser: true,
   maxRetries: 0, // Disable SDK-level retries — our callWithRetry handles this
 });
@@ -128,17 +129,51 @@ export async function callGroqWithFallback(
   throw lastError;
 }
 
+/** Milliseconds before a single model call is considered hung */
+const CALL_TIMEOUT_MS = 30_000;
+
 /**
- * Retry logic with exponential backoff
+ * Retry logic with 30-second timeout per attempt and rate-limit backoff.
+ * Timeout → retry up to `retries` times, then throw a user-visible error.
  */
 async function callWithRetry(
   params: GroqCallParams & { model: string },
   retries: number
 ): Promise<GroqCompletion> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(Object.assign(
+        new Error(`AI model timed out after ${CALL_TIMEOUT_MS / 1000}s`),
+        { code: 'GROQ_TIMEOUT' }
+      )),
+      CALL_TIMEOUT_MS
+    );
+  });
+
   try {
-    return await groq.chat.completions.create(params);
+    const result = await Promise.race([
+      groq.chat.completions.create(params),
+      timeoutPromise,
+    ]);
+    clearTimeout(timeoutId);
+    return result;
   } catch (error: unknown) {
-    const groqError = error as GroqError;
+    clearTimeout(timeoutId);
+
+    const groqError = error as GroqError & { code?: string };
+
+    // Timeout: retry once, then bubble a friendly error
+    if (groqError.code === 'GROQ_TIMEOUT') {
+      if (retries > 0) {
+        console.warn(`⏱ ${params.model} timed out after ${CALL_TIMEOUT_MS / 1000}s — retrying (${retries} left)…`);
+        return callWithRetry(params, retries - 1);
+      }
+      throw new Error('The AI took too long to respond. Please check your connection and try again.');
+    }
+
+    // Rate-limit: wait the suggested backoff then retry
     if (groqError.status === 429 && retries > 0) {
       // Extract wait time from error message (e.g., "Please try again in 6.85s")
       // Groq SDK wraps the message in both error.error.message and error.message

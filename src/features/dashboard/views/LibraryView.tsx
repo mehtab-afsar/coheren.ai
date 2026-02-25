@@ -1,13 +1,13 @@
 import { useState, useMemo } from 'react';
 import { BookOpen, CheckCircle2, FileText, Search, StickyNote } from 'lucide-react';
 import { useStore } from '@core/store/useStore';
-import { tokens, text, card } from '@core/design-system';
+import { tokens, card } from '@core/design-system';
 
 type LibraryTab = 'tasks' | 'notes';
 
 const TYPE_COLORS: Record<string, { bg: string; color: string; label: string }> = {
   practice:   { bg: 'rgba(124,58,237,0.10)', color: '#a78bfa', label: 'Practice' },
-  learning:   { bg: 'rgba(16,185,129,0.10)',  color: '#34d399', label: 'Learning' },
+  learning:   { bg: 'rgba(14,165,233,0.10)',  color: '#38bdf8', label: 'Learning' },
   reflection: { bg: 'rgba(245,158,11,0.10)',  color: '#fbbf24', label: 'Reflect' },
 };
 
@@ -58,10 +58,35 @@ export default function LibraryView() {
 
   return (
     <div>
-      <h1 style={{ ...text.h1, marginBottom: tokens.spacing.lg }}>Library</h1>
-      <p style={{ ...text.body, color: tokens.colors.text.secondary, marginBottom: tokens.spacing['2xl'] }}>
-        Your completed sessions and saved notes.
-      </p>
+      {/* Header — single inline row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing['2xl'] }}>
+        <h1 style={{
+          fontSize: tokens.typography.sizes['2xl'],
+          fontWeight: tokens.typography.weights.semibold,
+          color: tokens.colors.text.primary,
+          letterSpacing: '-0.03em',
+          margin: 0,
+          lineHeight: 1,
+          flex: 1,
+        }}>
+          Library
+        </h1>
+        <span style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          padding: '3px 10px',
+          background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+          borderRadius: '99px',
+          fontSize: '11px',
+          fontWeight: tokens.typography.weights.medium,
+          color: '#fff',
+          letterSpacing: '0.02em',
+          boxShadow: '0 2px 8px rgba(124,58,237,0.35)',
+          flexShrink: 0,
+        }}>
+          {completedTasks.length} done
+        </span>
+      </div>
 
       {/* Search */}
       <div style={{
@@ -221,7 +246,7 @@ export default function LibraryView() {
                       {task.title}
                     </span>
                     {hasNote && (
-                      <StickyNote size={12} color={tokens.colors.text.tertiary} title="Has note" />
+                      <StickyNote size={12} color={tokens.colors.text.tertiary} />
                     )}
                   </div>
                   {task.description && (

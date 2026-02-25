@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import NumberFlow from "@number-flow/react";
-import { Zap, Brain, Route, BookOpen, Infinity } from "lucide-react";
+import { Zap, Brain, Route, BookOpen, Infinity as InfinityIcon } from "lucide-react";
 
 const plans = [
   {
@@ -35,7 +35,7 @@ const plans = [
     popular: true,
     features: [
       { text: "Full 5-Agent AI Pipeline", icon: <Zap size={18} /> },
-      { text: "Unlimited Roadmaps & Goals", icon: <Infinity size={18} /> },
+      { text: "Unlimited Roadmaps & Goals", icon: <InfinityIcon size={18} /> },
       { text: "RAG knowledge access", icon: <BookOpen size={18} /> },
     ],
     includes: [

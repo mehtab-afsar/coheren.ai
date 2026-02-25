@@ -1,65 +1,76 @@
 /**
- * Agent 2 — Mode 1: Question Generator
+ * Agent 2 — Mode 1: Readiness Probe (Question Generator)
  *
- * Generates 4–6 domain-aware, linguistically personalized questions
- * based on Agent 1's goal analysis.
+ * The chat already collected: goal, timeline, dailyTime, skillLevel, energyPattern, name.
+ * Agent 2's job is NOT to re-collect that data. It is Coheren's propulsion engine —
+ * it uncovers the psychological, behavioural, and environmental realities that will
+ * determine whether the person actually follows through.
  *
- * Rules:
- *   - Questions must be goal-specific, not generic
- *   - Use the goal text inside question phrasing (reciprocity effect)
- *   - Prefer multiple_choice to reduce friction
- *   - Never ask what's already known (timeline, goal, daily time, name)
- *   - Each question must have a clear impact on the curriculum
+ * What it probes (never repeat what chat collected):
+ *   - Past failure patterns for this goal type
+ *   - Resilience response when a day is skipped
+ *   - Accountability style and social commitment
+ *   - Competing demands right now
+ *   - Emotional relationship with the goal (fear of failure, perfectionism, confidence)
+ *   - Environment and focus quality
+ *
+ * These answers feed directly into the stone taxonomy and shape Agents 3–5.
  */
 
 import type { Agent1Output, Agent2Output, AgentContext } from '@types-app/agents';
 import { callReasoning } from '@lib/ai-router';
-import { DOMAIN_GAPS, STONE_DESCRIPTIONS } from './stone-taxonomy';
+import { DOMAIN_READINESS_GAPS, STONE_DESCRIPTIONS } from './stone-taxonomy';
+// Note: DOMAIN_GAPS alias also exported for legacy references
 
 function buildSystemPrompt(): string {
   const stoneList = Object.entries(STONE_DESCRIPTIONS)
     .map(([type, desc]) => `- ${type}: ${desc}`)
     .join('\n');
 
-  return `You are Agent 2: Stone Identifier — Question Generator mode.
+  return `You are Agent 2: Coheren's Readiness Probe.
 
-Your job is to generate 4–6 targeted diagnostic questions that uncover the variables
-most likely to derail the user's goal — their "stones."
+The user just finished a chat where they told us their goal, timeline, daily time, skill level, and energy pattern.
+You ALREADY HAVE all of that. Your job is to go deeper — uncover the psychological and behavioural patterns
+that determine whether they will actually follow through.
 
-## Known Stone Types
+## What You Are Probing
+You are looking for hidden "stones" — the specific patterns most likely to derail this person.
+These are NOT about what they want to do. They are about how they operate, how they've failed before,
+and what their relationship to this goal really looks like beneath the surface.
+
+## Stone Types You Can Detect
 ${stoneList}
 
-## Question Generation Principles
+## Core Principles
 
-### 1. Domain-Aware Scoping
-Each domain has specific unknowns. Generate questions that address EXACTLY those unknowns.
-Do NOT ask generic questions like "How motivated are you?"
+### 1. Never Re-Ask What's Already Known
+The chat already collected: goal, timeline, daily time commitment, skill level, energy pattern (morning/evening/etc), and name.
+DO NOT ask about any of these. Asking them again breaks trust and wastes their time.
 
-### 2. Linguistic Personalization (Reciprocity Effect)
-WRONG: "How many hours can you study?"
-RIGHT: "Since UPSC prep demands deep concentration, how many distraction-free hours can you honestly commit daily?"
+### 2. Probe Patterns, Not Facts
+WRONG: "How many hours can you study per day?" (already known)
+WRONG: "What is your experience level?" (already known)
+RIGHT: "When you've tried building a habit before and hit a bad week, what happened next?"
+RIGHT: "Who in your life knows you're working on this goal right now?"
 
-Always reference the goal. Always explain WHY you're asking (increases honest response rate).
+### 3. One Insight Per Question
+Each question must probe exactly ONE stone. Don't stack multiple unknowns in one question.
 
-### 3. Question Type Rules
-- PREFER multiple_choice (2–4 options) — less friction, higher completion
-- Use open_ended only for truly free-form (e.g., "What usually stops you?")
-- Use scale for intensity ratings
-- Use yes_no only for binary gates (e.g., "Do you have gym access?")
+### 4. Question Type Rules
+- PREFER multiple_choice (2–4 options): less friction, faster completion
+- Use open_ended only when multiple choice would feel reductive (e.g., "What usually makes you quit?")
+- Use yes_no for true binary gates (e.g., "Have you tried this before?")
+- Use scale for intensity/frequency ratings
 
-### 4. Impact Specificity
-Every option MUST explain how it changes the curriculum:
+### 5. Impact Specificity
+Every option must explain exactly how it changes the curriculum:
 - Not: "affects plan"
-- Yes: "reduces weekly volume by 20%, adds recovery days, avoids compound movements"
+- Yes: "adds 'recovery day' structure after every 3 days, reduces Phase 1 volume by 25%"
 
-### 5. What NOT to Ask
-- Time commitment (already known)
-- Daily time (already known)
-- Timeline (already known)
-- Goal or purpose (already known)
-- General skill level (infer from analysis)
+### 6. Generate 4–5 Questions Only
+Quality over quantity. Each question must be high-signal. Skip low-impact probes.
 
-## Output
+## Output Format
 Return ONLY valid JSON, no markdown:
 {
   "requiredStones": [
@@ -67,17 +78,17 @@ Return ONLY valid JSON, no markdown:
       "stoneId": "unique_snake_case_id",
       "stoneName": "Display Name",
       "importance": "critical|high|medium|low",
-      "reasoning": "Why this changes the curriculum (be specific)",
+      "reasoning": "Why this specific pattern changes the curriculum",
       "question": {
-        "text": "Personalized question referencing the goal",
+        "text": "Personalized question referencing their specific goal",
         "type": "multiple_choice|open_ended|yes_no|scale",
         "options": [
           {
             "value": "option_value",
             "label": "Display label",
             "impact": {
-              "curriculum": "Specific curriculum change",
-              "modifications": "Specific modifications"
+              "curriculum": "Specific curriculum change this answer triggers",
+              "modifications": "Specific task/phase modifications"
             }
           }
         ]
@@ -89,35 +100,57 @@ Return ONLY valid JSON, no markdown:
 
 function buildUserPrompt(context: AgentContext, goalAnalysis: Agent1Output): string {
   const g = goalAnalysis.goalAnalysis;
-  const domainGaps = DOMAIN_GAPS[g.domain] ?? DOMAIN_GAPS['Lifestyle'];
+  const readinessGaps = DOMAIN_READINESS_GAPS[g.domain] ?? DOMAIN_READINESS_GAPS['Lifestyle'];
 
-  return `Generate 4–6 targeted diagnostic questions for this user.
+  // Build a rich "already known" block so Agent 2 never asks redundant questions
+  const alreadyKnown = [
+    `Goal: "${context.goal}"`,
+    `Timeline: ${context.timeline} days`,
+    `Daily time committed: ${context.dailyTimeAvailable} minutes`,
+    `Domain: ${g.domain} / ${g.category}`,
+    context.skillLevel  ? `Skill level: ${context.skillLevel}`  : null,
+    context.energyPattern ? `Peak energy: ${context.energyPattern}` : null,
+    context.name        ? `Name: ${context.name}` : null,
+    g.constraintsDetected.length > 0
+      ? `Constraints already surfaced in chat: ${g.constraintsDetected.join(', ')}`
+      : null,
+    g.risksDetected.length > 0
+      ? `Risks already surfaced: ${g.risksDetected.join(', ')}`
+      : null,
+    context.behavioralFlags && context.behavioralFlags.length > 0
+      ? `Behavioural signals from chat: ${context.behavioralFlags.join(', ')}`
+      : null,
+  ].filter(Boolean).join('\n');
 
-## Goal Analysis
-Goal: "${context.goal}"
+  return `Generate 4–5 readiness probe questions for this user. You are uncovering their psychological and behavioural patterns — NOT collecting data they already gave you.
+
+## Everything Already Known (DO NOT RE-ASK ANY OF THIS)
+${alreadyKnown}
+
+## Goal Intelligence (from Agent 1)
 Domain: ${g.domain}
-Category: ${g.category}
-Horizon: ${g.horizon}
 Intensity: ${g.intensity}
+Horizon: ${g.horizon}
 Complexity: ${g.complexity}
-Constraints Already Detected: ${g.constraintsDetected.length > 0 ? g.constraintsDetected.join(', ') : 'None'}
-Risks Already Detected: ${g.risksDetected.length > 0 ? g.risksDetected.join(', ') : 'None'}
-Missing SMART: ${g.missingSMART.length > 0 ? g.missingSMART.join(', ') : 'None'}
+Realism — Time: ${g.realismChecks.timeRealism}, Effort: ${g.realismChecks.effortRealism}
+SMART gaps: ${g.missingSMART.length > 0 ? g.missingSMART.join(', ') : 'None'}
+Common obstacles for this goal type: ${g.commonObstacles.length > 0 ? g.commonObstacles.join('; ') : 'N/A'}
 
-## Critical Variables for ${g.domain} Domain
-These are the unknowns most likely to derail progress — generate questions that uncover them:
-${domainGaps.map((gap, i) => `${i + 1}. ${gap}`).join('\n')}
+## Readiness Gaps to Probe for ${g.domain} Domain
+These are the hidden patterns most likely to determine whether this person succeeds.
+Generate questions that surface EXACTLY these patterns:
+${readinessGaps.map((gap, i) => `${i + 1}. ${gap}`).join('\n')}
 
-## Already Known (DO NOT ASK)
-- Goal: "${context.goal}"
-- Timeline: ${context.timeline} days
-- Daily time: ${context.dailyTimeAvailable} minutes
-- General complexity: ${g.complexity}
+## Behavioural Flags Detected in Chat
+${context.behavioralFlags && context.behavioralFlags.length > 0
+  ? context.behavioralFlags.map(f => `- ${f}`).join('\n') + '\nIf relevant, ask a question that confirms or deepens understanding of these patterns.'
+  : 'No specific flags detected — probe general resilience and accountability patterns.'}
 
-## Instruction
-Generate GOAL-SPECIFIC questions. Every question must reference "${context.goal}" or related specifics.
-Prioritize questions that would create SIGNIFICANTLY different curriculum paths based on the answer.
-Order by importance (critical first).`;
+## Instructions
+- Every question must name the goal ("${context.goal}") or a specific aspect of it
+- Each question maps to exactly one stone type from the taxonomy
+- Order by importance: put the question most likely to split the curriculum path first
+- Never ask what's already known`;
 }
 
 function validateOutput(raw: unknown): Agent2Output {
@@ -126,8 +159,8 @@ function validateOutput(raw: unknown): Agent2Output {
     throw new Error('Agent 2 Mode 1: Missing requiredStones array');
   }
 
-  // Cap at 6 questions max
-  parsed.requiredStones = parsed.requiredStones.slice(0, 6);
+  // Cap at 5 questions
+  parsed.requiredStones = parsed.requiredStones.slice(0, 5);
 
   // Ensure each stone has required fields
   parsed.requiredStones = parsed.requiredStones.filter(
@@ -146,7 +179,7 @@ export async function generateQuestions(
       { role: 'system', content: buildSystemPrompt() },
       { role: 'user', content: buildUserPrompt(context, goalAnalysis) },
     ],
-    temperature: 0.35,  // Slightly creative to personalize language, not too random
+    temperature: 0.3,
     max_tokens: 3000,
     response_format: { type: 'json_object' },
   });

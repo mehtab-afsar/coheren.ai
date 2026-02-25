@@ -197,6 +197,25 @@ If domain is Career AND FearOfFailure is an active stone:
             "Three job titles researched and noted down", "Email draft saved in drafts folder".
 - Do NOT use open-ended criteria such as "just try it" or "see what happens".
 
+If domain is Financial AND FearOfFailure is an active stone:
+- ALL steps MUST be labeled "(Simulation)" — zero real-money action in this session.
+- Title starts with "Experiment:" (e.g. "Experiment: Paper-Trade Your First ETF Purchase").
+- successCriteria.primary measures understanding, not financial outcome:
+  e.g. "You're done when you've completed the simulation and written one thing you noticed — there's no wrong answer."
+- Add a "Safety Net" tip as the final tip: "This is a simulation. No real money will move. Your only job is to notice how the process feels."
+- coaching_cue must reinforce that observation is the goal, not profit.
+
+If domain is Financial AND ProcrastinationPattern is an active stone:
+- Step 1 MUST be a concrete platform/tool ACTION — not a video or reading step.
+  e.g. "Open your paper-trading account (or Investopedia Stock Simulator) and navigate to the search bar." — zero setup reading allowed.
+- Step 2 is a ≤10-min simulation action before any learning content.
+- Remove ALL standalone "watch/read X" steps — any learning must be embedded inside action steps as brief parenthetical notes.
+- Add an implementation intention as the final tip: "If I feel the urge to research more first, I will do step 1 anyway for just 2 minutes."
+
+If domain is Financial AND Overcommitment is an active stone:
+- Any real-money step must specify the minimum viable amount: "Use no more than $5 or 1% of your planned budget — whichever is smaller."
+- Add a hard-stop tip: "One action per session. Close the platform after completing step [N]. More moves do not mean more progress."
+
 ── GLOBAL RULES ──
 1. estimatedMinutes ≤ ${dailyTimeAvailable}. Never exceed the daily time budget.
 2. Steps must be specific and actionable — no vague instructions ("practice X" → "do 3×10 reps of X with a 90-second rest").
@@ -316,6 +335,7 @@ const PLACEHOLDER_VIDEO_IDS = new Set([
   'XXXXXXXXXX',
 ]);
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function sanitizeResourceUrl(url: unknown, _taskTitle?: string): string | null {
   if (typeof url !== 'string' || !url.trim()) return null;
 
@@ -463,24 +483,31 @@ export async function generateTask(
   const { phase, week, dayInPhase }  = resolvePhaseForDay(phases, dayNumber);
   const detectedStones               = stoneProfile.stoneProfile.stones.map(s => s.type as StoneType);
 
-  // Infer domain from domainPedagogy string (e.g. "Sports Periodization" → "Kinesthetic")
-  const pedagogy = roadmap.domainPedagogy?.toLowerCase() ?? '';
-  let domain = 'Lifestyle';
-  if (pedagogy.includes('spaced repetition') || pedagogy.includes('interleaving')) domain = 'Cognitive';
-  else if (pedagogy.includes('periodization'))                                      domain = 'Kinesthetic';
-  else if (pedagogy.includes('build') && pedagogy.includes('convert'))             domain = 'Career';
-  else if (pedagogy.includes('divergent') || pedagogy.includes('convergent'))      domain = 'Creative';
-  else if (pedagogy.includes('behavioral activation'))                             domain = 'Health';
-  else if (pedagogy.includes('keystone') || pedagogy.includes('identity'))        domain = 'Lifestyle';
-  else if (pedagogy.includes('knowledge laddering'))                               domain = 'Financial';
+  // Infer domain — category from Agent 1 is the primary signal (exact, reliable).
+  // domainPedagogy from Agent 3 is the fallback (keyword-based, can vary in phrasing).
+  const categoryLower = (category ?? '').toLowerCase();
+  const pedagogy      = roadmap.domainPedagogy?.toLowerCase() ?? '';
+
+  let domain: string;
+  if      (categoryLower === 'financial'   || pedagogy.includes('knowledge laddering'))                             domain = 'Financial';
+  else if (categoryLower === 'cognitive'   || pedagogy.includes('spaced repetition') || pedagogy.includes('interleaving')) domain = 'Cognitive';
+  else if (categoryLower === 'kinesthetic' || pedagogy.includes('periodization'))                                   domain = 'Kinesthetic';
+  else if (categoryLower === 'career'      || (pedagogy.includes('build') && pedagogy.includes('convert')))        domain = 'Career';
+  else if (categoryLower === 'creative'    || pedagogy.includes('divergent') || pedagogy.includes('convergent'))   domain = 'Creative';
+  else if (categoryLower === 'health'      || pedagogy.includes('behavioral activation'))                          domain = 'Health';
+  else                                                                                                              domain = 'Lifestyle';
 
   // Goal line from phase context
   const goalLine = phase.primaryGoals?.[0] ?? 'achieve the goal';
 
   // Auto-fetch RAG if not provided
+  // Financial domain benefits from money-psychology / behavioural-finance framing.
   let science = ragContext ?? '';
   if (!science) {
-    const query = `${phase.phaseName} ${stoneProfile.stoneProfile.primaryStone} daily practice habit coaching`;
+    const primaryStone = stoneProfile.stoneProfile.primaryStone;
+    const query = domain === 'Financial'
+      ? `financial habit building ${primaryStone} behavioral change money psychology action bias`
+      : `${phase.phaseName} ${primaryStone} daily practice habit coaching`;
     science = await retrieveKnowledgeSemantic({ query, matchCount: 2 });
   }
 

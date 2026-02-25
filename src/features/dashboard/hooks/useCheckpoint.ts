@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useStore, type Task } from '@core/store/useStore';
 import { getRecentFeedback } from '@lib/database';
+import { track } from '@lib/analytics';
 import { handleCheckpoint } from '@core/agents/orchestrator';
 import { isCheckpointDay } from '@lib/checkpointHelpers';
 import type { Agent2ProfileOutput } from '@types-app/agents';
@@ -150,6 +151,11 @@ export function useCheckpoint() {
 
       // Update local tasks with new sprint tasks
       setTasks(convertedTasks);
+
+      track({
+        event: 'checkpoint_completed',
+        properties: { day: currentDay, completed_tasks: checkpointData.completedTasks, avg_difficulty: checkpointData.avgDifficulty },
+      });
 
       // Surface the Agent 5 result in the UI (replaces the alert)
       setRecalibrationResult({

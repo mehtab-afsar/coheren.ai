@@ -1,5 +1,6 @@
 import { tokens } from '@core/design-system';
 import DashboardSidebar from '@features/dashboard/components/DashboardSidebar';
+import BottomNav from '@features/dashboard/components/BottomNav';
 import TodayView from './views/TodayView';
 import JourneyView from './views/JourneyView';
 import ProfileView from './views/ProfileView';
@@ -13,28 +14,26 @@ import { useStore } from '@core/store/useStore';
 import { useCheckpoint } from './hooks/useCheckpoint';
 import { useDashboardNav } from './hooks/useDashboardNav';
 import { useBreakpoint } from '@hooks/useBreakpoint';
+import { useNotifications } from '@hooks/useNotifications';
 
 export default function Dashboard() {
+  useNotifications();
   const { currentView, setCurrentView, sidebarOpen, setSidebarOpen } = useDashboardNav();
   const { checkpointData, isRecalibrating, recalibrationResult, handleCheckpointComplete } = useCheckpoint();
-  const { isMobile, isTablet } = useBreakpoint();
+  const { isMobile } = useBreakpoint();
 
   const currentDay = useStore((state) => state.currentDay);
 
-  const contentPadding = isMobile
-    ? `${tokens.spacing.xl} ${tokens.spacing.lg}`
-    : `${tokens.spacing['4xl']} ${tokens.spacing['4xl']}`;
+  const handleFocusTap = () => setCurrentView('today');
 
-  const contentPaddingLeft = isMobile
-    ? tokens.spacing.lg
-    : sidebarOpen ? tokens.spacing['4xl'] : 'calc(44px + 48px)';
-
+  // Desktop-only: shift content right when sidebar is open
   const marginLeft = isMobile ? '0' : sidebarOpen ? '260px' : '0';
+  const paddingLeft = isMobile ? '16px' : sidebarOpen ? tokens.spacing['4xl'] : 'calc(44px + 48px)';
 
   const renderView = () => {
     switch (currentView) {
       case 'today':
-        return <TodayView />;
+        return <TodayView onNavigate={setCurrentView} />;
       case 'journey':
         return <JourneyView />;
       case 'profile':
@@ -42,11 +41,11 @@ export default function Dashboard() {
       case 'progress':
         return <ProgressView />;
       case 'goals':
-        return <GoalsView />;
+        return <GoalsView onNavigate={setCurrentView} />;
       case 'library':
         return <LibraryView />;
       default:
-        return <TodayView />;
+        return <TodayView onNavigate={setCurrentView} />;
     }
   };
 
@@ -58,15 +57,15 @@ export default function Dashboard() {
         minHeight: '100vh',
         backgroundColor: tokens.colors.background,
       }}>
-        {/* Sidebar */}
-        <DashboardSidebar
-          currentView={currentView}
-          onViewChange={setCurrentView}
-          isOpen={sidebarOpen}
-          onToggle={setSidebarOpen}
-        />
+        {!isMobile && (
+          <DashboardSidebar
+            currentView={currentView}
+            onViewChange={setCurrentView}
+            isOpen={sidebarOpen}
+            onToggle={setSidebarOpen}
+          />
+        )}
 
-        {/* Checkpoint Screen */}
         <div style={{
           flex: 1,
           display: 'flex',
@@ -77,8 +76,9 @@ export default function Dashboard() {
           <div style={{
             width: '100%',
             maxWidth: '800px',
-            padding: `${tokens.spacing['4xl']} ${tokens.spacing['4xl']}`,
-            paddingLeft: sidebarOpen ? tokens.spacing['4xl'] : 'calc(44px + 48px)',
+            padding: isMobile ? '20px 16px' : `${tokens.spacing['4xl']} ${tokens.spacing['4xl']}`,
+            paddingLeft,
+            paddingBottom: isMobile ? '96px' : undefined,
           }}>
             <CheckpointScreen
               checkpointDay={currentDay}
@@ -94,6 +94,10 @@ export default function Dashboard() {
             />
           </div>
         </div>
+
+        {isMobile && (
+          <BottomNav activeTab={currentView} onTabChange={setCurrentView} onFocusTap={handleFocusTap} />
+        )}
       </div>
     );
   }
@@ -105,15 +109,16 @@ export default function Dashboard() {
       minHeight: '100vh',
       backgroundColor: tokens.colors.background,
     }}>
-      {/* Sidebar */}
-      <DashboardSidebar
-        currentView={currentView}
-        onViewChange={setCurrentView}
-        isOpen={sidebarOpen}
-        onToggle={setSidebarOpen}
-      />
+      {!isMobile && (
+        <DashboardSidebar
+          currentView={currentView}
+          onViewChange={setCurrentView}
+          isOpen={sidebarOpen}
+          onToggle={setSidebarOpen}
+        />
+      )}
 
-      {/* Main Content - Centered with smooth transition */}
+      {/* Main Content */}
       <div style={{
         flex: 1,
         display: 'flex',
@@ -124,12 +129,20 @@ export default function Dashboard() {
         <div style={{
           width: '100%',
           maxWidth: '800px',
-          padding: contentPadding,
-          paddingLeft: contentPaddingLeft, // Space for toggle button
+          padding: isMobile ? '20px 16px' : `${tokens.spacing['4xl']} ${tokens.spacing['4xl']}`,
+          paddingLeft,
+          // Extra bottom padding on mobile so content isn't hidden behind BottomNav
+          paddingBottom: isMobile ? '96px' : undefined,
         }}>
-          {renderView()}
+          <div key={currentView} style={{ animation: 'dashFadeIn 0.18s ease both' }}>
+            {renderView()}
+          </div>
         </div>
       </div>
+
+      {isMobile && (
+        <BottomNav activeTab={currentView} onTabChange={setCurrentView} onFocusTap={handleFocusTap} />
+      )}
     </div>
   );
 }

@@ -41,6 +41,7 @@ function useTypewriter(phrases: string[]) {
           setCharIdx((c) => c - 1);
         }, 25);
       } else {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setDeleting(false);
         setPhraseIdx((p) => (p + 1) % phrases.length);
       }
@@ -107,7 +108,7 @@ export function AIInput({
           }}
         />
 
-        <div className="relative flex items-center rounded-2xl bg-white/80 backdrop-blur-sm border border-black/[0.06] px-5">
+        <div className="relative flex items-center rounded-2xl bg-white/80 backdrop-blur-sm px-5">
           {/* Textarea */}
           <textarea
             id={id}
@@ -157,7 +158,7 @@ export function AIInput({
               "h-8 w-8 rounded-xl transition-all duration-200",
               inputValue
                 ? "bg-violet-600 text-white shadow-[0_2px_8px_rgba(139,92,246,0.4)] scale-100 opacity-100"
-                : "bg-black/5 text-black/30 scale-90 opacity-0 pointer-events-none",
+                : "bg-black/[0.06] text-black/25 scale-95 opacity-100",
             )}
           >
             <ArrowRight className="w-4 h-4" />

@@ -64,10 +64,11 @@ export function resetORStats(): void {
 
 // ── Core fetch ────────────────────────────────────────────────────────────────
 
+import { env } from '@config/env';
+
 function getKey(): string {
-  const key = import.meta.env.VITE_OPENROUTER_API_KEY;
-  if (!key) throw new Error('[OpenRouter] VITE_OPENROUTER_API_KEY is not set in .env');
-  return key;
+  if (!env.OPENROUTER_API_KEY) throw new Error('[OpenRouter] VITE_OPENROUTER_API_KEY is not set in .env');
+  return env.OPENROUTER_API_KEY;
 }
 
 function extractWaitMs(errMsg: string): number {

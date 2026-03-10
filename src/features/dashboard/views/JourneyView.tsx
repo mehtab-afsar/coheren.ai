@@ -82,6 +82,11 @@ export default function JourneyView() {
     return 'upcoming';
   };
 
+  // Phase map
+  const phases = ['Foundation', 'Development', 'Mastery', 'Excellence'];
+  const weeksPerPhase = Math.max(1, Math.ceil(totalWeeks / 4));
+  const currentPhaseIdx = Math.min(3, Math.floor((currentWeek - 1) / weeksPerPhase));
+
   return (
     <div>
       {/* Animation keyframes */}
@@ -220,6 +225,57 @@ export default function JourneyView() {
               <p style={{ fontSize: tokens.typography.sizes.base, fontWeight: tokens.typography.weights.semibold, color: '#e9d5ff', margin: 0, letterSpacing: '-0.01em' }}>{value}</p>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Phase Map */}
+      <div style={{ marginBottom: tokens.spacing['2xl'] }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.md }}>
+          <h2 style={{ fontSize: tokens.typography.sizes.lg, fontWeight: tokens.typography.weights.semibold, color: tokens.colors.text.primary, margin: 0, letterSpacing: '-0.02em' }}>
+            Phases
+          </h2>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: tokens.spacing.xs }}>
+          {phases.map((phaseName, idx) => {
+            const phaseStartWeek = idx * weeksPerPhase + 1;
+            const phaseEndWeek = Math.min((idx + 1) * weeksPerPhase, totalWeeks);
+            const isActive = idx === currentPhaseIdx;
+            const isCompleted = idx < currentPhaseIdx;
+            const phaseWeeksCompleted = isCompleted
+              ? phaseEndWeek - phaseStartWeek + 1
+              : isActive
+              ? Math.max(0, currentWeek - phaseStartWeek)
+              : 0;
+            const phaseWeeksTotal = phaseEndWeek - phaseStartWeek + 1;
+            const phaseProgress = phaseWeeksTotal > 0 ? Math.round((phaseWeeksCompleted / phaseWeeksTotal) * 100) : 0;
+            return (
+              <div key={phaseName} style={{
+                padding: `${tokens.spacing.sm} ${tokens.spacing.md}`,
+                backgroundColor: isActive ? 'rgba(124,58,237,0.05)' : tokens.colors.surface,
+                border: `1px solid ${isActive ? 'rgba(124,58,237,0.2)' : isCompleted ? 'rgba(124,58,237,0.12)' : tokens.colors.borderLight}`,
+                borderRadius: tokens.borderRadius.md,
+                opacity: !isActive && !isCompleted ? 0.5 : 1,
+              }}>
+                <p style={{ fontSize: '10px', fontWeight: 600, color: isActive ? '#7c3aed' : isCompleted ? '#6d28d9' : tokens.colors.text.tertiary, letterSpacing: '0.02em', margin: '0 0 3px', textTransform: 'uppercase' as const }}>
+                  Phase {idx + 1}
+                </p>
+                <p style={{ fontSize: '11px', fontWeight: 600, color: isActive ? '#7c3aed' : tokens.colors.text.primary, margin: '0 0 4px', lineHeight: 1.2 }}>
+                  {phaseName}
+                </p>
+                <p style={{ fontSize: '10px', color: tokens.colors.text.tertiary, margin: '0 0 6px' }}>
+                  Wks {phaseStartWeek}–{phaseEndWeek}
+                </p>
+                <div style={{ height: 3, backgroundColor: tokens.colors.gray[100], borderRadius: '99px', overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${phaseProgress}%`,
+                    background: isCompleted ? '#6d28d9' : 'linear-gradient(90deg, #7c3aed, #a78bfa)',
+                    borderRadius: '99px',
+                  }} />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -469,6 +525,35 @@ export default function JourneyView() {
                             }} />
                           </div>
                         )}
+                        {/* Day dots */}
+                        <div style={{ display: 'flex', gap: 3, marginTop: 6 }}>
+                          {Array.from({ length: 7 }, (_, i) => {
+                            const dayNum = (weekNumber - 1) * 7 + 1 + i;
+                            const dayTask = tasks.find(t => t.day === dayNum);
+                            const isToday = dayNum === currentDay;
+                            const isPast = dayNum < currentDay;
+                            let dotBg: string;
+                            if (isToday) dotBg = '#7c3aed';
+                            else if (dayTask?.completed) dotBg = '#6d28d9';
+                            else if (dayTask?.skipped) dotBg = '#d1d5db';
+                            else if (isPast && dayTask) dotBg = 'rgba(239,68,68,0.25)';
+                            else if (isPast) dotBg = '#f3f4f6';
+                            else dotBg = 'transparent';
+                            const dotBorder = !isToday && !dayTask?.completed && !dayTask?.skipped && dayNum > currentDay
+                              ? '1.5px solid #e5e7eb' : 'none';
+                            return (
+                              <div key={i} style={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: '50%',
+                                background: dotBg,
+                                border: dotBorder,
+                                flexShrink: 0,
+                                boxShadow: isToday ? '0 0 0 2px rgba(124,58,237,0.2)' : 'none',
+                              }} />
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
 
@@ -558,12 +643,58 @@ export default function JourneyView() {
                                     </span>
                                   )}
                                 </div>
+                                {(() => {
+                                  try {
+                                    const notes = JSON.parse(localStorage.getItem(`note_entries_${task.id}`) || '[]') as Array<{ id: string; text: string }>;
+                                    const last = notes[notes.length - 1];
+                                    if (!last) return null;
+                                    return (
+                                      <div style={{
+                                        marginTop: 4,
+                                        padding: '3px 8px',
+                                        backgroundColor: 'rgba(124,58,237,0.04)',
+                                        borderLeft: '2px solid rgba(124,58,237,0.2)',
+                                        borderRadius: '0 4px 4px 0',
+                                      }}>
+                                        <p style={{ fontSize: '10px', color: tokens.colors.text.tertiary, margin: 0, fontStyle: 'italic', lineHeight: 1.4 }}>
+                                          "{last.text}"
+                                        </p>
+                                      </div>
+                                    );
+                                  } catch { return null; }
+                                })()}
                               </div>
                             </div>
                           );
                         })}
                       </div>
                     )}
+                    {isCurrentWeek && currentWeek < totalWeeks && (() => {
+                      const nextWeekNum = currentWeek + 1;
+                      const { focus: nextFocus } = getWeekDetails(nextWeekNum);
+                      return (
+                        <div style={{
+                          marginTop: tokens.spacing.xs,
+                          padding: `${tokens.spacing.sm} ${tokens.spacing.md}`,
+                          background: 'rgba(124,58,237,0.03)',
+                          border: '1px dashed rgba(124,58,237,0.15)',
+                          borderRadius: tokens.borderRadius.md,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: tokens.spacing.sm,
+                        }}>
+                          <div style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, border: '1.5px dashed rgba(124,58,237,0.4)' }} />
+                          <div>
+                            <p style={{ fontSize: '10px', color: 'rgba(124,58,237,0.55)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' as const, margin: '0 0 2px' }}>
+                              Up next · Week {nextWeekNum}
+                            </p>
+                            <p style={{ fontSize: '11px', color: tokens.colors.text.secondary, margin: 0, fontWeight: 500 }}>
+                              {nextFocus}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}

@@ -23,13 +23,37 @@ export function initAnalytics() {
 
 // ── Event catalogue ───────────────────────────────────────────────────────────
 export type AnalyticsEvent =
+  // Core task events
   | { event: 'onboarding_completed'; properties?: { goal_category?: string } }
   | { event: 'task_completed'; properties: { task_id: string; task_type?: string; day: number } }
   | { event: 'task_skipped'; properties: { task_id: string; reason: string; day: number } }
   | { event: 'task_feedback_submitted'; properties: { task_id: string; difficulty: number } }
   | { event: 'checkpoint_completed'; properties: { day: number; completed_tasks: number; avg_difficulty: number } }
   | { event: 'checkpoint_dropped'; properties: { day: number } }
-  | { event: 'view_changed'; properties: { view: string } };
+  | { event: 'view_changed'; properties: { view: string } }
+  // Focus session
+  | { event: 'focus_session_started'; properties: { task_id: string; task_type?: string; day: number } }
+  | { event: 'focus_session_completed'; properties: { task_id: string; duration_seconds: number; has_notes: boolean } }
+  | { event: 'focus_session_abandoned'; properties: { task_id: string; duration_seconds: number; reason?: string } }
+  // Difficulty feedback loop
+  | { event: 'difficulty_prompt_shown'; properties: { trigger: 'hard_skips' | 'low_moods'; count: number } }
+  | { event: 'difficulty_choice_made'; properties: { choice: 'simplify' | 'extend' | 'keep' } }
+  // Sharing & milestones
+  | { event: 'milestone_shared'; properties: { platform: 'native' | 'download'; streak: number; tasks_done: number } }
+  | { event: 'streak_warning_shown'; properties: { current_streak: number } }
+  // Notifications & permissions
+  | { event: 'notification_permission'; properties: { granted: boolean } }
+  // Plan adjustments
+  | { event: 'plan_adjustment_shown'; properties: { adjustment_type: 'simplify' | 'extend' } }
+  // Onboarding steps
+  | { event: 'onboarding_step_completed'; properties: { step: number; total: number } }
+  // Summaries & coach insights
+  | { event: 'weekly_summary_viewed'; properties: { week_number: number; completion_pct: number } }
+  | { event: 'coach_insight_shown'; properties: { insight_type: string } }
+  // Offline
+  | { event: 'offline_action_queued'; properties: { action_type: string } }
+  // Tab engagement
+  | { event: 'tab_time_spent'; properties: { tab: string; seconds: number } };
 
 export function track({ event, properties }: AnalyticsEvent) {
   if (!initialized) return;

@@ -1,4 +1,4 @@
-import { Target, Map, User, TrendingUp, Home } from 'lucide-react';
+import { Home, Map, User, TrendingUp, Play } from 'lucide-react';
 import { tokens } from '@core/design-system';
 
 type ViewType = 'today' | 'journey' | 'profile' | 'progress' | 'goals' | 'library';
@@ -12,14 +12,15 @@ interface BottomNavProps {
 const ACTIVE_COLOR = '#7c3aed';
 const INACTIVE_COLOR = 'rgba(0,0,0,0.35)';
 
+// New order: Today | Journey | [FAB] | Progress | Me
 const LEFT_TABS = [
-  { id: 'goals' as const,    label: 'Goals',    icon: Target },
-  { id: 'progress' as const, label: 'Progress', icon: TrendingUp },
+  { id: 'today'   as const, label: 'Today',   icon: Home },
+  { id: 'journey' as const, label: 'Journey', icon: Map },
 ];
 
 const RIGHT_TABS = [
-  { id: 'journey' as const, label: 'Journey', icon: Map },
-  { id: 'profile' as const, label: 'Profile',  icon: User },
+  { id: 'progress' as const, label: 'Progress', icon: TrendingUp },
+  { id: 'profile'  as const, label: 'Me',        icon: User },
 ];
 
 type LucideIcon = React.ComponentType<{ size: number; strokeWidth: number; color: string; style?: React.CSSProperties }>;
@@ -109,7 +110,7 @@ export default function BottomNav({ activeTab, onTabChange, onFocusTap }: Bottom
         overflow: 'visible',
       }}
     >
-      {/* Left tabs: Goals + Progress */}
+      {/* Left tabs: Today + Journey */}
       {LEFT_TABS.map(({ id, label, icon }) => (
         <TabButton
           key={id}
@@ -121,7 +122,7 @@ export default function BottomNav({ activeTab, onTabChange, onFocusTap }: Bottom
         />
       ))}
 
-      {/* Center FAB — floats above the nav bar */}
+      {/* Center FAB — DO: instant task launcher, floats above the nav bar */}
       <div style={{
         flex: 1,
         display: 'flex',
@@ -147,13 +148,13 @@ export default function BottomNav({ activeTab, onTabChange, onFocusTap }: Bottom
             WebkitTapHighlightColor: 'transparent',
             flexShrink: 0,
           }}
-          aria-label="Go to Today"
+          aria-label="Start focus session"
         >
-          <Home size={20} color="#fff" />
+          <Play size={18} color="#fff" fill="#fff" />
         </button>
       </div>
 
-      {/* Right tabs: Journey + Profile */}
+      {/* Right tabs: Progress + Me */}
       {RIGHT_TABS.map(({ id, label, icon }) => (
         <TabButton
           key={id}

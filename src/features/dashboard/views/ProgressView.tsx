@@ -1,4 +1,5 @@
-import { TrendingUp, Calendar, CheckCircle, Flame, Brain, Zap } from 'lucide-react';
+import { useMemo } from 'react';
+import { TrendingUp, Calendar, CheckCircle, Flame, Brain, Zap, Trophy, Clock } from 'lucide-react';
 import { useStore } from '@core/store/useStore';
 import { tokens } from '@core/design-system';
 import { shouldTriggerCheckpoint } from '@core/agents/recalibrator';
@@ -37,29 +38,37 @@ export default function ProgressView() {
   // 14-day activity chart — group completed tasks by calendar date
   const todayDate = new Date();
   const todayDateStr = todayDate.toISOString().split('T')[0];
-  const last14Dates = Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(todayDate);
-    d.setDate(d.getDate() - 13 + i);
-    return d.toISOString().split('T')[0];
-  });
-  const completedByDate: Record<string, number> = {};
-  tasks.forEach(t => {
-    if (t.completed && t.completedAt) {
-      const dateStr = t.completedAt.split('T')[0];
-      completedByDate[dateStr] = (completedByDate[dateStr] ?? 0) + 1;
-    }
-  });
-  const last14DaysData = last14Dates.map(dateStr => {
-    const d = new Date(dateStr + 'T12:00:00');
-    const dayNames = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-    return {
-      dateStr,
-      label: dayNames[d.getDay()],
-      completed: completedByDate[dateStr] ?? 0,
-      isToday: dateStr === todayDateStr,
-    };
-  });
-  const maxDayBar = Math.max(1, ...last14DaysData.map(d => d.completed));
+
+  const completedByDate = useMemo(() => {
+    const byDate: Record<string, number> = {};
+    tasks.forEach(t => {
+      if (t.completed && t.completedAt) {
+        const dateStr = t.completedAt.split('T')[0];
+        byDate[dateStr] = (byDate[dateStr] ?? 0) + 1;
+      }
+    });
+    return byDate;
+  }, [tasks]);
+
+  const { last14DaysData, maxDayBar } = useMemo(() => {
+    const last14Dates = Array.from({ length: 14 }, (_, i) => {
+      const d = new Date(todayDate);
+      d.setDate(d.getDate() - 13 + i);
+      return d.toISOString().split('T')[0];
+    });
+    const data = last14Dates.map(dateStr => {
+      const d = new Date(dateStr + 'T12:00:00');
+      const dayNames = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+      return {
+        dateStr,
+        label: dayNames[d.getDay()],
+        completed: completedByDate[dateStr] ?? 0,
+        isToday: dateStr === todayDateStr,
+      };
+    });
+    return { last14DaysData: data, maxDayBar: Math.max(1, ...data.map(d => d.completed)) };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completedByDate, todayDateStr]);
 
   // Task type breakdown
   const typeBreakdown = [
@@ -71,6 +80,83 @@ export default function ProgressView() {
     const pct = completedTasks > 0 ? Math.round((count / completedTasks) * 100) : 0;
     return { label, color, gradient, count, pct };
   });
+
+  // ── Streak Calendar ────────────────────────────────────────────────────
+  // Build a 7-week (49-day) contribution grid ending today
+  const calendarDays = useMemo(() => {
+    const result: Array<{ date: string; status: 'completed' | 'partial' | 'missed' | 'today' | 'future' }> = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let i = 48; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      const isToday = i === 0;
+      const isFuture = d > today;
+      if (isFuture) { result.push({ date: dateStr, status: 'future' }); continue; }
+      if (isToday) { result.push({ date: dateStr, status: 'today' }); continue; }
+      const dayCompleted = completedByDate[dateStr] ?? 0;
+      const dayTotal = (() => {
+        // Estimate total by checking tasks with completedAt or tasks whose day maps roughly to this date
+        const firstTaskDate = tasks.length > 0 && tasks[0].completedAt
+          ? new Date(tasks[0].completedAt.split('T')[0])
+          : null;
+        if (!firstTaskDate) return 0;
+        const dayOffset = Math.round((d.getTime() - firstTaskDate.getTime()) / (1000 * 60 * 60 * 24));
+        return tasks.filter(t => Math.ceil(t.day / 1) === dayOffset + 1).length;
+      })();
+      if (dayCompleted === 0) { result.push({ date: dateStr, status: 'missed' }); continue; }
+      if (dayTotal > 0 && dayCompleted >= dayTotal) { result.push({ date: dateStr, status: 'completed' }); continue; }
+      result.push({ date: dateStr, status: 'partial' });
+    }
+    return result;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completedByDate, tasks]);
+
+  // ── Personal Records ───────────────────────────────────────────────────
+  const longestStreak = useMemo(() => {
+    let best = 0, current = 0;
+    for (const d of calendarDays) {
+      if (d.status === 'completed' || d.status === 'today') { current++; if (current > best) best = current; }
+      else if (d.status !== 'future') current = 0;
+    }
+    return Math.max(best, streak);
+  }, [calendarDays, streak]);
+
+  const bestWeek = useMemo(() => {
+    const highestWeekWithTasks = tasks.length > 0 ? Math.max(...tasks.map(t => Math.ceil(t.day / 7))) : 1;
+    let bestNum = 1, bestPct = 0;
+    for (let w = 1; w <= highestWeekWithTasks; w++) {
+      const wTasks = tasks.filter(t => Math.ceil(t.day / 7) === w);
+      const wDone = wTasks.filter(t => t.completed).length;
+      const pct = wTasks.length > 0 ? Math.round((wDone / wTasks.length) * 100) : 0;
+      if (pct > bestPct) { bestPct = pct; bestNum = w; }
+    }
+    return { number: bestNum, percentage: bestPct };
+  }, [tasks]);
+
+  const totalMinutesInvested = useMemo(
+    () => tasks.filter(t => t.completed).reduce((sum, t) => sum + (t.duration || 0), 0),
+    [tasks]
+  );
+  const formatHours = (mins: number) => {
+    if (mins < 60) return `${mins}m`;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  };
+
+  // ── Coach Summary ──────────────────────────────────────────────────────
+  const coachSummary = (() => {
+    if (completedTasks === 0) return "You're just getting started. Every journey begins with a single task — complete one today.";
+    if (streak >= 14) return `${streak} days of consistency is rare. Most people never make it past 2 weeks. You're building something real.`;
+    if (streak >= 7) return `A full week of consistency. Your brain is forming new neural pathways right now. Keep the chain unbroken.`;
+    if (streak >= 3) return `Three days in a row. The pattern is forming. This is the critical window — don't let momentum slip.`;
+    if (overallCompletion >= 80) return `${overallCompletion}% overall completion puts you in the top tier. You're not just building habits — you're building identity.`;
+    if (weeklyCompletion >= 70) return `Strong week. You completed ${weeklyCompletion}% of your planned tasks. Consistency compounds — keep going.`;
+    if (weeklyCompletion < 40 && currentWeek > 1) return `This week has been tough. That's okay — progress isn't linear. Focus on completing just one task today.`;
+    return `Day ${currentDay} of your journey. Every task you complete is a vote for the person you're becoming.`;
+  })();
 
   const statCards = [
     {
@@ -201,6 +287,130 @@ export default function ProgressView() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* ── Streak Calendar ──────────────────────────────────────────────── */}
+      <div style={{
+        backgroundColor: tokens.colors.surface,
+        border: `1px solid ${tokens.colors.borderLight}`,
+        borderRadius: tokens.borderRadius.lg,
+        padding: tokens.spacing.xl,
+        marginBottom: tokens.spacing['2xl'],
+        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: tokens.spacing.lg }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm }}>
+            <Flame size={15} strokeWidth={2} color="#f97316" style={{ filter: 'drop-shadow(0 0 4px rgba(249,115,22,0.4))' }} />
+            <h3 style={{ fontSize: tokens.typography.sizes.base, fontWeight: tokens.typography.weights.semibold, color: tokens.colors.text.primary, margin: 0, letterSpacing: '-0.01em' }}>
+              Activity
+            </h3>
+          </div>
+          {/* Legend */}
+          <div style={{ display: 'flex', gap: tokens.spacing.md }}>
+            {[
+              { color: '#7c3aed', label: 'Done' },
+              { color: 'rgba(124,58,237,0.35)', label: 'Partial' },
+              { color: 'rgba(239,68,68,0.3)', label: 'Missed' },
+            ].map(({ color, label }) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: color }} />
+                <span style={{ fontSize: 9, color: tokens.colors.text.tertiary }}>{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Day-of-week labels */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3, marginBottom: 4 }}>
+          {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
+            <span key={i} style={{ fontSize: 9, color: tokens.colors.text.tertiary, textAlign: 'center' }}>{d}</span>
+          ))}
+        </div>
+
+        {/* Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 }}>
+          {calendarDays.map(({ date, status }) => {
+            const bg =
+              status === 'completed' ? '#7c3aed' :
+              status === 'partial'   ? 'rgba(124,58,237,0.4)' :
+              status === 'missed'    ? 'rgba(239,68,68,0.28)' :
+              status === 'today'     ? '#7c3aed' :
+              'rgba(0,0,0,0.04)';
+            const ring = status === 'today' ? '2px solid rgba(124,58,237,0.5)' : 'none';
+            return (
+              <div
+                key={date}
+                title={date}
+                style={{ aspectRatio: '1', borderRadius: 3, backgroundColor: bg, outline: ring, outlineOffset: 1, transition: 'opacity 0.15s' }}
+              />
+            );
+          })}
+        </div>
+
+        {/* Current streak callout */}
+        <div style={{ marginTop: tokens.spacing.lg, paddingTop: tokens.spacing.md, borderTop: `1px solid ${tokens.colors.borderLight}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: tokens.typography.sizes.xs, color: tokens.colors.text.tertiary }}>Current streak</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Flame size={13} strokeWidth={2} color="#f97316" />
+            <span style={{ fontSize: tokens.typography.sizes.sm, fontWeight: tokens.typography.weights.semibold, color: tokens.colors.text.primary }}>{streak} day{streak !== 1 ? 's' : ''}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Personal Records ─────────────────────────────────────────────── */}
+      <div style={{ marginBottom: tokens.spacing['2xl'] }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.md }}>
+          <Trophy size={15} strokeWidth={2} color="#f59e0b" style={{ filter: 'drop-shadow(0 0 4px rgba(245,158,11,0.4))' }} />
+          <h3 style={{ fontSize: tokens.typography.sizes.base, fontWeight: tokens.typography.weights.semibold, color: tokens.colors.text.primary, margin: 0, letterSpacing: '-0.01em' }}>
+            Personal Records
+          </h3>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: tokens.spacing.sm }}>
+          {[
+            { icon: Flame,    color: '#f97316', label: 'Longest Streak',   value: `${longestStreak} day${longestStreak !== 1 ? 's' : ''}` },
+            { icon: Trophy,   color: '#f59e0b', label: 'Best Week',        value: `Week ${bestWeek.number} · ${bestWeek.percentage}%` },
+            { icon: CheckCircle, color: '#7c3aed', label: 'Tasks Done',    value: String(completedTasks) },
+            { icon: Clock,    color: '#0ea5e9', label: 'Time Invested',    value: formatHours(totalMinutesInvested) },
+          ].map(({ icon: Icon, color, label, value }) => (
+            <div key={label} style={{
+              backgroundColor: tokens.colors.surface,
+              border: `1px solid ${tokens.colors.borderLight}`,
+              borderRadius: tokens.borderRadius.lg,
+              padding: tokens.spacing.lg,
+              boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+            }}>
+              <Icon size={15} strokeWidth={2} color={color} style={{ marginBottom: 8 }} />
+              <p style={{ fontSize: '1.25rem', fontWeight: tokens.typography.weights.semibold, color: tokens.colors.text.primary, margin: '0 0 2px', letterSpacing: '-0.03em' }}>{value}</p>
+              <p style={{ fontSize: tokens.typography.sizes.xs, color: tokens.colors.text.tertiary, margin: 0 }}>{label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Coach Summary ─────────────────────────────────────────────────── */}
+      <div style={{
+        backgroundColor: `${tokens.colors.primary}07`,
+        border: `1px solid ${tokens.colors.primary}15`,
+        borderRadius: tokens.borderRadius.lg,
+        padding: tokens.spacing.xl,
+        marginBottom: tokens.spacing['2xl'],
+        display: 'flex', alignItems: 'flex-start', gap: tokens.spacing.md,
+      }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: tokens.borderRadius.md,
+          backgroundColor: `${tokens.colors.primary}15`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}>
+          <Brain size={16} color={tokens.colors.primary} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <p style={{ fontSize: '10px', color: tokens.colors.primary, fontWeight: tokens.typography.weights.semibold, letterSpacing: '0.07em', textTransform: 'uppercase' as const, margin: '0 0 6px' }}>
+            Coach Notes
+          </p>
+          <p style={{ fontSize: tokens.typography.sizes.sm, color: tokens.colors.text.secondary, lineHeight: 1.65, margin: 0 }}>
+            {coachSummary}
+          </p>
+        </div>
       </div>
 
       {/* Task Type Breakdown */}

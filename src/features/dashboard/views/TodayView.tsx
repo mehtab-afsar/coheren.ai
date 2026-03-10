@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock, ArrowRight, Sparkles, SkipForward, X, Zap, BookOpen, FileText } from 'lucide-react';
+import { CheckCircle2, Clock, ArrowRight, Sparkles, SkipForward, X, Zap, BookOpen, FileText, Flame, Brain, Rocket } from 'lucide-react';
 import { useStore } from '@core/store/useStore';
 import { tokens, text, card } from '@core/design-system';
 import { useRef, useState, useCallback, useEffect } from 'react';
@@ -35,8 +35,8 @@ export default function TodayView({
   const [quickMode, setQuickMode] = useState(false);
   // Ease Back Mode — auto-limits to 1 task on re-engagement, dismissed when user wants all
   const [easeBackMode, setEaseBackMode] = useState(true);
-  // Cinema Mode panel: null = closed, 'guide' | 'notes' = open
-  const [cinemaTab, setCinemaTab] = useState<'guide' | 'notes' | null>(null);
+  // Cinema Mode panel: null = closed, 'guide' | 'notes' | 'steps' = open
+  const [cinemaTab, setCinemaTab] = useState<'guide' | 'notes' | 'steps' | null>(null);
   // Ref to the YouTube iframe so we can postMessage it
   const cinemaIframeRef = useRef<HTMLIFrameElement>(null);
   // Tracks current video playback position from YouTube infoDelivery messages
@@ -45,11 +45,39 @@ export default function TodayView({
   const [cinemaResumeTime, setCinemaResumeTime] = useState<number | null>(null);
   // Override the embed start time (null = use watchFrom, number = resume/seek target)
   const [cinemaStartOverride, setCinemaStartOverride] = useState<number | null>(null);
-  // Notes: persisted in localStorage keyed by task id
-  const [cinemaNote, setCinemaNote] = useState('');
-  const loadNoteForTask = (taskId: string) => localStorage.getItem(`note_${taskId}`) || '';
-  const saveNote = (taskId: string, note: string) => {
-    localStorage.setItem(`note_${taskId}`, note);
+  // Focus Timer (count-up while cinema is open)
+  const [focusSeconds, setFocusSeconds] = useState(0);
+  const [focusPaused, setFocusPaused] = useState(false);
+  const focusIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Note entries: structured per-entry notes with optional video timestamp
+  interface NoteEntry { id: string; text: string; videoTs?: string; createdAt: string; }
+  const [noteEntries, setNoteEntries] = useState<NoteEntry[]>([]);
+  const [noteInput, setNoteInput] = useState('');
+  const loadNoteEntries = (taskId: string): NoteEntry[] => {
+    try {
+      const raw = localStorage.getItem(`note_entries_${taskId}`);
+      if (raw) return JSON.parse(raw);
+      // Migrate old single-string note to a single entry
+      const old = localStorage.getItem(`note_${taskId}`);
+      if (old?.trim()) return [{ id: 'legacy', text: old.trim(), createdAt: new Date().toISOString() }];
+    } catch { /* ignore */ }
+    return [];
+  };
+  const saveNoteEntries = (taskId: string, entries: NoteEntry[]) => {
+    try { localStorage.setItem(`note_entries_${taskId}`, JSON.stringify(entries)); } catch { /* ignore */ }
+  };
+
+  // Step completion state per task (set of completed step indices)
+  const [stepsCompleted, setStepsCompleted] = useState<Set<number>>(new Set());
+  const loadStepsCompleted = (taskId: string): Set<number> => {
+    try {
+      const raw = localStorage.getItem(`steps_done_${taskId}`);
+      return raw ? new Set<number>(JSON.parse(raw)) : new Set();
+    } catch { return new Set(); }
+  };
+  const saveStepsCompleted = (taskId: string, set: Set<number>) => {
+    try { localStorage.setItem(`steps_done_${taskId}`, JSON.stringify([...set])); } catch { /* ignore */ }
   };
 
   // Listen for YouTube infoDelivery postMessages to track current time
@@ -66,6 +94,16 @@ export default function TodayView({
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
   }, [cinemaTaskId]);
+
+  // Count-up focus timer — runs while cinema is open and not paused
+  useEffect(() => {
+    if (!cinemaTaskId || focusPaused) {
+      if (focusIntervalRef.current) { clearInterval(focusIntervalRef.current); focusIntervalRef.current = null; }
+      return;
+    }
+    focusIntervalRef.current = setInterval(() => setFocusSeconds(s => s + 1), 1000);
+    return () => { if (focusIntervalRef.current) { clearInterval(focusIntervalRef.current); focusIntervalRef.current = null; } };
+  }, [cinemaTaskId, focusPaused]);
 
   // Pause the embedded YouTube video via postMessage (requires enablejsapi=1)
   const pauseYouTube = useCallback(() => {
@@ -86,10 +124,46 @@ export default function TodayView({
   }, []);
 
   // Switch cinema panel — pause video whenever switching
-  const switchCinemaTab = useCallback((tab: 'guide' | 'notes') => {
+  const switchCinemaTab = useCallback((tab: 'guide' | 'notes' | 'steps') => {
     pauseYouTube();
     setCinemaTab(prev => prev === tab ? null : tab); // toggle: click active = close
   }, [pauseYouTube]);
+  // ── Onboarding Checklist (first 7 days only) ─────────────────────────────
+  const CHECKLIST_DISMISS_KEY = 'onboard_checklist_dismissed';
+  const [checklistDismissed, setChecklistDismissed] = useState(
+    () => { try { return localStorage.getItem(CHECKLIST_DISMISS_KEY) === '1'; } catch { return false; } }
+  );
+  // Derive checklist item completion
+  const checklistItems = [
+    {
+      id: 'task1',
+      label: 'Complete your first task',
+      done: tasks.filter(t => t.completed).length > 0,
+    },
+    {
+      id: 'focus',
+      label: 'Try a Focus Session',
+      done: (() => { try { return localStorage.getItem('onboard_focus_done') === '1'; } catch { return false; } })(),
+    },
+    {
+      id: 'note',
+      label: 'Write a note during a session',
+      done: (() => { try { return Object.keys(localStorage).some(k => k.startsWith('note_') && Boolean(localStorage.getItem(k))); } catch { return false; } })(),
+    },
+    {
+      id: 'streak3',
+      label: 'Hit a 3-day streak',
+      done: streak >= 3,
+    },
+    {
+      id: 'journey',
+      label: 'Check your Journey map',
+      done: (() => { try { return localStorage.getItem('onboard_journey_done') === '1'; } catch { return false; } })(),
+    },
+  ];
+  const checklistAllDone = checklistItems.every(i => i.done);
+  const showChecklist = currentDay <= 7 && !checklistDismissed && !checklistAllDone;
+
   // Weekly recap dismiss (persisted per session per week boundary)
   const weekRecapKey = `weekRecap_dismissed_day${currentDay}`;
   const [weekRecapDismissed, setWeekRecapDismissed] = useState(
@@ -209,6 +283,12 @@ export default function TodayView({
 
   // Open cinema: check for saved resume position, load note, open guide panel
   const openCinema = (taskId: string) => {
+    try { localStorage.setItem('onboard_focus_done', '1'); } catch { /* ignore */ }
+    setFocusSeconds(0);
+    setFocusPaused(false);
+    setNoteEntries(loadNoteEntries(taskId));
+    setNoteInput('');
+    setStepsCompleted(loadStepsCompleted(taskId));
     const task = todaysTasks.find(t => t.id === taskId);
     const vidId = task?.resources?.primary?.type === 'video'
       ? getYouTubeId(task.resources.primary.url)
@@ -219,7 +299,6 @@ export default function TodayView({
     setCinemaResumeTime(savedSecs > 10 ? savedSecs : null); // only offer resume if meaningfully past start
     setCinemaStartOverride(null);
     setCinemaTaskId(taskId);
-    setCinemaNote(loadNoteForTask(taskId));
     setCinemaTab('guide');
   };
 
@@ -358,10 +437,51 @@ export default function TodayView({
                 <span style={{ fontSize: 13, fontWeight: 400, color: 'rgba(255,255,255,0.65)', lineHeight: 1.4, letterSpacing: '-0.01em', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {cinemaTask.title}
                 </span>
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
-                  <Clock size={11} strokeWidth={1.5} /> {formatDuration(cinemaTask.duration)}
-                </span>
               </div>
+
+              {/* Focus Timer — count-up with circular progress */}
+              {(() => {
+                const estSecs = cinemaTask.duration * 60;
+                const progress = Math.min(focusSeconds / estSecs, 1);
+                const circumference = 2 * Math.PI * 13;
+                const mins = Math.floor(focusSeconds / 60);
+                const secs = focusSeconds % 60;
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    {/* Ring + time */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <svg width="32" height="32" viewBox="0 0 32 32" style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
+                        <circle cx="16" cy="16" r="13" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="2.5" />
+                        <circle
+                          cx="16" cy="16" r="13" fill="none"
+                          stroke={progress >= 1 ? '#a78bfa' : tokens.colors.primary}
+                          strokeWidth="2.5"
+                          strokeDasharray={`${progress * circumference} ${circumference}`}
+                          strokeLinecap="round"
+                          style={{ transition: 'stroke-dasharray 1s linear' }}
+                        />
+                      </svg>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.75)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                        {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
+                      </span>
+                    </div>
+                    {/* Pause/resume */}
+                    <button
+                      onClick={() => setFocusPaused(p => !p)}
+                      title={focusPaused ? 'Resume timer' : 'Pause timer'}
+                      style={{ width: 28, height: 28, borderRadius: 7, border: 'none', cursor: 'pointer', backgroundColor: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}
+                      onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; }}
+                    >
+                      {focusPaused
+                        ? <svg width="10" height="12" viewBox="0 0 10 12" fill="currentColor"><path d="M0 0l10 6-10 6z"/></svg>
+                        : <svg width="10" height="12" viewBox="0 0 10 12" fill="currentColor"><rect x="0" y="0" width="3.5" height="12"/><rect x="6.5" y="0" width="3.5" height="12"/></svg>
+                      }
+                    </button>
+                  </div>
+                );
+              })()}
+
               {/* Close button */}
               <button
                 onClick={closeCinema}
@@ -497,14 +617,15 @@ export default function TodayView({
                   <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginBottom: 10, textAlign: 'center' }}>What's getting in the way?</p>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
                     {([
-                      { reason: 'time' as const, emoji: '⏱️', label: 'No time' },
-                      { reason: 'health' as const, emoji: '😓', label: 'Not well' },
-                      { reason: 'difficulty' as const, emoji: '😕', label: 'Too hard' },
-                      { reason: 'external' as const, emoji: '📅', label: 'Came up' },
-                    ]).map(({ reason, emoji, label }) => (
+                      { reason: 'time'       as const, storeReason: 'time'       as const, emoji: '⏱️', label: 'No time' },
+                      { reason: 'health'     as const, storeReason: 'health'     as const, emoji: '😓', label: 'Not feeling well' },
+                      { reason: 'difficulty' as const, storeReason: 'difficulty' as const, emoji: '😕', label: 'Too hard' },
+                      { reason: 'external'   as const, storeReason: 'external'   as const, emoji: '📅', label: 'Something came up' },
+                      { reason: 'motivation' as const, storeReason: 'external'   as const, emoji: '🌪️', label: 'Lost motivation' },
+                    ]).map(({ storeReason, emoji, label }) => (
                       <button
-                        key={reason}
-                        onClick={() => confirmSkip(cinemaTask.id, reason, setCinemaTaskId)}
+                        key={label}
+                        onClick={() => confirmSkip(cinemaTask.id, storeReason, setCinemaTaskId)}
                         style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.6)', transition: 'all 120ms ease' }}
                         onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'; }}
                         onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; }}
@@ -559,20 +680,23 @@ export default function TodayView({
               {/* Panel header */}
               <div style={{ padding: '20px 20px 14px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', gap: 2, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 9, padding: 3 }}>
-                  {(['guide', 'notes'] as const).map(tab => (
+                  {([
+                    { id: 'guide' as const, icon: <BookOpen size={12} />, label: 'Guide' },
+                    { id: 'notes' as const, icon: <FileText size={12} />, label: 'Notes' },
+                    ...(cinemaTask.steps?.length ? [{ id: 'steps' as const, icon: <CheckCircle2 size={12} />, label: 'Steps' }] : []),
+                  ]).map(({ id, icon, label }) => (
                     <button
-                      key={tab}
-                      onClick={() => switchCinemaTab(tab)}
+                      key={id}
+                      onClick={() => switchCinemaTab(id)}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 5,
                         padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
                         fontSize: 12, fontWeight: 500, transition: 'all 0.15s',
-                        backgroundColor: cinemaTab === tab ? 'rgba(255,255,255,0.1)' : 'transparent',
-                        color: cinemaTab === tab ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.3)',
+                        backgroundColor: cinemaTab === id ? 'rgba(255,255,255,0.1)' : 'transparent',
+                        color: cinemaTab === id ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.3)',
                       }}
                     >
-                      {tab === 'guide' ? <BookOpen size={12} /> : <FileText size={12} />}
-                      {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                      {icon}{label}
                     </button>
                   ))}
                 </div>
@@ -638,33 +762,89 @@ export default function TodayView({
 
                 {cinemaTab === 'notes' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
-                    <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.22)', margin: 0, lineHeight: 1.5 }}>
-                      Capture key takeaways while watching. Notes are saved per task.
-                    </p>
-                    <textarea
-                      value={cinemaNote}
-                      onChange={e => setCinemaNote(e.target.value)}
-                      placeholder="Type your notes here..."
-                      autoFocus
-                      style={{
-                        flex: 1, minHeight: 220,
-                        backgroundColor: 'rgba(255,255,255,0.04)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: 10, padding: '12px 14px',
-                        fontSize: 13, color: 'rgba(255,255,255,0.75)',
-                        lineHeight: 1.7, resize: 'none', outline: 'none', fontFamily: 'inherit',
-                      }}
-                      onFocus={e => { e.currentTarget.style.borderColor = `${tokens.colors.primary}50`; e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)'; }}
-                      onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.04)'; }}
-                    />
-                    <button
-                      onClick={() => saveNote(cinemaTask.id, cinemaNote)}
-                      style={{ alignSelf: 'flex-end', padding: '7px 18px', backgroundColor: tokens.colors.primary, border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, color: '#fff', cursor: 'pointer', transition: 'opacity 0.15s' }}
-                      onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
-                      onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-                    >
-                      Save note
-                    </button>
+                    {/* Existing entries */}
+                    {noteEntries.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {noteEntries.map(entry => (
+                          <div key={entry.id} style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 9, padding: '10px 12px', border: '1px solid rgba(255,255,255,0.07)' }}>
+                            {entry.videoTs && (
+                              <span style={{ fontSize: 10, color: tokens.colors.primary, fontFamily: 'monospace', display: 'block', marginBottom: 4 }}>⏱ {entry.videoTs}</span>
+                            )}
+                            <p style={{ margin: 0, fontSize: 13, color: 'rgba(255,255,255,0.65)', lineHeight: 1.65 }}>{entry.text}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {noteEntries.length === 0 && (
+                      <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.22)', margin: 0, lineHeight: 1.5 }}>
+                        Capture key takeaways. Notes are saved per task.
+                      </p>
+                    )}
+                    {/* Input row */}
+                    <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
+                      <input
+                        value={noteInput}
+                        onChange={e => setNoteInput(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && noteInput.trim()) {
+                            const entry: NoteEntry = {
+                              id: Date.now().toString(),
+                              text: noteInput.trim(),
+                              videoTs: cinemaCurrentTimeRef.current > 5
+                                ? (() => { const m = Math.floor(cinemaCurrentTimeRef.current / 60); const s = Math.floor(cinemaCurrentTimeRef.current % 60); return `${m}:${String(s).padStart(2, '0')}`; })()
+                                : undefined,
+                              createdAt: new Date().toISOString(),
+                            };
+                            const updated = [...noteEntries, entry];
+                            setNoteEntries(updated);
+                            saveNoteEntries(cinemaTask.id, updated);
+                            setNoteInput('');
+                            try { localStorage.setItem('onboard_note_done', '1'); } catch { /* ignore */ }
+                          }
+                        }}
+                        placeholder="Add a note... (Enter to save)"
+                        style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 9, padding: '9px 12px', fontSize: 13, color: 'rgba(255,255,255,0.75)', outline: 'none', fontFamily: 'inherit' }}
+                        onFocus={e => e.currentTarget.style.borderColor = `${tokens.colors.primary}50`}
+                        onBlur={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {cinemaTab === 'steps' && cinemaTask.steps && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.25)', fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase' }}>Sub-steps</p>
+                      <span style={{ fontSize: 11, color: stepsCompleted.size === cinemaTask.steps.length ? tokens.colors.primary : 'rgba(255,255,255,0.3)' }}>
+                        {stepsCompleted.size}/{cinemaTask.steps.length}
+                      </span>
+                    </div>
+                    {/* Progress bar */}
+                    <div style={{ height: 3, backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 99, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${(stepsCompleted.size / cinemaTask.steps.length) * 100}%`, backgroundColor: tokens.colors.primary, borderRadius: 99, transition: 'width 0.3s ease' }} />
+                    </div>
+                    {cinemaTask.steps.map((step, i) => {
+                      const done = stepsCompleted.has(i);
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            const next = new Set(stepsCompleted);
+                            if (done) next.delete(i); else next.add(i);
+                            setStepsCompleted(next);
+                            saveStepsCompleted(cinemaTask.id, next);
+                          }}
+                          style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 12px', backgroundColor: done ? `${tokens.colors.primary}0D` : 'rgba(255,255,255,0.04)', border: `1px solid ${done ? tokens.colors.primary + '30' : 'rgba(255,255,255,0.07)'}`, borderRadius: 10, cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s' }}
+                        >
+                          <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${done ? tokens.colors.primary : 'rgba(255,255,255,0.2)'}`, backgroundColor: done ? tokens.colors.primary : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1, transition: 'all 0.15s' }}>
+                            {done && <CheckCircle2 size={10} color="#fff" strokeWidth={3} />}
+                          </div>
+                          <span style={{ fontSize: 13, color: done ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.7)', lineHeight: 1.65, textDecoration: done ? 'line-through' : 'none', transition: 'all 0.15s' }}>
+                            {step}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -705,6 +885,24 @@ export default function TodayView({
               <FileText size={16} />
             </button>
 
+            {/* Steps button — only if task has steps */}
+            {(cinemaTask.steps?.length ?? 0) > 0 && (
+              <button
+                onClick={() => switchCinemaTab('steps')}
+                title="Steps"
+                style={{
+                  width: 40, height: 40, borderRadius: 10, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
+                  backgroundColor: cinemaTab === 'steps' ? tokens.colors.primary : 'rgba(255,255,255,0.06)',
+                  color: cinemaTab === 'steps' ? '#fff' : 'rgba(255,255,255,0.4)',
+                  boxShadow: cinemaTab === 'steps' ? `0 4px 16px ${tokens.colors.primary}50` : 'none',
+                }}
+                onMouseEnter={e => { if (cinemaTab !== 'steps') { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; } }}
+                onMouseLeave={e => { if (cinemaTab !== 'steps') { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; } }}
+              >
+                <CheckCircle2 size={16} />
+              </button>
+            )}
+
             {/* Spacer then close */}
             <div style={{ flex: 1 }} />
             <button
@@ -720,48 +918,118 @@ export default function TodayView({
         </div>
       )}
 
-      {/* ── Header — single inline row ──────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.xl }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{
-            fontSize: tokens.typography.sizes.xs,
-            color: tokens.colors.text.tertiary,
-            margin: 0,
-            letterSpacing: '0.01em',
-            lineHeight: 1,
-            marginBottom: '3px',
+      {/* ── Header — greeting + week dots ───────────────────────────────── */}
+      <div style={{ marginBottom: tokens.spacing.xl }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: '10px' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{
+              fontSize: tokens.typography.sizes.xs,
+              color: tokens.colors.text.tertiary,
+              margin: 0,
+              letterSpacing: '0.01em',
+              lineHeight: 1,
+              marginBottom: '3px',
+            }}>
+              {getGreeting()}
+            </p>
+            <h1 style={{
+              fontSize: 'clamp(18px, 5vw, 24px)',
+              fontWeight: tokens.typography.weights.semibold,
+              color: tokens.colors.text.primary,
+              letterSpacing: '-0.03em',
+              margin: 0,
+              lineHeight: 1.1,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap' as const,
+            }}>
+              {universalProfile.name || 'Welcome back'}
+            </h1>
+          </div>
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            padding: '3px 10px',
+            background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+            borderRadius: '99px',
+            fontSize: '11px',
+            fontWeight: tokens.typography.weights.medium,
+            color: '#fff',
+            letterSpacing: '0.02em',
+            boxShadow: '0 2px 8px rgba(124,58,237,0.35)',
+            flexShrink: 0,
           }}>
-            {getGreeting()}
-          </p>
-          <h1 style={{
-            fontSize: 'clamp(18px, 5vw, 24px)',
-            fontWeight: tokens.typography.weights.semibold,
-            color: tokens.colors.text.primary,
-            letterSpacing: '-0.03em',
-            margin: 0,
-            lineHeight: 1.1,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap' as const,
-          }}>
-            {universalProfile.name || 'Welcome back'}
-          </h1>
+            Day {currentDay}
+          </span>
         </div>
-        <span style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          padding: '3px 10px',
-          background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-          borderRadius: '99px',
-          fontSize: '11px',
-          fontWeight: tokens.typography.weights.medium,
-          color: '#fff',
-          letterSpacing: '0.02em',
-          boxShadow: '0 2px 8px rgba(124,58,237,0.35)',
-          flexShrink: 0,
+
+        {/* Week dots — 7 dots showing this week's progress */}
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          {[1, 2, 3, 4, 5, 6, 7].map(dotDay => {
+            const weekStart = Math.floor((currentDay - 1) / 7) * 7 + 1;
+            const absDay = weekStart + dotDay - 1;
+            const currentWeekDay = ((currentDay - 1) % 7) + 1;
+            const dayTasks = tasks.filter(t => t.day === absDay && !t.skipped);
+            const dayCompleted = dayTasks.length > 0 && dayTasks.every(t => t.completed);
+            const isCurrent = dotDay === currentWeekDay;
+            const isPast = dotDay < currentWeekDay;
+            return (
+              <div
+                key={dotDay}
+                style={{
+                  width: isCurrent ? '10px' : '8px',
+                  height: isCurrent ? '10px' : '8px',
+                  borderRadius: '50%',
+                  backgroundColor: isCurrent
+                    ? '#7c3aed'
+                    : isPast && dayCompleted
+                    ? '#7c3aed'
+                    : isPast && !dayCompleted
+                    ? 'rgba(239,68,68,0.45)'
+                    : '#e5e7eb',
+                  boxShadow: isCurrent ? '0 0 0 2px rgba(124,58,237,0.22)' : 'none',
+                  transition: 'all 0.2s ease',
+                  flexShrink: 0,
+                }}
+              />
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Stats Strip — streak + energy ───────────────────────────────── */}
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+        <div style={{
+          flex: 1, display: 'flex', alignItems: 'center', gap: '6px',
+          background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.06)',
+          borderRadius: '12px', padding: '10px 14px',
         }}>
-          Day {currentDay}
-        </span>
+          <Flame size={15} strokeWidth={2} color={streak > 0 ? '#f97316' : '#d1d5db'} />
+          <span style={{ fontWeight: 700, fontSize: '14px', color: tokens.colors.text.primary }}>
+            {streak}
+          </span>
+          <span style={{ fontSize: '12px', color: tokens.colors.text.tertiary }}>streak</span>
+        </div>
+        <div style={{
+          flex: 1, display: 'flex', alignItems: 'center', gap: '6px',
+          background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.06)',
+          borderRadius: '12px', padding: '10px 14px',
+        }}>
+          <Zap size={15} strokeWidth={2} color={completionRate >= 80 ? '#22c55e' : completionRate >= 50 ? '#eab308' : '#ef4444'} />
+          <span style={{ fontWeight: 700, fontSize: '14px', color: tokens.colors.text.primary }}>
+            {Math.round(completionRate)}%
+          </span>
+          <span style={{ fontSize: '12px', color: tokens.colors.text.tertiary }}>energy</span>
+          <div style={{ flex: 1, height: '4px', background: '#e5e7eb', borderRadius: '99px', marginLeft: '2px', overflow: 'hidden' }}>
+            <div style={{
+              width: `${Math.round(completionRate)}%`,
+              height: '100%',
+              background: completionRate >= 80 ? '#22c55e' : completionRate >= 50 ? '#eab308' : '#ef4444',
+              borderRadius: '99px',
+              transition: 'width 1s ease-out',
+            }} />
+          </div>
+        </div>
       </div>
 
       {/* ── Skip Toast ───────────────────────────────────────────────────── */}
@@ -789,8 +1057,48 @@ export default function TodayView({
         </div>
       )}
 
-      {/* ── Streak Milestone Banner ──────────────────────────────────────── */}
-      {showMilestoneBanner && (
+      {/* ── Smart Banner Slot — max 1 banner, priority: re-engage > milestone > recap ── */}
+      {showReEngagement ? (
+        <div style={{
+          marginBottom: tokens.spacing['2xl'],
+          padding: tokens.spacing.xl,
+          background: 'linear-gradient(135deg, rgba(124,58,237,0.06) 0%, rgba(99,102,241,0.03) 100%)',
+          border: '1px solid rgba(124,58,237,0.15)',
+          borderLeft: '3px solid #7c3aed',
+          borderRadius: tokens.borderRadius.lg,
+          animation: 'milestoneIn 0.4s cubic-bezier(0.4,0,0.2,1)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: '6px' }}>
+            <Sparkles size={15} color="#7c3aed" strokeWidth={1.8} />
+            <span style={{ fontSize: tokens.typography.sizes.base, fontWeight: tokens.typography.weights.medium, color: tokens.colors.text.primary }}>
+              Welcome back — ease back in.
+            </span>
+          </div>
+          <p style={{ fontSize: tokens.typography.sizes.sm, color: tokens.colors.text.secondary, margin: '0 0 12px 0', fontWeight: tokens.typography.weights.light, lineHeight: 1.55, paddingLeft: '23px' }}>
+            Life got busy — that's okay. We've queued up just one task so you can rebuild momentum without pressure.
+          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.lg, paddingLeft: '23px' }}>
+            {easeBackMode && incompleteTasks.length > 1 && (
+              <>
+                <span style={{ fontSize: tokens.typography.sizes.xs, color: tokens.colors.text.tertiary }}>
+                  Showing 1 of {incompleteTasks.length} tasks
+                </span>
+                <button
+                  onClick={() => setEaseBackMode(false)}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: tokens.typography.sizes.xs, fontWeight: tokens.typography.weights.medium, color: '#7c3aed', textDecoration: 'underline', textUnderlineOffset: '2px' }}
+                >
+                  Show all {incompleteTasks.length} tasks
+                </button>
+              </>
+            )}
+            {(!easeBackMode || incompleteTasks.length <= 1) && (
+              <span style={{ fontSize: tokens.typography.sizes.xs, color: '#7c3aed', fontWeight: tokens.typography.weights.medium }}>
+                ✓ Showing all {incompleteTasks.length} {incompleteTasks.length === 1 ? 'task' : 'tasks'} today
+              </span>
+            )}
+          </div>
+        </div>
+      ) : showMilestoneBanner ? (
         <div style={{
           background: 'linear-gradient(135deg, #fff7ed 0%, #fef3c7 100%)',
           border: '1px solid rgba(249,115,22,0.3)',
@@ -813,87 +1121,11 @@ export default function TodayView({
               {STREAK_MESSAGES[streak]}
             </p>
           </div>
-          <button
-            onClick={dismissMilestone}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#b45309', padding: '4px', flexShrink: 0, display: 'flex', alignItems: 'center' }}
-          >
+          <button onClick={dismissMilestone} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#b45309', padding: '4px', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
             <X size={16} />
           </button>
         </div>
-      )}
-
-
-      {/* ── Ease Back In Banner ───────────────────────────────────────────── */}
-      {showReEngagement && (
-        <div style={{
-          marginBottom: tokens.spacing['2xl'],
-          padding: tokens.spacing.xl,
-          background: 'linear-gradient(135deg, rgba(124,58,237,0.05) 0%, rgba(99,102,241,0.03) 100%)',
-          border: '1px solid rgba(124,58,237,0.14)',
-          borderLeft: '3px solid #7c3aed',
-          borderRadius: tokens.borderRadius.lg,
-        }}>
-          {/* Header row */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: '6px' }}>
-            <Sparkles size={15} color="#7c3aed" strokeWidth={1.8} />
-            <span style={{
-              fontSize: tokens.typography.sizes.base,
-              fontWeight: tokens.typography.weights.medium,
-              color: tokens.colors.text.primary,
-            }}>
-              Welcome back — ease back in.
-            </span>
-          </div>
-
-          {/* Body */}
-          <p style={{
-            fontSize: tokens.typography.sizes.sm,
-            color: tokens.colors.text.secondary,
-            margin: '0 0 12px 0',
-            fontWeight: tokens.typography.weights.light,
-            lineHeight: 1.55,
-            paddingLeft: '23px',
-          }}>
-            Life got busy — that's okay. We've queued up just one task so you can rebuild momentum without pressure.
-          </p>
-
-          {/* Footer row */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.lg, paddingLeft: '23px' }}>
-            {easeBackMode && incompleteTasks.length > 1 && (
-              <span style={{ fontSize: tokens.typography.sizes.xs, color: tokens.colors.text.tertiary }}>
-                Showing 1 of {incompleteTasks.length} tasks
-              </span>
-            )}
-            {easeBackMode && incompleteTasks.length > 1 && (
-              <button
-                onClick={() => setEaseBackMode(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  padding: 0,
-                  cursor: 'pointer',
-                  fontSize: tokens.typography.sizes.xs,
-                  fontWeight: tokens.typography.weights.medium,
-                  color: '#7c3aed',
-                  letterSpacing: '0.01em',
-                  textDecoration: 'underline',
-                  textUnderlineOffset: '2px',
-                }}
-              >
-                I'm ready — show all {incompleteTasks.length} tasks
-              </button>
-            )}
-            {(!easeBackMode || incompleteTasks.length <= 1) && (
-              <span style={{ fontSize: tokens.typography.sizes.xs, color: '#7c3aed', fontWeight: tokens.typography.weights.medium }}>
-                ✓ Showing all {incompleteTasks.length} {incompleteTasks.length === 1 ? 'task' : 'tasks'} today
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── Weekly Recap ─────────────────────────────────────────────────── */}
-      {showWeekRecap && (
+      ) : showWeekRecap ? (
         <div style={{
           marginBottom: tokens.spacing['2xl'],
           padding: tokens.spacing.xl,
@@ -905,6 +1137,7 @@ export default function TodayView({
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: tokens.spacing.lg,
+          animation: 'milestoneIn 0.4s cubic-bezier(0.4,0,0.2,1)',
         }}>
           <div style={{ flex: 1 }}>
             <p style={{ fontSize: '11px', color: tokens.colors.text.tertiary, fontWeight: tokens.typography.weights.regular, letterSpacing: '0.06em', textTransform: 'uppercase' as const, margin: '0 0 6px 0' }}>
@@ -917,16 +1150,11 @@ export default function TodayView({
               {lastWeekRate < 50 && ' This week, aim for one more.'}
             </p>
           </div>
-          {/* Mini donut-style ring */}
           <div style={{ position: 'relative', flexShrink: 0, width: 48, height: 48 }}>
             <svg width="48" height="48" viewBox="0 0 48 48" style={{ transform: 'rotate(-90deg)' }}>
               <circle cx="24" cy="24" r="18" fill="none" stroke={tokens.colors.gray[100]} strokeWidth="4" />
-              <circle cx="24" cy="24" r="18" fill="none"
-                stroke={lastWeekRate >= 70 ? '#7c3aed' : tokens.colors.primary}
-                strokeWidth="4"
-                strokeDasharray={`${2 * Math.PI * 18 * lastWeekRate / 100} ${2 * Math.PI * 18}`}
-                strokeLinecap="round"
-              />
+              <circle cx="24" cy="24" r="18" fill="none" stroke={lastWeekRate >= 70 ? '#7c3aed' : tokens.colors.primary} strokeWidth="4"
+                strokeDasharray={`${2 * Math.PI * 18 * lastWeekRate / 100} ${2 * Math.PI * 18}`} strokeLinecap="round" />
             </svg>
             <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: tokens.typography.weights.medium, color: tokens.colors.text.secondary }}>
               {lastWeekRate}%
@@ -935,6 +1163,59 @@ export default function TodayView({
           <button onClick={dismissWeekRecap} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: tokens.colors.text.tertiary, flexShrink: 0 }}>
             <X size={14} strokeWidth={1.5} />
           </button>
+        </div>
+      ) : null}
+
+      {/* ── Onboarding Checklist (first 7 days) ─────────────────────────── */}
+      {showChecklist && (
+        <div style={{
+          marginBottom: tokens.spacing['2xl'],
+          padding: tokens.spacing.xl,
+          backgroundColor: tokens.colors.surface,
+          border: `1px solid ${tokens.colors.borderLight}`,
+          borderRadius: tokens.borderRadius.lg,
+          boxShadow: tokens.shadows.xs,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: tokens.spacing.md }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm }}>
+              <Rocket size={15} color={tokens.colors.primary} strokeWidth={2} />
+              <span style={{ fontSize: tokens.typography.sizes.sm, fontWeight: tokens.typography.weights.semibold, color: tokens.colors.text.primary }}>
+                Getting started
+              </span>
+              <span style={{ fontSize: tokens.typography.sizes.xs, color: tokens.colors.text.tertiary }}>
+                {checklistItems.filter(i => i.done).length}/{checklistItems.length}
+              </span>
+            </div>
+            <button
+              onClick={() => { try { localStorage.setItem(CHECKLIST_DISMISS_KEY, '1'); } catch { /* ignore */ } setChecklistDismissed(true); }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: tokens.colors.text.tertiary, padding: '2px', display: 'flex' }}
+            >
+              <X size={14} strokeWidth={1.5} />
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacing.sm }}>
+            {checklistItems.map(item => (
+              <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm }}>
+                <div style={{
+                  width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                  backgroundColor: item.done ? tokens.colors.primary : 'transparent',
+                  border: `2px solid ${item.done ? tokens.colors.primary : tokens.colors.border}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 200ms ease',
+                }}>
+                  {item.done && <CheckCircle2 size={10} color="#fff" strokeWidth={3} />}
+                </div>
+                <span style={{
+                  fontSize: tokens.typography.sizes.sm,
+                  color: item.done ? tokens.colors.text.tertiary : tokens.colors.text.secondary,
+                  textDecoration: item.done ? 'line-through' : 'none',
+                  transition: 'all 200ms ease',
+                }}>
+                  {item.label}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -1024,14 +1305,15 @@ export default function TodayView({
               <p style={{ fontSize: 12, color: 'rgba(196,181,253,0.55)', marginBottom: 10 }}>What's getting in the way?</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
                 {([
-                  { reason: 'time'       as const, emoji: '⏱️', label: 'No time' },
-                  { reason: 'health'     as const, emoji: '😓', label: 'Not well' },
-                  { reason: 'difficulty' as const, emoji: '😕', label: 'Too hard' },
-                  { reason: 'external'   as const, emoji: '📅', label: 'Came up' },
-                ]).map(({ reason, emoji, label }) => (
+                  { storeReason: 'time'       as const, emoji: '⏱️', label: 'No time' },
+                  { storeReason: 'health'     as const, emoji: '😓', label: 'Not feeling well' },
+                  { storeReason: 'difficulty' as const, emoji: '😕', label: 'Too hard' },
+                  { storeReason: 'external'   as const, emoji: '📅', label: 'Something came up' },
+                  { storeReason: 'external'   as const, emoji: '🌪️', label: 'Lost motivation' },
+                ]).map(({ storeReason, emoji, label }) => (
                   <button
-                    key={reason}
-                    onClick={() => confirmSkip(heroTask.id, reason, setCinemaTaskId)}
+                    key={label}
+                    onClick={() => confirmSkip(heroTask.id, storeReason, setCinemaTaskId)}
                     style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.6)', transition: 'all 120ms ease' }}
                     onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'; }}
                     onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; }}
@@ -1099,6 +1381,36 @@ export default function TodayView({
           )}
         </div>
       )}
+
+      {/* ── Daily Insight ────────────────────────────────────────────────── */}
+      {!allDone && (() => {
+        const insights: { condition: boolean; text: string }[] = [
+          { condition: currentDay <= 3, text: "The first 3 days are the hardest. Momentum builds from here." },
+          { condition: streak >= 14, text: `${streak} days of consistency. Your brain is rewiring in real time.` },
+          { condition: streak >= 7, text: "7+ days in — you've passed the hardest threshold. Keep going." },
+          { condition: streak >= 3, text: "You're on a streak. Each day makes the next one easier." },
+          { condition: completionRate >= 80, text: "Your completion rate is exceptional. You're in rare company." },
+          { condition: showReEngagement, text: "Getting back after a break is harder than starting fresh. That counts." },
+          { condition: true, text: "Progress is built in small, consistent steps — not grand moments." },
+        ];
+        const insight = insights.find(i => i.condition);
+        if (!insight) return null;
+        return (
+          <div style={{
+            display: 'flex', alignItems: 'flex-start', gap: tokens.spacing.sm,
+            marginBottom: tokens.spacing['2xl'],
+            padding: `${tokens.spacing.md} ${tokens.spacing.lg}`,
+            backgroundColor: `${tokens.colors.primary}08`,
+            border: `1px solid ${tokens.colors.primary}18`,
+            borderRadius: tokens.borderRadius.lg,
+          }}>
+            <Brain size={14} strokeWidth={1.5} color={tokens.colors.primary} style={{ flexShrink: 0, marginTop: 2 }} />
+            <p style={{ margin: 0, fontSize: tokens.typography.sizes.sm, color: tokens.colors.text.secondary, lineHeight: 1.55, fontStyle: 'italic' }}>
+              {insight.text}
+            </p>
+          </div>
+        );
+      })()}
 
       {/* ── Tasks Section ────────────────────────────────────────────────── */}
       <div>
@@ -1412,14 +1724,15 @@ export default function TodayView({
                             </p>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: tokens.spacing.sm }}>
                               {([
-                                { reason: 'time' as const,       emoji: '⏱️', label: 'No time today' },
-                                { reason: 'health' as const,     emoji: '😓', label: 'Not feeling well' },
-                                { reason: 'difficulty' as const, emoji: '😕', label: 'Too difficult' },
-                                { reason: 'external' as const,   emoji: '📅', label: 'Something came up' },
-                              ]).map(({ reason, emoji, label }) => (
+                                { storeReason: 'time'       as const, emoji: '⏱️', label: 'No time today' },
+                                { storeReason: 'health'     as const, emoji: '😓', label: 'Not feeling well' },
+                                { storeReason: 'difficulty' as const, emoji: '😕', label: 'Too difficult' },
+                                { storeReason: 'external'   as const, emoji: '📅', label: 'Something came up' },
+                                { storeReason: 'external'   as const, emoji: '🌪️', label: 'Lost motivation' },
+                              ]).map(({ storeReason, emoji, label }) => (
                                 <button
-                                  key={reason}
-                                  onClick={() => confirmSkip(task.id, reason, setCinemaTaskId)}
+                                  key={label}
+                                  onClick={() => confirmSkip(task.id, storeReason, setCinemaTaskId)}
                                   style={{
                                     display: 'flex',
                                     alignItems: 'center',
@@ -1601,30 +1914,9 @@ export default function TodayView({
                 ))}
               </div>
 
-              <button
-                onClick={handleAdvanceDay}
-                style={{
-                  padding: `14px ${tokens.spacing['3xl']}`,
-                  background: 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 50%, #7c3aed 100%)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: tokens.borderRadius.md,
-                  fontSize: tokens.typography.sizes.base,
-                  fontWeight: tokens.typography.weights.semibold,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: tokens.spacing.sm,
-                  boxShadow: '0 6px 24px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.2)',
-                  transition: 'all 0.2s ease',
-                  letterSpacing: '-0.01em',
-                  position: 'relative' as const,
-                }}
-                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 12px 32px rgba(124,58,237,0.6), inset 0 1px 0 rgba(255,255,255,0.2)'; }}
-                onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 6px 24px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.2)'; }}
-              >
-                Start Day {currentDay + 1} <ArrowRight size={18} strokeWidth={2} />
-              </button>
+              <p style={{ fontSize: tokens.typography.sizes.sm, color: 'rgba(196,181,253,0.45)', margin: 0, position: 'relative' as const }}>
+                Rest well — tomorrow starts automatically.
+              </p>
             </div>
           </div>
         )}

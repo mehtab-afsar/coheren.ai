@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { User, Clock, Bell, Trash2, Sunrise, Target, Palette, Moon, Sun } from 'lucide-react';
+import { User, Clock, Bell, Trash2, Sunrise, Target, Palette, Moon, Sun, Shield } from 'lucide-react';
 import { useStore } from '@core/store/useStore';
 import { tokens, text, card } from '@core/design-system';
 import { useBreakpoint } from '@hooks/useBreakpoint';
 import { updateProfile } from '@lib/database';
+import { STONE_DISPLAY_NAMES, SEVERITY_DISPLAY } from '../../../utils/stone-labels';
 
 type ProfileTab = 'profile' | 'settings';
 
@@ -19,6 +20,7 @@ export default function ProfileView() {
     setCheckInTime,
     updateUniversalProfile,
     resetOnboarding,
+    stoneProfile,
   } = useStore();
   const user = useStore((state) => state.user);
   const { isMobile } = useBreakpoint();
@@ -63,6 +65,19 @@ export default function ProfileView() {
     .slice(0, 2)
     .join('')
     .toUpperCase();
+
+  const totalWeeks = roadmap?.strategicPlan?.totalWeeks || Math.ceil((roadmap?.duration || 3) * 4);
+  const progress = totalWeeks > 0 ? Math.min(1, currentDay / (totalWeeks * 7)) : 0;
+  const category = currentGoal.category || 'Learning';
+  const identityTitle = progress >= 0.75
+    ? `${category} Achiever`
+    : progress >= 0.5
+    ? `${category} Practitioner`
+    : progress >= 0.25
+    ? `${category} Builder`
+    : `Aspiring ${category}`;
+
+  const stones = stoneProfile?.stoneProfile?.stones || [];
 
   const TAB_ACTIVE_BG = `${tokens.colors.primary}12`;
   const TAB_ACTIVE_COLOR = tokens.colors.primary;
@@ -155,6 +170,17 @@ export default function ProfileView() {
             }}>
               {currentGoal.specificGoal || 'No goal set'}
             </p>
+            <span style={{
+              display: 'inline-block',
+              marginTop: 6,
+              fontSize: '10px',
+              fontWeight: 600,
+              color: 'rgba(196,181,253,0.55)',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase' as const,
+            }}>
+              {identityTitle}
+            </span>
           </div>
         </div>
 
@@ -285,6 +311,69 @@ export default function ProfileView() {
               ))}
             </div>
           </div>
+
+          {/* Growth Challenges */}
+          {stones.length > 0 && (
+            <div style={{ ...card.standard, marginTop: tokens.spacing.xl }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.lg }}>
+                <Shield size={16} strokeWidth={1.5} color={tokens.colors.text.secondary} />
+                <h3 style={{ ...text.h3, margin: 0 }}>Growth Challenges</h3>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacing.sm }}>
+                {stones.map((stone, idx) => (
+                  <div key={idx} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: `${tokens.spacing.sm} ${tokens.spacing.md}`,
+                    backgroundColor: tokens.colors.gray[50],
+                    borderRadius: tokens.borderRadius.md,
+                  }}>
+                    <span style={{ ...text.bodySmall, color: tokens.colors.text.primary }}>
+                      {STONE_DISPLAY_NAMES[stone.type] || stone.type}
+                    </span>
+                    <span style={{
+                      fontSize: '10px',
+                      padding: '2px 8px',
+                      borderRadius: '99px',
+                      fontWeight: 600,
+                      letterSpacing: '0.02em',
+                      backgroundColor: stone.severity === 'Critical'
+                        ? 'rgba(239,68,68,0.1)'
+                        : stone.severity === 'High'
+                        ? 'rgba(245,158,11,0.1)'
+                        : 'rgba(124,58,237,0.08)',
+                      color: stone.severity === 'Critical'
+                        ? '#dc2626'
+                        : stone.severity === 'High'
+                        ? '#d97706'
+                        : '#7c3aed',
+                    }}>
+                      {SEVERITY_DISPLAY[stone.severity] || stone.severity}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Commitment Card */}
+          {(currentGoal.specificGoal || roadmap?.title) && (
+            <div style={{
+              marginTop: tokens.spacing.xl,
+              background: 'linear-gradient(135deg, rgba(124,58,237,0.06) 0%, rgba(109,40,217,0.03) 100%)',
+              border: '1px solid rgba(124,58,237,0.15)',
+              borderRadius: tokens.borderRadius.lg,
+              padding: tokens.spacing.xl,
+            }}>
+              <p style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(124,58,237,0.6)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, margin: '0 0 8px' }}>
+                My Commitment
+              </p>
+              <p style={{ ...text.body, margin: 0, fontStyle: 'italic', color: tokens.colors.text.primary, lineHeight: 1.5 }}>
+                "{currentGoal.specificGoal || roadmap?.title}"
+              </p>
+            </div>
+          )}
         </>
       )}
 

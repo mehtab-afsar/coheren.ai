@@ -84,7 +84,7 @@ export default function FocusCard({
   void totalCount;
 
   // Rich agent data
-  const taskExt = task as Record<string, unknown>;
+  const taskExt = task as unknown as Record<string, unknown>;
   const whyThisMatters = typeof taskExt.whyThisMatters === 'string' ? taskExt.whyThisMatters : null;
   const successCriteria = typeof taskExt.successCriteria === 'string' ? taskExt.successCriteria : null;
   const primaryResource = taskExt.resources && typeof taskExt.resources === 'object'

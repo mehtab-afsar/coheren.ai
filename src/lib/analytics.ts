@@ -53,7 +53,9 @@ export type AnalyticsEvent =
   // Offline
   | { event: 'offline_action_queued'; properties: { action_type: string } }
   // Tab engagement
-  | { event: 'tab_time_spent'; properties: { tab: string; seconds: number } };
+  | { event: 'tab_time_spent'; properties: { tab: string; seconds: number } }
+  // Recalibration
+  | { event: 'early_recalibration_triggered'; properties: { day: number; mode: string; skipped_tasks: number } };
 
 export function track({ event, properties }: AnalyticsEvent) {
   if (!initialized) return;

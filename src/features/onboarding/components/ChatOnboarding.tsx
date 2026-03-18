@@ -785,7 +785,7 @@ The system will automatically detect when the data is complete and transition to
       })
       .catch(() => { /* non-critical */ });
 
-    track({ event: 'onboarding_completed', properties: { category: collectedData.category, paceChoice: choice } });
+    track({ event: 'onboarding_completed', properties: { goal_category: collectedData.category ?? undefined } });
     delete (window as unknown as Record<string, unknown>).__pendingOnboarding;
     setStep(2);
   };

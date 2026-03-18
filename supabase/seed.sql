@@ -1,2 +1,0 @@
--- Seed file intentionally empty.
--- No test/mock data. Use real user registration to test.

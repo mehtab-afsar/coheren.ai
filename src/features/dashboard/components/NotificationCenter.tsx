@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { X } from 'lucide-react';
+import { X, Bell } from 'lucide-react';
 import { tokens } from '@core/design-system';
 import { getNotifications } from './notification-utils';
 import type { AppNotification } from './notification-utils';

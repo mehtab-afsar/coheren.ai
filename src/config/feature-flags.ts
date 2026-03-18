@@ -83,7 +83,7 @@ applyUrlOverrides();
 export const flags: Readonly<FeatureFlags> = Object.freeze(
   Object.fromEntries(
     (Object.keys(DEFAULTS) as (keyof FeatureFlags)[]).map(key => [key, resolveFlag(key)])
-  ) as FeatureFlags
+  ) as unknown as FeatureFlags
 );
 
 /** Reset a flag to default (remove localStorage override). */

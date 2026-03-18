@@ -37,8 +37,7 @@ const TIME_OPTIONS: { value: CheckpointFeedback['timeManagement']; label: string
 ];
 
 export default function CheckpointScreen({
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  checkpointDay,
+  checkpointDay: _checkpointDay,
   sprintNumber,
   completedTasks,
   totalTasks,

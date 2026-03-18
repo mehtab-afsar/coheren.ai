@@ -354,16 +354,16 @@ export default function TodayView({
                   )}
 
                   {/* Steps */}
-                  {Array.isArray((cinemaTask as Record<string, unknown>).steps) && ((cinemaTask as Record<string, unknown>).steps as string[]).length > 0 && (
+                  {Array.isArray((cinemaTask as unknown as Record<string, unknown>).steps) && ((cinemaTask as unknown as Record<string, unknown>).steps as string[]).length > 0 && (
                     <div style={{ marginBottom: 20 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
                         <ListChecks size={13} color="#a78bfa" strokeWidth={2} />
                         <span style={{ fontSize: 10, fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                          Steps ({checkedSteps.size}/{((cinemaTask as Record<string, unknown>).steps as string[]).length})
+                          Steps ({checkedSteps.size}/{((cinemaTask as unknown as Record<string, unknown>).steps as string[]).length})
                         </span>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {((cinemaTask as Record<string, unknown>).steps as string[]).map((step, i) => {
+                        {((cinemaTask as unknown as Record<string, unknown>).steps as string[]).map((step, i) => {
                           const done = checkedSteps.has(i);
                           return (
                             <button
@@ -418,7 +418,7 @@ export default function TodayView({
                   )}
 
                   {/* Tips */}
-                  {Array.isArray((cinemaTask as Record<string, unknown>).tips) && ((cinemaTask as Record<string, unknown>).tips as string[]).length > 0 && (
+                  {Array.isArray((cinemaTask as unknown as Record<string, unknown>).tips) && ((cinemaTask as unknown as Record<string, unknown>).tips as string[]).length > 0 && (
                     <div style={{
                       background: 'rgba(251,191,36,0.06)',
                       border: '1px solid rgba(251,191,36,0.15)',
@@ -429,7 +429,7 @@ export default function TodayView({
                         <span style={{ fontSize: 10, fontWeight: 700, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Coach Tips</span>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {((cinemaTask as Record<string, unknown>).tips as string[]).slice(0, 3).map((tip, i) => (
+                        {((cinemaTask as unknown as Record<string, unknown>).tips as string[]).slice(0, 3).map((tip, i) => (
                           <p key={i} style={{ fontSize: 12, color: 'rgba(251,191,36,0.8)', margin: 0, lineHeight: 1.5 }}>
                             · {tip}
                           </p>
@@ -461,7 +461,7 @@ export default function TodayView({
                 )}
 
                 {/* No video: show description centered */}
-                {!cinemaVideoId && !Array.isArray((cinemaTask as Record<string, unknown>).steps) && cinemaTask.description && (
+                {!cinemaVideoId && !Array.isArray((cinemaTask as unknown as Record<string, unknown>).steps) && cinemaTask.description && (
                   <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
                     <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.45)', lineHeight: 1.75, textAlign: 'center', maxWidth: 480, margin: 0 }}>
                       {cinemaTask.description}
@@ -490,7 +490,7 @@ export default function TodayView({
                           letterSpacing: '0.01em',
                         }}
                       >
-                        {tab === 'steps' ? `Steps (${checkedSteps.size}/${((cinemaTask as Record<string, unknown>).steps as string[] | undefined)?.length ?? 0})` : 'Watch'}
+                        {tab === 'steps' ? `Steps (${checkedSteps.size}/${((cinemaTask as unknown as Record<string, unknown>).steps as string[] | undefined)?.length ?? 0})` : 'Watch'}
                       </button>
                     ))}
                   </div>
@@ -505,13 +505,13 @@ export default function TodayView({
                     </h2>
 
                     {/* Steps */}
-                    {Array.isArray((cinemaTask as Record<string, unknown>).steps) && ((cinemaTask as Record<string, unknown>).steps as string[]).length > 0 && (
+                    {Array.isArray((cinemaTask as unknown as Record<string, unknown>).steps) && ((cinemaTask as unknown as Record<string, unknown>).steps as string[]).length > 0 && (
                       <div style={{ marginBottom: 16 }}>
                         <p style={{ fontSize: 10, fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 10px' }}>
                           Steps
                         </p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          {((cinemaTask as Record<string, unknown>).steps as string[]).map((step, i) => {
+                          {((cinemaTask as unknown as Record<string, unknown>).steps as string[]).map((step, i) => {
                             const done = checkedSteps.has(i);
                             return (
                               <button
@@ -564,13 +564,13 @@ export default function TodayView({
                     )}
 
                     {/* Tips */}
-                    {Array.isArray((cinemaTask as Record<string, unknown>).tips) && ((cinemaTask as Record<string, unknown>).tips as string[]).length > 0 && (
+                    {Array.isArray((cinemaTask as unknown as Record<string, unknown>).tips) && ((cinemaTask as unknown as Record<string, unknown>).tips as string[]).length > 0 && (
                       <div style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.15)', borderRadius: 12, padding: '12px 14px', marginBottom: 8 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                           <Lightbulb size={12} color="#fbbf24" strokeWidth={2} />
                           <span style={{ fontSize: 10, fontWeight: 700, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Tips</span>
                         </div>
-                        {((cinemaTask as Record<string, unknown>).tips as string[]).slice(0, 3).map((tip, i) => (
+                        {((cinemaTask as unknown as Record<string, unknown>).tips as string[]).slice(0, 3).map((tip, i) => (
                           <p key={i} style={{ fontSize: 12, color: 'rgba(251,191,36,0.8)', margin: '0 0 4px', lineHeight: 1.5 }}>· {tip}</p>
                         ))}
                       </div>

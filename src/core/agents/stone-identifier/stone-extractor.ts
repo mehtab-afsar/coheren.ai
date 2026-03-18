@@ -302,22 +302,20 @@ export function crossValidateStones(
   correctedPrimary = correctedPrelim[0]?.type ?? 'Inconsistency';
 
   // Build a corrected profile stub (full extraction still happens in extractStones)
-  const correctedProfile = {
-    stoneProfile: {
-      userArchetype: 'Pending full extraction',
-      primaryStone: correctedPrimary,
-      stones: correctedPrelim.map(s => ({
-        type: s.type,
-        category: STONE_TO_CATEGORY[s.type] ?? 'Behavioural',
-        trigger: '',
-        severity: s.confidence > 0.75 ? 'High' : s.confidence > 0.5 ? 'Moderate' : 'Low',
-        riskImpact: s.confidence,
-      })),
-      agent3Guidance: [],
-      agent5Note: '',
-      confidence: correctedPrelim[0]?.confidence ?? 0.6,
-    },
-  } as Agent2ProfileOutput;
+  const correctedProfile: import('@types-app/agents').StoneProfile = {
+    userArchetype: 'Pending full extraction',
+    primaryStone: correctedPrimary,
+    stones: correctedPrelim.map(s => ({
+      type: s.type,
+      category: STONE_TO_CATEGORY[s.type] ?? 'Behavioural',
+      trigger: '',
+      severity: (s.confidence > 0.75 ? 'High' : s.confidence > 0.5 ? 'Moderate' : 'Low') as import('@types-app/agents').StoneSeverity,
+      riskImpact: s.confidence,
+    })),
+    agent3Guidance: [],
+    agent5Note: '',
+    confidence: correctedPrelim[0]?.confidence ?? 0.6,
+  };
 
   const originalConfidence = preliminary[0]?.confidence ?? 0.5;
   const newConfidence = correctedPrelim[0]?.confidence ?? 0.6;

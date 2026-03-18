@@ -40,7 +40,7 @@ function makeRoadmap(
       phases,
       progressionCurve: {},
       reviewMoments:    [],
-      restDays:         { frequency: 7, dayOfWeek: 7, type: 'active recovery' },
+      restDays:         { pattern: 'every-7', customDays: [], restType: 'active_recovery' },
       modifiers_from_stones: {},
     },
     domainPedagogy,
@@ -53,7 +53,7 @@ function makeStoneProfile(primaryStone: StoneType): Agent2ProfileOutput {
     stoneProfile: {
       userArchetype: 'Test Archetype',
       primaryStone,
-      stones: [{ type: primaryStone, severity: 'moderate', evidence: '', interventions: [] }],
+      stones: [{ type: primaryStone, severity: 'Moderate' as const, category: 'Behavioural', trigger: '', riskImpact: 0.5 }],
       agent3Guidance: [],
       agent5Note: '',
       confidence: 0.8,

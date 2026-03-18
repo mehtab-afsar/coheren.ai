@@ -506,8 +506,8 @@ export const useStore = create<AppStore>()(
 
               // Sync to Supabase in background (non-blocking)
               const syncState = get();
-              const roadmapId = (syncState.roadmap as Record<string, unknown> & { id?: string })?.id
-                ?? (syncState.agentRoadmap as Record<string, unknown> & { dbRoadmapId?: string })?.dbRoadmapId;
+              const roadmapId = (syncState.roadmap as unknown as Record<string, unknown> & { id?: string })?.id
+                ?? (syncState.agentRoadmap as unknown as Record<string, unknown> & { dbRoadmapId?: string })?.dbRoadmapId;
               if (roadmapId && typeof roadmapId === 'string') {
                 syncDailyTasksToDB(roadmapId, [newTask]).then(synced => {
                   if (synced.length > 0) {
@@ -555,8 +555,8 @@ export const useStore = create<AppStore>()(
 
               // Sync fallback task to Supabase in background
               const fbSyncState = get();
-              const fbRoadmapId = (fbSyncState.roadmap as Record<string, unknown> & { id?: string })?.id
-                ?? (fbSyncState.agentRoadmap as Record<string, unknown> & { dbRoadmapId?: string })?.dbRoadmapId;
+              const fbRoadmapId = (fbSyncState.roadmap as unknown as Record<string, unknown> & { id?: string })?.id
+                ?? (fbSyncState.agentRoadmap as unknown as Record<string, unknown> & { dbRoadmapId?: string })?.dbRoadmapId;
               if (fbRoadmapId && typeof fbRoadmapId === 'string') {
                 syncDailyTasksToDB(fbRoadmapId, [fallbackStoreTask]).then(synced => {
                   if (synced.length > 0) {

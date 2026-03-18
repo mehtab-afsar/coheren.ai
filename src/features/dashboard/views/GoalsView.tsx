@@ -30,8 +30,7 @@ const SEVERITY_STYLE: Record<StoneSeverity, { color: string; bg: string; label: 
   Critical: { color: '#7c3aed', bg: 'rgba(124,58,237,0.12)', label: 'Critical' },
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export default function GoalsView({ onNavigate }: GoalsViewProps) {
+export default function GoalsView({ onNavigate: _onNavigate }: GoalsViewProps) {
   const { roadmap, currentDay, stoneProfile } = useStore();
 
   const profile = stoneProfile?.stoneProfile ?? null;

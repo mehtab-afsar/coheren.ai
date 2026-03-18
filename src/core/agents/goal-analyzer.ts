@@ -177,7 +177,7 @@ function validateAndNormalize(raw: unknown, goalText?: string): Agent1Output {
   if (goalText) {
     const override = detectDomainOverride(goalText);
     if (override && override !== g.domain) {
-      g.domain = override;
+      g.domain = override as import('@types-app/agents').GoalDomain;
     }
   }
 

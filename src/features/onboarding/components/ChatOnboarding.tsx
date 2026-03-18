@@ -192,7 +192,7 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
     dailyTime: string;
     skillLevel: 'beginner' | 'intermediate' | 'advanced' | '';
     subGoals: string[];
-    timeline: { target: string; milestones: string[] } | null;
+    timeline: string | null;
     behavioralFlags: string[];
   }>({
     goal: initialGoal || '',
@@ -233,7 +233,7 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
     authName, setAuthName,
     authLoading,
     authError, setAuthError,
-    setPendingSyncData: _setPendingSyncData,
+    setPendingSyncData,
     handleAuthGateSubmit
   } = useAuthGate({ collectedData, setInitialGoal, setStep });
 
@@ -339,7 +339,7 @@ Extract these fields based on conversation context:
 - goal: What they want to achieve (e.g., "learn boxing", "get fit", "prepare for UPSC")
 - skillLevel: Their experience level - must be one of: "beginner", "intermediate", or "advanced"
 - category: Type of goal - one of: "Fitness", "Learning", "Exam", "Habit", "Creative", "Hobby"
-- timeline: When they want to achieve it (e.g., "3 months", "by 2027", "6 weeks")
+- timeline: (string) When they want to achieve it — return as a plain string (e.g., "3 months", "by December", "6 weeks"). NEVER return an object.
 - dailyTime: How much time per day (e.g., "30 minutes", "1 hour", "2 hours")
 - energyPattern: Peak energy time - one of: "morning", "afternoon", "evening", "night"
 - behavioralFlags: Array of obstacle signals detected. Include any that apply: "past_failure_mentioned" (user references previous failed attempts), "conditional_availability" (availability depends on external factors like "if work allows"), "external_accountability_needed" (user wants a partner, deadline, or accountability), "low_confidence" (user expresses doubt about ability), "time_scarcity" (user emphasizes they have very little time), "perfectionist_tendency" (user wants everything to be perfect before starting). Return [] if none apply.
@@ -446,17 +446,17 @@ IMPORTANT:
 The system will automatically detect when the data is complete and transition to the next phase. You do not need to use any specific 'magic words' or commands. Just be a helpful coach until the screen changes.`;
 
       // --- STEP 3: AI WHISPERING (Dynamic Guidance) ---
-      // Identify what's still missing
-      const missingFields = [];
-      if (!collectedData.name) missingFields.push("their name");
-      if (!collectedData.skillLevel) missingFields.push("their experience/skill level");
-      if (!collectedData.dailyTime) missingFields.push("how much time they can commit daily");
-      if (!collectedData.energyPattern) missingFields.push("their peak energy time (morning/evening/etc)");
-      if (!collectedData.timeline) missingFields.push("their target timeline or deadline");
+      // Priority order: timeline first (required for planning), then others
+      let nextQuestion: string | null = null;
+      if (!collectedData.timeline) nextQuestion = 'their target timeline or deadline (e.g. "3 months", "6 weeks", "by December")';
+      else if (!collectedData.dailyTime) nextQuestion = 'how much time per day they can commit (e.g. "30 minutes", "1 hour")';
+      else if (!collectedData.skillLevel) nextQuestion = 'their current experience level (beginner / intermediate / advanced)';
+      else if (!collectedData.name) nextQuestion = 'their name';
+      else if (!collectedData.energyPattern) nextQuestion = 'their peak energy time (morning / afternoon / evening)';
 
       // Create the "Whisper"
-      const whisper = missingFields.length > 0
-        ? `\n\n(SYSTEM WHISPER: You still need to find out: ${missingFields.join(', ')}. Please ask about ONE of these naturally in your next response.)`
+      const whisper = nextQuestion
+        ? `\n\n(SYSTEM WHISPER: Your ONLY job in this reply is to ask specifically about: ${nextQuestion}. Ask it as a single warm question. Do NOT wrap up or say the plan is ready yet.)`
         : `\n\n(SYSTEM WHISPER: You have all the data! Wrap up the conversation warmly and let them know the plan is ready.)`;
 
       // Inject the whisper into the system prompt
@@ -517,18 +517,17 @@ The system will automatically detect when the data is complete and transition to
   const runAnalysisAndGetStones = async () => {
 
     if (!collectedData.goal || !collectedData.category) {
-      console.error('❌ Missing required data - cannot run agents');
-      console.error('   Goal:', collectedData.goal);
-      console.error('   Category:', collectedData.category);
       return;
     }
 
+    // Guard: prevent re-trigger while analysis is running
+    setIsGeneratingPlan(true);
     setIsTyping(true);
 
     try {
       const dailyMinutes = parseDailyTimeToMinutes(collectedData.dailyTime);
-      const durationInMonths = collectedData.timeline?.target
-        ? calculateDurationInMonths(collectedData.timeline.target)
+      const durationInMonths = collectedData.timeline
+        ? calculateDurationInMonths(collectedData.timeline)
         : 3;
       const timelineDays = durationInMonths * 30;
 
@@ -562,14 +561,12 @@ The system will automatically detect when the data is complete and transition to
         setOnboardingPhase('stones');
       }
       setIsTyping(false);
+      setIsGeneratingPlan(false);
 
     } catch (error) {
       console.error('❌ Error running onboarding agents:', error);
-      if (error instanceof Error) {
-        console.error('   Error message:', error.message);
-        console.error('   Error stack:', error.stack);
-      }
       setIsTyping(false);
+      setIsGeneratingPlan(false);
       setOnboardingPhase('conversation');
       const isRateLimit = error instanceof Error && (error.message.includes('rate') || error.message.includes('Rate'));
       setAgentError({
@@ -611,7 +608,7 @@ The system will automatically detect when the data is complete and transition to
 
     try {
       const dailyMinutes = parseDailyTimeToMinutes(collectedData.dailyTime);
-      const timelineDays = (collectedData.timeline?.target ? calculateDurationInMonths(collectedData.timeline.target) : 3) * 30;
+      const timelineDays = (collectedData.timeline ? calculateDurationInMonths(collectedData.timeline) : 3) * 30;
 
       // Run preliminary extraction to generate Round 2 follow-ups
       const round2 = await runStoneRound2(collectedData.goal, timelineDays, dailyMinutes, goalAnalysis, answers);
@@ -647,7 +644,7 @@ The system will automatically detect when the data is complete and transition to
 
     try {
       const dailyMinutes = parseDailyTimeToMinutes(collectedData.dailyTime);
-      const timelineDays = (collectedData.timeline?.target ? calculateDurationInMonths(collectedData.timeline.target) : 3) * 30;
+      const timelineDays = (collectedData.timeline ? calculateDurationInMonths(collectedData.timeline) : 3) * 30;
       const { extractStones } = await import('@core/agents');
       const profile = await extractStones(
         { userId: 'temp', goal: collectedData.goal, timeline: timelineDays, dailyTimeAvailable: dailyMinutes },
@@ -787,7 +784,22 @@ The system will automatically detect when the data is complete and transition to
 
     track({ event: 'onboarding_completed', properties: { goal_category: collectedData.category ?? undefined } });
     delete (window as unknown as Record<string, unknown>).__pendingOnboarding;
-    setStep(2);
+
+    // If user is already authenticated, go straight to dashboard.
+    // If not (value-first funnel), show auth gate — handleAuthGateSubmit will call setStep(2)
+    // after setting the user in the store, preventing the step=2 && !user white screen.
+    const currentUser = useStore.getState().user;
+    if (currentUser) {
+      setStep(2);
+    } else {
+      setPendingSyncData({
+        goalAnalysisData: goalAnalysis!,
+        answers: pending.answers,
+        agentRoadmap,
+        initialTasksData: initialTasks,
+      });
+      setShowAuthGate(true);
+    }
   };
 
   // New function: Generate plan using Agent 3 & 4
@@ -803,8 +815,8 @@ The system will automatically detect when the data is complete and transition to
     setGenerationProgress(0);
 
     const dailyMinutes = parseDailyTimeToMinutes(collectedData.dailyTime);
-    const durationInMonths = collectedData.timeline?.target
-      ? calculateDurationInMonths(collectedData.timeline.target)
+    const durationInMonths = collectedData.timeline
+      ? calculateDurationInMonths(collectedData.timeline)
       : 3;
     const timelineDays = durationInMonths * 30;
 

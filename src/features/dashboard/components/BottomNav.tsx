@@ -1,29 +1,21 @@
-import { Home, Map, User, TrendingUp, Play } from 'lucide-react';
-import { tokens } from '@core/design-system';
-
-type ViewType = 'today' | 'journey' | 'profile' | 'progress' | 'goals' | 'library';
+import { Home, Map, User, BarChart2, BookMarked } from 'lucide-react';
+import type { ViewType } from '../hooks/useDashboardNav';
 
 interface BottomNavProps {
   activeTab: ViewType;
   onTabChange: (tab: ViewType) => void;
-  onFocusTap: () => void;
 }
 
 const ACTIVE_COLOR = '#7c3aed';
-const INACTIVE_COLOR = 'rgba(0,0,0,0.35)';
+const INACTIVE_COLOR = 'rgba(255,255,255,0.35)';
 
-// New order: Today | Journey | [FAB] | Progress | Me
-const LEFT_TABS = [
-  { id: 'today'   as const, label: 'Today',   icon: Home },
-  { id: 'journey' as const, label: 'Journey', icon: Map },
+const TABS: { id: ViewType; label: string; icon: React.ComponentType<{ size: number; strokeWidth: number; color: string; style?: React.CSSProperties }> }[] = [
+  { id: 'today',    label: 'Today',    icon: Home },
+  { id: 'roadmap',  label: 'Journey',  icon: Map },
+  { id: 'library',  label: 'Library',  icon: BookMarked },
+  { id: 'insights', label: 'Progress', icon: BarChart2 },
+  { id: 'you',      label: 'You',      icon: User },
 ];
-
-const RIGHT_TABS = [
-  { id: 'progress' as const, label: 'Progress', icon: TrendingUp },
-  { id: 'profile'  as const, label: 'Me',        icon: User },
-];
-
-type LucideIcon = React.ComponentType<{ size: number; strokeWidth: number; color: string; style?: React.CSSProperties }>;
 
 function TabButton({
   id,
@@ -34,7 +26,7 @@ function TabButton({
 }: {
   id: ViewType;
   label: string;
-  icon: LucideIcon;
+  icon: typeof TABS[0]['icon'];
   isActive: boolean;
   onTabChange: (tab: ViewType) => void;
 }) {
@@ -47,12 +39,12 @@ function TabButton({
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: '4px',
-        height: '60px',
+        gap: '3px',
+        height: '56px',
         background: 'none',
         border: 'none',
         cursor: 'pointer',
-        padding: '8px 4px',
+        padding: '6px 2px',
         position: 'relative',
         WebkitTapHighlightColor: 'transparent',
       }}
@@ -62,37 +54,37 @@ function TabButton({
       {isActive && (
         <span style={{
           position: 'absolute',
-          top: 6,
+          top: 0,
           left: '50%',
           transform: 'translateX(-50%)',
-          width: '4px',
-          height: '4px',
-          borderRadius: '99px',
+          width: '28px',
+          height: '2px',
+          borderRadius: '0 0 3px 3px',
           backgroundColor: ACTIVE_COLOR,
+          boxShadow: `0 0 8px ${ACTIVE_COLOR}80`,
         }} />
       )}
       <Icon
-        size={22}
+        size={20}
         strokeWidth={isActive ? 2 : 1.5}
         color={isActive ? ACTIVE_COLOR : INACTIVE_COLOR}
         style={{ transition: 'color 150ms ease' }}
       />
-      {isActive && (
-        <span style={{
-          fontSize: '10px',
-          fontWeight: tokens.typography.weights.medium,
-          color: ACTIVE_COLOR,
-          letterSpacing: '0.02em',
-          lineHeight: 1,
-        }}>
-          {label}
-        </span>
-      )}
+      <span style={{
+        fontSize: '10px',
+        fontWeight: isActive ? 600 : 400,
+        color: isActive ? ACTIVE_COLOR : INACTIVE_COLOR,
+        letterSpacing: '0.02em',
+        lineHeight: 1,
+        transition: 'color 150ms ease',
+      }}>
+        {label}
+      </span>
     </button>
   );
 }
 
-export default function BottomNav({ activeTab, onTabChange, onFocusTap }: BottomNavProps) {
+export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   return (
     <nav
       style={{
@@ -103,64 +95,20 @@ export default function BottomNav({ activeTab, onTabChange, onFocusTap }: Bottom
         zIndex: 100,
         display: 'flex',
         alignItems: 'stretch',
-        backgroundColor: tokens.colors.surface,
-        borderTop: `1px solid ${tokens.colors.border}`,
+        background: 'linear-gradient(180deg, rgba(8,8,15,0.95) 0%, rgba(8,8,15,1) 100%)',
+        borderTop: '1px solid rgba(255,255,255,0.07)',
         paddingBottom: 'env(safe-area-inset-bottom)',
-        boxShadow: '0 -1px 12px rgba(0,0,0,0.06)',
-        overflow: 'visible',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        boxShadow: '0 -4px 24px rgba(0,0,0,0.25)',
       }}
     >
-      {/* Left tabs: Today + Journey */}
-      {LEFT_TABS.map(({ id, label, icon }) => (
+      {TABS.map(({ id, label, icon }) => (
         <TabButton
           key={id}
           id={id}
           label={label}
-          icon={icon as LucideIcon}
-          isActive={activeTab === id}
-          onTabChange={onTabChange}
-        />
-      ))}
-
-      {/* Center FAB — DO: instant task launcher, floats above the nav bar */}
-      <div style={{
-        flex: 1,
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'flex-end',
-        paddingBottom: '10px',
-        overflow: 'visible',
-      }}>
-        <button
-          onClick={onFocusTap}
-          style={{
-            width: '52px',
-            height: '52px',
-            borderRadius: '50%',
-            background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-            border: `3px solid ${tokens.colors.surface}`,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 4px 20px rgba(124,58,237,0.55), 0 2px 8px rgba(0,0,0,0.12)',
-            transform: 'translateY(-14px)',
-            WebkitTapHighlightColor: 'transparent',
-            flexShrink: 0,
-          }}
-          aria-label="Start focus session"
-        >
-          <Play size={18} color="#fff" fill="#fff" />
-        </button>
-      </div>
-
-      {/* Right tabs: Progress + Me */}
-      {RIGHT_TABS.map(({ id, label, icon }) => (
-        <TabButton
-          key={id}
-          id={id}
-          label={label}
-          icon={icon as LucideIcon}
+          icon={icon}
           isActive={activeTab === id}
           onTabChange={onTabChange}
         />

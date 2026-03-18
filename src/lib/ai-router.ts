@@ -108,7 +108,6 @@ async function routeCall(
     const provider = available[i];
     try {
       const result = await provider.call(params);
-      if (i > 0) console.log(`[AI Router] ${tierLabel}: used fallback ${provider.model}`);
       return result;
     } catch (error) {
       lastError = error;

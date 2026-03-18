@@ -1,16 +1,16 @@
 import { useRef, useEffect, useState } from 'react';
-import { MapPin, Calendar, Target, CheckCircle, Circle, TrendingUp, Lock, ChevronDown, ChevronUp } from 'lucide-react';
+import { MapPin, Calendar, Target, CheckCircle, Circle, TrendingUp, Lock } from 'lucide-react';
 import { useStore } from '@core/store/useStore';
 import { tokens } from '@core/design-system';
-
-const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
-  practice:   { bg: 'rgba(124,58,237,0.1)',  text: '#7c3aed' },
-  learning:   { bg: 'rgba(14,165,233,0.1)',  text: '#0284c7' },
-  reflection: { bg: 'rgba(124,58,237,0.1)',  text: '#7c3aed' },
-};
+import PhaseMap from './journey/PhaseMap';
+import type { PhaseMapPhase } from './journey/PhaseMap';
+import WeekCard from './journey/WeekCard';
+import type { DayDot, WeekTaskRow } from './journey/WeekCard';
+import UpcomingPreview from './journey/UpcomingPreview';
 
 export default function JourneyView() {
   const { roadmap, currentDay, tasks } = useStore();
+  const agentRoadmap = useStore(s => s.agentRoadmap);
   const currentWeekRef = useRef<HTMLDivElement>(null);
   const [expandedWeek, setExpandedWeek] = useState<number | null>(null);
 
@@ -38,8 +38,11 @@ export default function JourneyView() {
   }
 
   const currentWeek = Math.ceil(currentDay / 7);
-  const totalWeeks = roadmap.strategicPlan?.totalWeeks || Math.ceil((roadmap.duration || 3) * 4);
-  const totalMonths = roadmap.duration || 3;
+  const totalDays = agentRoadmap?.roadmap?.totalDays ?? (roadmap.strategicPlan?.totalWeeks ?? Math.ceil((roadmap.duration || 3) * 4)) * 7;
+  const totalWeeks = Math.ceil(totalDays / 7);
+  const totalMonths = agentRoadmap?.roadmap?.totalDays
+    ? Math.ceil(agentRoadmap.roadmap.totalDays / 30)
+    : (roadmap.duration || 3);
   const overallProgress = Math.min(100, Math.round((currentWeek / totalWeeks) * 100));
 
   // Group weeks by month
@@ -58,6 +61,25 @@ export default function JourneyView() {
   });
 
   const getWeekDetails = (weekNumber: number) => {
+    // If we have Agent 3 roadmap, look up the phase that covers this week's days
+    if (agentRoadmap?.roadmap?.phases) {
+      const weekStartDay = (weekNumber - 1) * 7 + 1;
+      let elapsed = 0;
+      for (const p of agentRoadmap.roadmap.phases) {
+        const dur = p.durationDays ?? 14;
+        if (weekStartDay <= elapsed + dur) {
+          return {
+            focus: p.phaseName,
+            description: p.primaryGoals?.[0] ?? p.scienceRationale ?? 'Continue building your skills',
+          };
+        }
+        elapsed += dur;
+      }
+      // Beyond all phases — use last phase
+      const last = agentRoadmap.roadmap.phases[agentRoadmap.roadmap.phases.length - 1];
+      return { focus: last.phaseName, description: last.primaryGoals?.[0] ?? '' };
+    }
+    // Legacy fallback
     const weekTemplate = roadmap.strategicPlan?.weekTemplates?.find(
       (w: { weekNumber: number }) => w.weekNumber === weekNumber
     );
@@ -65,12 +87,6 @@ export default function JourneyView() {
     const phase = Math.ceil((weekNumber / totalWeeks) * 4);
     const phaseNames = ['Foundation', 'Development', 'Mastery', 'Excellence'];
     return { focus: phaseNames[phase - 1] || 'Progress', description: 'Continue building your skills' };
-  };
-
-  const getWeekProgress = (weekNumber: number) => {
-    const weekTasks = tasks.filter(t => Math.ceil(t.day / 7) === weekNumber);
-    const weekCompleted = weekTasks.filter(t => t.completed).length;
-    return weekTasks.length > 0 ? Math.round((weekCompleted / weekTasks.length) * 100) : 0;
   };
 
   const getWeekStatus = (weekNumber: number) => {
@@ -82,10 +98,46 @@ export default function JourneyView() {
     return 'upcoming';
   };
 
-  // Phase map
-  const phases = ['Foundation', 'Development', 'Mastery', 'Excellence'];
-  const weeksPerPhase = Math.max(1, Math.ceil(totalWeeks / 4));
-  const currentPhaseIdx = Math.min(3, Math.floor((currentWeek - 1) / weeksPerPhase));
+  // ── PhaseMap data ──────────────────────────────────────────────────────────
+  const phaseMapPhases: PhaseMapPhase[] =
+    agentRoadmap?.roadmap?.phases?.map((p, i) => {
+      let elapsed = 0;
+      for (let j = 0; j < i; j++) {
+        elapsed += agentRoadmap.roadmap.phases[j].durationDays ?? 14;
+      }
+      const phaseStart = elapsed + 1;
+      const phaseEnd = elapsed + (p.durationDays ?? 14);
+      const daysInPhase = p.durationDays ?? 14;
+      const daysCompleted = Math.max(0, Math.min(currentDay - phaseStart + 1, daysInPhase));
+      const percentage = Math.round((daysCompleted / daysInPhase) * 100);
+      const status: 'completed' | 'active' | 'upcoming' =
+        currentDay > phaseEnd ? 'completed' : currentDay >= phaseStart ? 'active' : 'upcoming';
+      return {
+        name: p.phaseName,
+        status,
+        percentage:
+          status === 'completed' ? 100 : status === 'upcoming' ? 0 : percentage,
+        description: p.primaryGoals?.[0] ?? p.scienceRationale ?? '',
+      };
+    }) ?? [];
+
+  const currentPhaseIndex = Math.max(
+    0,
+    phaseMapPhases.findIndex(p => p.status === 'active')
+  );
+
+  // ── Upcoming preview data ─────────────────────────────────────────────────
+  const nextWeekNum = currentWeek + 1;
+  const showUpcomingPreview = nextWeekNum <= totalWeeks && !!agentRoadmap;
+  const nextWeekDetail = showUpcomingPreview ? getWeekDetails(nextWeekNum) : null;
+  const nextWeekTasks = showUpcomingPreview
+    ? tasks.filter(
+        t => t.day >= (nextWeekNum - 1) * 7 + 1 && t.day <= nextWeekNum * 7
+      )
+    : [];
+  const nextWeekPracticeCount = nextWeekTasks.filter(t => t.type === 'practice').length;
+  const nextWeekLearningCount = nextWeekTasks.filter(t => t.type === 'learning').length;
+  const nextWeekReflectionCount = nextWeekTasks.filter(t => t.type === 'reflection').length;
 
   return (
     <div>
@@ -228,56 +280,10 @@ export default function JourneyView() {
         </div>
       </div>
 
-      {/* Phase Map */}
-      <div style={{ marginBottom: tokens.spacing['2xl'] }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.md }}>
-          <h2 style={{ fontSize: tokens.typography.sizes.lg, fontWeight: tokens.typography.weights.semibold, color: tokens.colors.text.primary, margin: 0, letterSpacing: '-0.02em' }}>
-            Phases
-          </h2>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: tokens.spacing.xs }}>
-          {phases.map((phaseName, idx) => {
-            const phaseStartWeek = idx * weeksPerPhase + 1;
-            const phaseEndWeek = Math.min((idx + 1) * weeksPerPhase, totalWeeks);
-            const isActive = idx === currentPhaseIdx;
-            const isCompleted = idx < currentPhaseIdx;
-            const phaseWeeksCompleted = isCompleted
-              ? phaseEndWeek - phaseStartWeek + 1
-              : isActive
-              ? Math.max(0, currentWeek - phaseStartWeek)
-              : 0;
-            const phaseWeeksTotal = phaseEndWeek - phaseStartWeek + 1;
-            const phaseProgress = phaseWeeksTotal > 0 ? Math.round((phaseWeeksCompleted / phaseWeeksTotal) * 100) : 0;
-            return (
-              <div key={phaseName} style={{
-                padding: `${tokens.spacing.sm} ${tokens.spacing.md}`,
-                backgroundColor: isActive ? 'rgba(124,58,237,0.05)' : tokens.colors.surface,
-                border: `1px solid ${isActive ? 'rgba(124,58,237,0.2)' : isCompleted ? 'rgba(124,58,237,0.12)' : tokens.colors.borderLight}`,
-                borderRadius: tokens.borderRadius.md,
-                opacity: !isActive && !isCompleted ? 0.5 : 1,
-              }}>
-                <p style={{ fontSize: '10px', fontWeight: 600, color: isActive ? '#7c3aed' : isCompleted ? '#6d28d9' : tokens.colors.text.tertiary, letterSpacing: '0.02em', margin: '0 0 3px', textTransform: 'uppercase' as const }}>
-                  Phase {idx + 1}
-                </p>
-                <p style={{ fontSize: '11px', fontWeight: 600, color: isActive ? '#7c3aed' : tokens.colors.text.primary, margin: '0 0 4px', lineHeight: 1.2 }}>
-                  {phaseName}
-                </p>
-                <p style={{ fontSize: '10px', color: tokens.colors.text.tertiary, margin: '0 0 6px' }}>
-                  Wks {phaseStartWeek}–{phaseEndWeek}
-                </p>
-                <div style={{ height: 3, backgroundColor: tokens.colors.gray[100], borderRadius: '99px', overflow: 'hidden' }}>
-                  <div style={{
-                    height: '100%',
-                    width: `${phaseProgress}%`,
-                    background: isCompleted ? '#6d28d9' : 'linear-gradient(90deg, #7c3aed, #a78bfa)',
-                    borderRadius: '99px',
-                  }} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {/* ── PhaseMap ── */}
+      {phaseMapPhases.length > 0 && (
+        <PhaseMap phases={phaseMapPhases} currentPhaseIndex={currentPhaseIndex} />
+      )}
 
       {/* Month-by-Month Breakdown */}
       <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.lg }}>
@@ -379,299 +385,72 @@ export default function JourneyView() {
               )}
             </div>
 
-            {/* Weeks */}
+            {/* Weeks — using new WeekCard component */}
             <div style={{ padding: tokens.spacing.lg, display: 'flex', flexDirection: 'column', gap: tokens.spacing.sm }}>
               {month.weeks.map((weekNumber) => {
-                const { focus, description } = getWeekDetails(weekNumber);
-                const progress = getWeekProgress(weekNumber);
+                const { focus } = getWeekDetails(weekNumber);
                 const status = getWeekStatus(weekNumber);
                 const isCurrentWeek = weekNumber === currentWeek;
-                const isNextSprint = weekNumber === currentWeek + 1;
 
                 const weekTasks = tasks.filter(t => Math.ceil(t.day / 7) === weekNumber);
+                const completedCount = weekTasks.filter(t => t.completed).length;
+                const totalCount = weekTasks.length;
                 const isExpanded = expandedWeek === weekNumber;
-                const canExpand = weekTasks.length > 0;
+
+                // Day dots
+                const weekDays: DayDot[] = Array.from({ length: 7 }, (_, i) => {
+                  const dayNum = (weekNumber - 1) * 7 + i + 1;
+                  const dayTasks = tasks.filter(t => t.day === dayNum);
+                  return {
+                    dayNumber: dayNum,
+                    completed: dayTasks.length > 0 && dayTasks.every(t => t.completed),
+                    skipped:
+                      dayTasks.length > 0 &&
+                      dayTasks.every(t => t.skipped) &&
+                      !dayTasks.some(t => t.completed),
+                    isToday: dayNum === currentDay,
+                    isRest: dayNum % 7 === 0,
+                    isFuture: dayNum > currentDay,
+                  };
+                });
+
+                // Task rows for expanded drill-down
+                const weekTaskRows: WeekTaskRow[] = weekTasks
+                  .sort((a, b) => a.day - b.day)
+                  .map(t => ({
+                    id: t.id,
+                    title: t.title,
+                    taskType: t.type ?? 'practice',
+                    duration: t.duration ?? 30,
+                    completed: t.completed,
+                    skipped: t.skipped ?? false,
+                    isToday: t.day === currentDay,
+                    day: t.day,
+                    description: t.description,
+                    mood: t.difficultyRating,
+                    reflection: t.userComment,
+                    hasNotes: Boolean(localStorage.getItem(`note_entries_${t.id}`)),
+                  }));
 
                 return (
                   <div key={weekNumber} ref={isCurrentWeek ? currentWeekRef : undefined}>
-                    {/* Week row — tappable to expand */}
-                    <div
-                      onClick={() => canExpand && setExpandedWeek(isExpanded ? null : weekNumber)}
-                      style={{
-                        display: 'flex',
-                        gap: tokens.spacing.md,
-                        padding: tokens.spacing.md,
-                        backgroundColor: isCurrentWeek
-                          ? 'rgba(124,58,237,0.05)'
-                          : isNextSprint
-                          ? 'rgba(124,58,237,0.01)'
-                          : 'transparent',
-                        border: isCurrentWeek
-                          ? '1px solid rgba(124,58,237,0.2)'
-                          : isNextSprint
-                          ? '1px solid rgba(124,58,237,0.08)'
-                          : '1px solid transparent',
-                        borderRadius: isExpanded ? `${tokens.borderRadius.md} ${tokens.borderRadius.md} 0 0` : tokens.borderRadius.md,
-                        animation: isCurrentWeek ? 'journey-fadein 0.4s ease both' : 'none',
-                        cursor: canExpand ? 'pointer' : 'default',
-                        WebkitTapHighlightColor: 'transparent',
-                      }}
-                    >
-                      {/* Status icon */}
-                      <div style={{
-                        width: '30px', height: '30px', flexShrink: 0,
-                        borderRadius: '50%',
-                        background: status === 'completed'
-                          ? 'linear-gradient(135deg, #6d28d9 0%, #5b21b6 100%)'
-                          : isCurrentWeek
-                          ? 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)'
-                          : isNextSprint
-                          ? 'rgba(124,58,237,0.08)'
-                          : tokens.colors.gray[100],
-                        border: isNextSprint ? '1px dashed rgba(124,58,237,0.3)' : 'none',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        animation: isCurrentWeek ? 'journey-pulse 2.2s ease-in-out infinite' : 'none',
-                      }}>
-                        {status === 'completed' ? (
-                          <CheckCircle size={15} color="#fff" />
-                        ) : isCurrentWeek ? (
-                          <MapPin size={15} color="#fff" />
-                        ) : isNextSprint ? (
-                          <Lock size={13} color="rgba(124,58,237,0.5)" strokeWidth={2} />
-                        ) : (
-                          <Circle size={15} color={tokens.colors.text.tertiary} />
-                        )}
-                      </div>
+                    <WeekCard
+                      weekNumber={weekNumber}
+                      focus={focus}
+                      completedCount={completedCount}
+                      totalCount={totalCount}
+                      isActive={isCurrentWeek || status === 'active'}
+                      isCompleted={status === 'completed'}
+                      isExpanded={isExpanded}
+                      onToggle={() => setExpandedWeek(isExpanded ? null : weekNumber)}
+                      days={weekDays}
+                      tasks={weekTaskRows}
+                    />
 
-                      {/* Week details */}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '3px' }}>
-                          <h4 style={{
-                            fontSize: tokens.typography.sizes.sm,
-                            fontWeight: tokens.typography.weights.semibold,
-                            color: isCurrentWeek ? '#7c3aed' : isNextSprint ? 'rgba(124,58,237,0.6)' : tokens.colors.text.primary,
-                            margin: 0,
-                            letterSpacing: '-0.01em',
-                          }}>
-                            Week {weekNumber}
-                            {isCurrentWeek && (
-                              <span style={{
-                                marginLeft: '6px',
-                                fontSize: '10px',
-                                padding: '1px 6px',
-                                background: 'rgba(124,58,237,0.12)',
-                                color: '#7c3aed',
-                                borderRadius: '99px',
-                                fontWeight: tokens.typography.weights.medium,
-                                letterSpacing: '0.02em',
-                              }}>
-                                NOW
-                              </span>
-                            )}
-                            {isNextSprint && (
-                              <span style={{
-                                marginLeft: '6px',
-                                fontSize: '10px',
-                                padding: '1px 6px',
-                                background: 'rgba(124,58,237,0.06)',
-                                color: 'rgba(124,58,237,0.55)',
-                                border: '1px dashed rgba(124,58,237,0.25)',
-                                borderRadius: '99px',
-                                fontWeight: tokens.typography.weights.medium,
-                                letterSpacing: '0.02em',
-                              }}>
-                                NEXT
-                              </span>
-                            )}
-                          </h4>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                            {status !== 'upcoming' && (
-                              <span style={{ fontSize: '11px', color: status === 'completed' ? '#6d28d9' : tokens.colors.text.tertiary, fontWeight: tokens.typography.weights.medium }}>
-                                {progress}%
-                              </span>
-                            )}
-                            {canExpand && (
-                              isExpanded
-                                ? <ChevronUp size={14} color={tokens.colors.text.tertiary} />
-                                : <ChevronDown size={14} color={tokens.colors.text.tertiary} />
-                            )}
-                          </div>
-                        </div>
-                        <p style={{ fontSize: '11px', color: isNextSprint ? 'rgba(124,58,237,0.5)' : tokens.colors.text.secondary, margin: '0 0 6px', fontWeight: tokens.typography.weights.medium }}>
-                          {focus}
-                        </p>
-                        <p style={{ fontSize: '11px', color: tokens.colors.text.tertiary, margin: 0, lineHeight: 1.45 }}>
-                          {description}
-                        </p>
-
-                        {/* Progress bar */}
-                        {status !== 'upcoming' && (
-                          <div style={{
-                            marginTop: '8px',
-                            height: '3px',
-                            backgroundColor: tokens.colors.gray[100],
-                            borderRadius: '99px',
-                            overflow: 'hidden',
-                          }}>
-                            <div style={{
-                              height: '100%',
-                              width: `${progress}%`,
-                              background: status === 'completed'
-                                ? 'linear-gradient(90deg, #6d28d9, #a78bfa)'
-                                : 'linear-gradient(90deg, #7c3aed, #a78bfa)',
-                              borderRadius: '99px',
-                              boxShadow: progress > 0 ? '0 0 6px rgba(124,58,237,0.4)' : 'none',
-                              transition: 'width 0.5s ease',
-                            }} />
-                          </div>
-                        )}
-                        {/* Day dots */}
-                        <div style={{ display: 'flex', gap: 3, marginTop: 6 }}>
-                          {Array.from({ length: 7 }, (_, i) => {
-                            const dayNum = (weekNumber - 1) * 7 + 1 + i;
-                            const dayTask = tasks.find(t => t.day === dayNum);
-                            const isToday = dayNum === currentDay;
-                            const isPast = dayNum < currentDay;
-                            let dotBg: string;
-                            if (isToday) dotBg = '#7c3aed';
-                            else if (dayTask?.completed) dotBg = '#6d28d9';
-                            else if (dayTask?.skipped) dotBg = '#d1d5db';
-                            else if (isPast && dayTask) dotBg = 'rgba(239,68,68,0.25)';
-                            else if (isPast) dotBg = '#f3f4f6';
-                            else dotBg = 'transparent';
-                            const dotBorder = !isToday && !dayTask?.completed && !dayTask?.skipped && dayNum > currentDay
-                              ? '1.5px solid #e5e7eb' : 'none';
-                            return (
-                              <div key={i} style={{
-                                width: 6,
-                                height: 6,
-                                borderRadius: '50%',
-                                background: dotBg,
-                                border: dotBorder,
-                                flexShrink: 0,
-                                boxShadow: isToday ? '0 0 0 2px rgba(124,58,237,0.2)' : 'none',
-                              }} />
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Expandable task drill-down */}
-                    {isExpanded && (
-                      <div style={{
-                        borderLeft: isCurrentWeek ? '1px solid rgba(124,58,237,0.2)' : `1px solid ${tokens.colors.borderLight}`,
-                        borderRight: isCurrentWeek ? '1px solid rgba(124,58,237,0.2)' : `1px solid ${tokens.colors.borderLight}`,
-                        borderBottom: isCurrentWeek ? '1px solid rgba(124,58,237,0.2)' : `1px solid ${tokens.colors.borderLight}`,
-                        borderRadius: `0 0 ${tokens.borderRadius.md} ${tokens.borderRadius.md}`,
-                        backgroundColor: 'rgba(0,0,0,0.015)',
-                        overflow: 'hidden',
-                      }}>
-                        {weekTasks.map((task, idx) => {
-                          const isTaskDone = task.completed;
-                          const isTaskSkipped = task.skipped;
-                          const typeStyle = TYPE_COLORS[task.type] ?? TYPE_COLORS.practice;
-                          return (
-                            <div
-                              key={task.id}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                gap: tokens.spacing.sm,
-                                padding: `${tokens.spacing.sm} ${tokens.spacing.md}`,
-                                borderTop: idx === 0 ? 'none' : `1px solid ${tokens.colors.borderLight}`,
-                                opacity: isTaskSkipped ? 0.45 : 1,
-                              }}
-                            >
-                              {/* completion dot */}
-                              <div style={{
-                                marginTop: '2px',
-                                width: '16px',
-                                height: '16px',
-                                borderRadius: '50%',
-                                flexShrink: 0,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                background: isTaskDone
-                                  ? 'linear-gradient(135deg, #6d28d9 0%, #5b21b6 100%)'
-                                  : 'transparent',
-                                border: isTaskDone ? 'none' : `1.5px solid ${tokens.colors.gray[300]}`,
-                              }}>
-                                {isTaskDone && <CheckCircle size={10} color="#fff" />}
-                              </div>
-
-                              {/* task info */}
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <p style={{
-                                  fontSize: tokens.typography.sizes.xs,
-                                  fontWeight: tokens.typography.weights.medium,
-                                  color: isTaskDone ? tokens.colors.text.secondary : tokens.colors.text.primary,
-                                  margin: '0 0 4px',
-                                  textDecoration: isTaskSkipped ? 'line-through' : 'none',
-                                  lineHeight: 1.4,
-                                }}>
-                                  Day {task.day} — {task.title}
-                                </p>
-                                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' as const }}>
-                                  <span style={{
-                                    fontSize: '10px',
-                                    fontWeight: tokens.typography.weights.medium,
-                                    color: typeStyle.text,
-                                    background: typeStyle.bg,
-                                    borderRadius: '99px',
-                                    padding: '1px 7px',
-                                    textTransform: 'capitalize' as const,
-                                    letterSpacing: '0.02em',
-                                  }}>
-                                    {task.type}
-                                  </span>
-                                  <span style={{ fontSize: '10px', color: tokens.colors.text.tertiary }}>
-                                    {task.duration}m
-                                  </span>
-                                  {task.userComment && (
-                                    <span style={{
-                                      fontSize: '10px',
-                                      color: tokens.colors.text.tertiary,
-                                      fontStyle: 'italic',
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis',
-                                      whiteSpace: 'nowrap' as const,
-                                      maxWidth: '160px',
-                                    }}>
-                                      "{task.userComment}"
-                                    </span>
-                                  )}
-                                </div>
-                                {(() => {
-                                  try {
-                                    const notes = JSON.parse(localStorage.getItem(`note_entries_${task.id}`) || '[]') as Array<{ id: string; text: string }>;
-                                    const last = notes[notes.length - 1];
-                                    if (!last) return null;
-                                    return (
-                                      <div style={{
-                                        marginTop: 4,
-                                        padding: '3px 8px',
-                                        backgroundColor: 'rgba(124,58,237,0.04)',
-                                        borderLeft: '2px solid rgba(124,58,237,0.2)',
-                                        borderRadius: '0 4px 4px 0',
-                                      }}>
-                                        <p style={{ fontSize: '10px', color: tokens.colors.text.tertiary, margin: 0, fontStyle: 'italic', lineHeight: 1.4 }}>
-                                          "{last.text}"
-                                        </p>
-                                      </div>
-                                    );
-                                  } catch { return null; }
-                                })()}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                    {/* "Up next" teaser below current week (legacy inline preview) */}
                     {isCurrentWeek && currentWeek < totalWeeks && (() => {
-                      const nextWeekNum = currentWeek + 1;
-                      const { focus: nextFocus } = getWeekDetails(nextWeekNum);
+                      const nextWk = currentWeek + 1;
+                      const { focus: nextFocus } = getWeekDetails(nextWk);
                       return (
                         <div style={{
                           marginTop: tokens.spacing.xs,
@@ -686,7 +465,7 @@ export default function JourneyView() {
                           <div style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, border: '1.5px dashed rgba(124,58,237,0.4)' }} />
                           <div>
                             <p style={{ fontSize: '10px', color: 'rgba(124,58,237,0.55)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' as const, margin: '0 0 2px' }}>
-                              Up next · Week {nextWeekNum}
+                              Up next · Week {nextWk}
                             </p>
                             <p style={{ fontSize: '11px', color: tokens.colors.text.secondary, margin: 0, fontWeight: 500 }}>
                               {nextFocus}
@@ -702,6 +481,26 @@ export default function JourneyView() {
           </div>
         ))}
       </div>
+
+      {/* ── UpcomingPreview ── */}
+      {showUpcomingPreview && nextWeekDetail && (
+        <UpcomingPreview
+          weekNumber={nextWeekNum}
+          focus={nextWeekDetail.focus}
+          description={nextWeekDetail.description}
+          practiceCount={nextWeekPracticeCount}
+          learningCount={nextWeekLearningCount}
+          reflectionCount={nextWeekReflectionCount}
+        />
+      )}
+
+      {/* Spacer for bottom nav */}
+      <div style={{ height: 32 }} />
     </div>
   );
 }
+
+// Keep icon imports used in legacy inline sections alive
+void MapPin;
+void Lock;
+void Circle;

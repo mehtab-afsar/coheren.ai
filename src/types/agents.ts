@@ -171,6 +171,14 @@ export interface StoneAnswer {
 // AGENT 3: CURRICULUM BUILDER TYPES
 // ============================================
 
+export interface DaySkeleton {
+  day: number;                     // Day number within the phase (1-indexed)
+  theme: string;                   // What this day covers (e.g. "Jab technique drill")
+  taskType: 'practice' | 'learning' | 'reflection' | 'challenge' | 'retrieval' | 'rest';
+  intensity: number;               // 0.0–1.0 relative intensity
+  focusArea: string;               // Which focusArea key this day targets
+}
+
 export interface Phase {
   phaseNumber: number;
   phaseName: string;
@@ -181,6 +189,7 @@ export interface Phase {
   keyMilestones: string[];
   scienceRationale: string;      // Citation from RAG / pedagogical reason for this structure
   buildingOn?: string;
+  daySkeleton?: DaySkeleton[];   // Day-level plan — gives Agent 4 specific daily guidance
   adaptationRules?: {
     if_completing_easily?: string;
     if_struggling?: string;
@@ -202,6 +211,44 @@ export interface ReviewMoment {
   type: 'reflection' | 'checkpoint' | 'mid_assessment' | 'final_assessment';
   prompt?: string;
   task?: string;
+  relatedSkills?: string[];        // Skills from earlier days being tested
+  relatedDays?: number[];          // Which days' content this reviews
+}
+
+// ============================================
+// ASSESSMENT TYPES (Testing & Revision System)
+// ============================================
+
+export type AssessmentQuestionType = 'multiple_choice' | 'open_ended' | 'true_false' | 'ordering' | 'self_rate';
+
+export type BloomLevel = 'recall' | 'apply' | 'analyze';
+
+export interface AssessmentOption {
+  value: string;
+  label: string;
+  correct?: boolean;               // for auto-gradeable types
+}
+
+export interface AssessmentQuestion {
+  id: string;
+  type: AssessmentQuestionType;
+  question: string;
+  options?: AssessmentOption[];
+  correctAnswer?: string;           // for auto-gradeable types
+  rubric?: string;                   // for self-assessment (e.g., "Rate yourself: Did you maintain guard position?")
+  relatedDay: number;                // which day's content this tests
+  relatedSkill: string;             // e.g., "jab technique", "chord transitions"
+  difficulty: BloomLevel;            // Bloom's taxonomy level
+}
+
+export type ConfidenceLevel = 'guessing' | 'unsure' | 'confident' | 'certain';
+
+export interface AssessmentResult {
+  questionId: string;
+  userAnswer: string | number;
+  selfScore?: number;               // 1-5 self-assessment
+  correct?: boolean;                 // for auto-gradeable
+  confidence: ConfidenceLevel;
 }
 
 export interface RestDays {
@@ -395,6 +442,102 @@ export interface AgentPipeline {
   stoneAnswers?: StoneAnswer[];
   agent3Output?: Agent3Output;
   agent4Output?: Agent4Output;
+}
+
+// ============================================
+// MULTI-STAGE VALIDATION TYPES
+// ============================================
+
+// --- Agent 1: Goal Clarification ---
+
+export interface GoalClarificationOption {
+  value: string;
+  label: string;
+}
+
+export interface GoalClarificationQuestion {
+  id: string;                                     // e.g. "goal_specificity"
+  question: string;                               // e.g. "What does 'learn boxing' mean to you?"
+  type: 'multiple_choice' | 'yes_no';
+  options: GoalClarificationOption[];
+  probes: string;                                 // Which ambiguity this resolves
+}
+
+export interface RealityCheck {
+  triggered: boolean;
+  severity: 'warning' | 'hard_stop';             // warning = show but allow proceed; hard_stop = must acknowledge
+  headline: string;                               // e.g. "Your timeline is very aggressive"
+  detail: string;                                 // e.g. "90 days for competitive sparring requires..."
+  suggestedAdjustment: string;                    // e.g. "Focus on fundamentals in 90 days"
+  typicalTimeline: string;                        // from Agent 1 typicalTimeline.realistic
+}
+
+export interface GoalClarificationOutput {
+  needsClarification: boolean;                    // false = skip step entirely
+  questions: GoalClarificationQuestion[];         // 2-3 questions max
+  realityCheck: RealityCheck | null;
+}
+
+// --- Agent 2: Round 2 Adaptive Follow-ups ---
+
+export interface StoneFollowUpOption {
+  value: string;
+  label: string;
+  pointsTo: string;                               // Which stone this maps to
+}
+
+export interface StoneFollowUpQuestion {
+  id: string;
+  question: string;
+  type: 'multiple_choice' | 'yes_no';
+  options: StoneFollowUpOption[];
+  resolves: string;                               // e.g. "TimeConstraint vs ProcrastinationPattern"
+}
+
+export interface PreliminaryStone {
+  type: StoneType;
+  confidence: number;                             // 0-1
+}
+
+export interface StoneRound2Output {
+  preliminaryStones: PreliminaryStone[];
+  followUpQuestions: StoneFollowUpQuestion[];     // 3-4 adaptive questions
+  contradictionDetected: boolean;
+  contradictionNote?: string;
+}
+
+export interface CrossValidationResult {
+  correctedPrimary: StoneType;
+  correctedProfile: StoneProfile;
+  contradictionResolved: string | null;
+  confidenceImprovement: number;                  // delta confidence
+}
+
+// --- Agent 3: Curriculum Preview + Calibration ---
+
+export interface CurriculumPreviewTask {
+  day: number;
+  title: string;
+  type: 'practice' | 'learning' | 'reflection' | 'challenge' | 'retrieval';
+  estimatedMinutes: number;
+  summary: string;                                // 1-sentence description
+  phase: number;
+}
+
+export interface CurriculumPreview {
+  tasks: CurriculumPreviewTask[];                 // 7 tasks (Days 1-7)
+  weekTheme: string;                              // e.g. "Building your foundation"
+  endOfWeekOutcome: string;                       // e.g. "You'll be able to throw a clean jab"
+}
+
+export type PaceChoice = 'too_easy' | 'just_right' | 'too_intense';
+
+export interface PaceCalibration {
+  choice: PaceChoice;
+  difficultyMultiplier: number;                   // 0.8 = easier, 1.0 = normal, 1.2 = harder
+  phaseDurationMultiplier: number;                // 1.0 normal, 1.2 = extend phases
+  maxStepsPerTask: number;                        // 3 (too_intense), 4 (normal), 5 (too_easy)
+  note: string;                                   // Applied to Agent 4 prompt
 }
 
 // ============================================

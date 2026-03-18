@@ -29,8 +29,6 @@ test.describe('Dashboard — Today view', () => {
     const taskCard = page.getByText(/morning meditation/i).first();
     await expect(taskCard).toBeVisible();
     // The complete button is inside/near the task card
-    const completeBtn = page.locator('[aria-label*="complete" i], button[title*="done" i]')
-      .or(page.locator('button').filter({ has: taskCard }).first());
     // Just verify the task card itself is clickable/interactive
     await expect(taskCard.locator('..').locator('..').locator('button').first()).toBeVisible();
   });

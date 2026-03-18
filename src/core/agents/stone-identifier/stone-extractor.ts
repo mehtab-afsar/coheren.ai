@@ -8,7 +8,16 @@
  * Runs AFTER the user has answered Mode 1 questions.
  */
 
-import type { Agent1Output, Agent2ProfileOutput, AgentContext, StoneAnswer } from '@types-app/agents';
+import type {
+  Agent1Output,
+  Agent2ProfileOutput,
+  AgentContext,
+  StoneAnswer,
+  StoneRound2Output,
+  PreliminaryStone,
+  CrossValidationResult,
+  StoneType,
+} from '@types-app/agents';
 import { callReasoning } from '@lib/ai-router';
 import { STONE_DESCRIPTIONS, STONE_TO_CATEGORY, ALL_STONE_TYPES } from './stone-taxonomy';
 
@@ -151,6 +160,174 @@ function validateOutput(raw: unknown): Agent2ProfileOutput {
   p.userArchetype = p.userArchetype ?? 'Unknown Archetype';
 
   return parsed;
+}
+
+/**
+ * Preliminary extraction pass — runs after Round 1 answers to determine confidence levels
+ * and which stones need disambiguation via follow-up questions.
+ *
+ * This is a lightweight LLM call that returns preliminary stone guesses with confidence.
+ * Used to decide which Round 2 follow-up questions to show.
+ */
+export async function extractPreliminary(
+  context: AgentContext,
+  goalAnalysis: Agent1Output,
+  round1Answers: StoneAnswer[]
+): Promise<StoneRound2Output> {
+  const g = goalAnalysis.goalAnalysis;
+  const answersText = round1Answers
+    .map(a => `Q (${a.stoneId}): ${typeof a.answer === 'object' ? JSON.stringify(a.answer) : a.answer}`)
+    .join('\n');
+
+  const prompt = `Perform a PRELIMINARY stone analysis on these Round 1 answers.
+Do not give a final profile — just estimate which stones are present and how confident you are.
+Then produce 3-4 targeted follow-up questions to resolve the low-confidence stones.
+
+Goal: "${context.goal}" | Domain: ${g.domain}
+
+Round 1 Answers:
+${answersText}
+
+Return JSON:
+{
+  "preliminaryStones": [
+    { "type": "StoneType", "confidence": 0.0 }
+  ],
+  "contradictionDetected": false,
+  "contradictionNote": null,
+  "followUpQuestions": [
+    {
+      "id": "unique_id",
+      "question": "Clarifying question text",
+      "type": "multiple_choice",
+      "resolves": "Which ambiguity this resolves (e.g. TimeConstraint vs ProcrastinationPattern)",
+      "options": [
+        { "value": "option_value", "label": "Display label", "pointsTo": "StoneType" }
+      ]
+    }
+  ]
+}`;
+
+  const { content } = await callReasoning({
+    messages: [
+      { role: 'system', content: buildSystemPrompt() },
+      { role: 'user', content: prompt },
+    ],
+    temperature: 0.2,
+    max_tokens: 1000,
+    response_format: { type: 'json_object' },
+  });
+
+  if (!content) throw new Error('Agent 2 preliminary extraction: No response');
+
+  const raw = JSON.parse(content) as StoneRound2Output;
+
+  // Validate preliminary stones
+  const validatedPrelim: PreliminaryStone[] = (raw.preliminaryStones ?? [])
+    .filter(s => ALL_STONE_TYPES.includes(s.type))
+    .map(s => ({ type: s.type, confidence: Math.min(1, Math.max(0, s.confidence ?? 0.5)) }))
+    .slice(0, 5);
+
+  // Validate follow-up questions — cap at 4
+  const validatedFollowUps = (raw.followUpQuestions ?? [])
+    .slice(0, 4)
+    .map(q => ({
+      ...q,
+      options: (q.options ?? []).slice(0, 5),
+    }));
+
+  return {
+    preliminaryStones: validatedPrelim,
+    followUpQuestions: validatedFollowUps,
+    contradictionDetected: raw.contradictionDetected ?? false,
+    contradictionNote: raw.contradictionNote ?? undefined,
+  };
+}
+
+/**
+ * Cross-validation pass — detects contradictions between Round 1 + Round 2 answers
+ * and corrects the preliminary stone profile.
+ *
+ * Example: User said "no time" but Round 2 shows they fill time with low-priority tasks
+ * → reclassify from TimeConstraint → ProcrastinationPattern.
+ */
+export function crossValidateStones(
+  preliminary: PreliminaryStone[],
+  round2Answers: StoneAnswer[]
+): CrossValidationResult {
+  // Build a vote map: how many Round 2 answers point to each stone
+  const votes: Partial<Record<StoneType, number>> = {};
+  for (const answer of round2Answers) {
+    const pointsTo = answer.impact?.pointsTo as StoneType | undefined;
+    if (pointsTo && ALL_STONE_TYPES.includes(pointsTo)) {
+      votes[pointsTo] = (votes[pointsTo] ?? 0) + 1;
+    }
+  }
+
+  // Detect TimeConstraint ↔ ProcrastinationPattern confusion (most common)
+  let contradictionResolved: string | null = null;
+  let correctedPrimary = preliminary[0]?.type ?? 'Inconsistency';
+  const correctedPrelim = [...preliminary];
+
+  const timeIdx = correctedPrelim.findIndex(s => s.type === 'TimeConstraint');
+  const procIdx = correctedPrelim.findIndex(s => s.type === 'ProcrastinationPattern');
+  const timeVotes = votes['TimeConstraint'] ?? 0;
+  const procVotes = votes['ProcrastinationPattern'] ?? 0;
+
+  if (timeIdx !== -1 && procVotes > timeVotes) {
+    // Evidence points more to procrastination than actual time shortage
+    correctedPrelim[timeIdx] = { type: 'ProcrastinationPattern', confidence: 0.75 };
+    if (procIdx !== -1) correctedPrelim.splice(procIdx, 1);
+    contradictionResolved = 'TimeConstraint reclassified as ProcrastinationPattern based on Round 2 evidence';
+  }
+
+  // Perfectionism ↔ FearOfFailure disambiguation
+  const perfIdx = correctedPrelim.findIndex(s => s.type === 'Perfectionism');
+  const fearIdx = correctedPrelim.findIndex(s => s.type === 'FearOfFailure');
+  const perfVotes = votes['Perfectionism'] ?? 0;
+  const fearVotes = votes['FearOfFailure'] ?? 0;
+  if (perfIdx !== -1 && fearVotes > perfVotes && fearIdx === -1) {
+    correctedPrelim[perfIdx] = { type: 'FearOfFailure', confidence: 0.7 };
+    contradictionResolved = contradictionResolved ?? 'Perfectionism reclassified as FearOfFailure';
+  }
+
+  // Boost confidence for stones that had Round 2 votes
+  for (const stone of correctedPrelim) {
+    const v = votes[stone.type] ?? 0;
+    stone.confidence = Math.min(1, stone.confidence + v * 0.1);
+  }
+
+  // Re-sort by confidence descending
+  correctedPrelim.sort((a, b) => b.confidence - a.confidence);
+  correctedPrimary = correctedPrelim[0]?.type ?? 'Inconsistency';
+
+  // Build a corrected profile stub (full extraction still happens in extractStones)
+  const correctedProfile = {
+    stoneProfile: {
+      userArchetype: 'Pending full extraction',
+      primaryStone: correctedPrimary,
+      stones: correctedPrelim.map(s => ({
+        type: s.type,
+        category: STONE_TO_CATEGORY[s.type] ?? 'Behavioural',
+        trigger: '',
+        severity: s.confidence > 0.75 ? 'High' : s.confidence > 0.5 ? 'Moderate' : 'Low',
+        riskImpact: s.confidence,
+      })),
+      agent3Guidance: [],
+      agent5Note: '',
+      confidence: correctedPrelim[0]?.confidence ?? 0.6,
+    },
+  } as Agent2ProfileOutput;
+
+  const originalConfidence = preliminary[0]?.confidence ?? 0.5;
+  const newConfidence = correctedPrelim[0]?.confidence ?? 0.6;
+
+  return {
+    correctedPrimary,
+    correctedProfile,
+    contradictionResolved,
+    confidenceImprovement: newConfidence - originalConfidence,
+  };
 }
 
 export async function extractStones(

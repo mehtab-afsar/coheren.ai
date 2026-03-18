@@ -5,11 +5,12 @@
  */
 
 // Individual Agents
-export { analyzeGoal } from './goal-analyzer';
-export { identifyStones, extractStones } from './stone-identifier';
-export { buildCurriculum } from './curriculum-builder';
+export { analyzeGoal, buildClarifications } from './goal-analyzer';
+export { identifyStones, extractStones, extractPreliminary, crossValidateStones } from './stone-identifier';
+export { buildCurriculum, buildCurriculumPreview, resolvePaceCalibration } from './curriculum-builder';
 export { generateTask } from './task-generator';
 export { recalibrateCurriculum, shouldTriggerCheckpoint, convertToFeedback } from './recalibrator';
+export { planSession, serializeBlueprint } from './session-planner';
 
 // Orchestrator
 export {
@@ -20,7 +21,13 @@ export {
   generateTaskBatch,
   runCheckpointRecalibration,
   generateAdaptedSprint,
-  handleCheckpoint
+  handleCheckpoint,
+  // Multi-stage validation helpers
+  getGoalClarifications,
+  runStoneRound2,
+  runStoneCrossValidation,
+  getCurriculumPreview,
+  getPaceCalibration,
 } from './orchestrator';
 
 // Re-export types
@@ -43,5 +50,14 @@ export type {
   Roadmap,
   CompletedTaskFeedback,
   CheckpointAnalysis,
-  RecalibratedSprint
+  RecalibratedSprint,
+  AssessmentQuestion,
+  AssessmentResult,
+  ReviewMoment,
+  GoalClarificationOutput,
+  StoneRound2Output,
+  CrossValidationResult,
+  CurriculumPreview,
+  PaceCalibration,
+  PaceChoice,
 } from '@types-app/agents';

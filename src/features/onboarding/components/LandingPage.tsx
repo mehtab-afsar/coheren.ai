@@ -15,6 +15,9 @@ import {
   Map,
   BarChart2,
   ChevronRight,
+  Brain,
+  ScanLine,
+  CheckCheck,
 } from 'lucide-react';
 import { Icons } from '@shared/components/ui/icons';
 import { useStore } from '@core/store/useStore';
@@ -34,6 +37,12 @@ function BrainDumpCard() {
   const [showTags, setShowTags] = useState(false);
   const fullText = "I want to learn Python in 3 months";
 
+  const TAGS = [
+    { label: 'Intent',   value: 'learn a skill' },
+    { label: 'Domain',   value: 'Programming'   },
+    { label: 'Timeline', value: '3 months'       },
+  ];
+
   useEffect(() => {
     let currentIndex = 0;
     const typingInterval = setInterval(() => {
@@ -42,42 +51,90 @@ function BrainDumpCard() {
         currentIndex++;
       } else {
         clearInterval(typingInterval);
-        setTimeout(() => setShowTags(true), 300);
+        setTimeout(() => setShowTags(true), 400);
       }
-    }, 50);
+    }, 48);
     return () => clearInterval(typingInterval);
   }, []);
 
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-6">
-      {/* Input bar mockup */}
-      <div className="w-full rounded-xl bg-white/10 border border-white/20 px-4 py-3 flex items-center gap-3">
-        <MessageSquare className="h-4 w-4 text-white/60 flex-shrink-0" />
-        <span className="text-sm text-white/80 font-light">{text}</span>
+    <div className="flex h-full w-full flex-col items-center justify-center gap-0 px-6">
+      {/* Input bar */}
+      <div className="w-full rounded-xl px-4 py-3 flex items-center gap-3" style={{ background: '#FAF9F7', border: '1px solid #E2DDD5' }}>
+        <MessageSquare className="h-4 w-4 flex-shrink-0" style={{ color: '#9ca3af' }} />
+        <span className="text-sm font-light flex-1" style={{ color: '#111' }}>{text}</span>
         {text.length < fullText.length && (
-          <span className="ml-auto h-4 w-px bg-white/60 animate-pulse" />
+          <span className="h-4 w-px animate-pulse" style={{ background: '#9ca3af' }} />
+        )}
+        {showTags && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
+            <ScanLine className="h-3.5 w-3.5" style={{ color: '#7c3aed' }} />
+          </motion.div>
         )}
       </div>
-      {/* RAG tag row */}
+
+      {/* Animated extraction: vertical line + tag rows */}
       <AnimatePresence>
         {showTags && (
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="flex gap-2"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
+            className="w-full mt-3 space-y-2"
           >
-            {["Intent ✓", "Domain ✓", "Timeline ✓"].map((t, i) => (
-              <motion.span
-                key={t}
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: i * 0.1, duration: 0.3 }}
-                className="rounded-full bg-white/15 px-2.5 py-0.5 text-[11px] font-medium text-white/80"
+            {TAGS.map((tag, i) => (
+              <motion.div
+                key={tag.label}
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.18, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                className="flex items-center gap-3"
               >
-                {t}
-              </motion.span>
+                {/* Left connector line + dot */}
+                <div className="flex flex-col items-center" style={{ width: 16 }}>
+                  <motion.div
+                    initial={{ scaleY: 0 }}
+                    animate={{ scaleY: 1 }}
+                    transition={{ delay: i * 0.18, duration: 0.25, ease: 'easeOut' }}
+                    style={{
+                      width: 1,
+                      height: i === 0 ? 12 : 8,
+                      backgroundColor: 'rgba(124,58,237,0.4)',
+                      transformOrigin: 'top',
+                    }}
+                  />
+                  <div style={{
+                    width: 6, height: 6, borderRadius: '50%',
+                    backgroundColor: '#7c3aed',
+                    flexShrink: 0,
+                  }} />
+                </div>
+
+                {/* Tag card */}
+                <div
+                  className="flex-1 flex items-center justify-between rounded-lg px-3 py-2"
+                  style={{ backgroundColor: '#f5f3ff', border: '1px solid #ede9fe' }}
+                >
+                  <span style={{ fontSize: 10, color: '#7c3aed', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    {tag.label}
+                  </span>
+                  <span style={{ fontSize: 12, color: '#111', fontWeight: 500 }}>
+                    {tag.value}
+                  </span>
+                </div>
+              </motion.div>
             ))}
+
+            {/* Parsed confirmation */}
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: TAGS.length * 0.18 + 0.2, duration: 0.3 }}
+              className="flex items-center justify-center gap-1.5 pt-1"
+            >
+              <CheckCheck className="h-3 w-3" style={{ color: '#9ca3af' }} />
+              <span className="text-[10px] font-medium tracking-wide" style={{ color: '#9ca3af' }}>Goal structured · Passed to agents</span>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -86,171 +143,72 @@ function BrainDumpCard() {
 }
 
 function AgenticArchitectureCard() {
-  const agents = [
-    { label: "Goal", color: "#8b5cf6", icon: "🎯" },
-    { label: "Time", color: "#ec4899", icon: "⏱️" },
-    { label: "Skill", color: "#06b6d4", icon: "📊" },
-    { label: "Risk", color: "#f59e0b", icon: "⚠️" },
-    { label: "Path", color: "#3b82f6", icon: "🗺️" },
+  const PIPELINE = [
+    { Icon: ScanLine,  name: 'Goal Analyzer',       badge: 'Goal understood'   },
+    { Icon: Brain,     name: 'Behavioral Profiler',  badge: 'Challenges mapped' },
+    { Icon: Map,       name: 'Curriculum Builder',   badge: 'Roadmap built'     },
+    { Icon: Zap,       name: 'Task Generator',       badge: 'Daily task ready'  },
+    { Icon: RefreshCw, name: 'Recalibrator',         badge: 'Plan adapts'       },
   ];
 
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-6 px-6">
-      {/* Dynamic agent network */}
-      <div className="relative flex items-center justify-center h-48 w-48">
-        {/* Pulsing glow background */}
-        <motion.div
-          animate={{
-            scale: [1, 1.2, 1],
-            opacity: [0.3, 0.5, 0.3],
-          }}
-          transition={{
-            duration: 3,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
-          className="absolute inset-0 rounded-full bg-violet-500/20 blur-xl"
-        />
-
-        {/* Central AI brain */}
-        <motion.div
-          initial={{ scale: 0, rotate: -180 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-          className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/30 to-purple-600/30 border-2 border-violet-400/40 z-20 backdrop-blur-sm"
-        >
+    <div className="flex h-full w-full flex-col justify-center gap-0 px-5 py-4">
+      {PIPELINE.map(({ Icon, name, badge }, i) => (
+        <React.Fragment key={name}>
+          {/* Agent row */}
           <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+            initial={{ opacity: 0, x: -14 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.18, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            className="flex items-center gap-3"
           >
-            <Cpu className="h-7 w-7 text-violet-200" />
+            {/* Icon circle */}
+            <div
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full"
+              style={{ background: '#f5f3ff', border: '1px solid #ede9fe' }}
+            >
+              <Icon className="h-3.5 w-3.5" style={{ color: '#7c3aed' }} />
+            </div>
+
+            {/* Name */}
+            <span className="flex-1 text-[12px] font-medium" style={{ color: '#111' }}>{name}</span>
+
+            {/* Output badge */}
+            <motion.span
+              initial={{ opacity: 0, scale: 0.85 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: i * 0.18 + 0.25, duration: 0.3 }}
+              className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+              style={{ background: '#f5f3ff', border: '1px solid #ede9fe', color: '#7c3aed' }}
+            >
+              {badge}
+            </motion.span>
           </motion.div>
-        </motion.div>
 
-        {/* Orbiting agent nodes */}
-        {agents.map(({ label, color, icon }, i) => {
-          const angle = (i * 360) / agents.length - 90;
-          const radius = 70;
-
-          return (
-            <React.Fragment key={label}>
-              {/* Connecting beam */}
+          {/* Connector between agents */}
+          {i < PIPELINE.length - 1 && (
+            <div className="relative ml-4 flex h-5 w-8 flex-col items-center">
+              <div className="absolute left-0 top-0 h-full w-px" style={{ background: '#e5e7eb' }} />
               <motion.div
-                initial={{ opacity: 0 }}
-                animate={{
-                  opacity: [0, 0.6, 0],
-                }}
-                transition={{
-                  delay: 1 + i * 0.15,
-                  duration: 2,
-                  repeat: Infinity,
-                  repeatDelay: 1,
-                }}
-                className="absolute h-[2px] origin-left z-0"
-                style={{
-                  width: `${radius}px`,
-                  background: `linear-gradient(90deg, ${color}80, transparent)`,
-                  transform: `rotate(${angle}deg)`,
-                  left: '50%',
-                  top: '50%',
-                }}
+                animate={{ top: ['0%', '100%'] }}
+                transition={{ delay: i * 0.18 + 0.5, duration: 0.7, repeat: Infinity, repeatDelay: PIPELINE.length * 0.18 + 1.2, ease: 'easeInOut' }}
+                className="absolute left-0 h-1.5 w-1.5 -translate-x-[2px] rounded-full"
+                style={{ backgroundColor: '#7c3aed' }}
               />
+            </div>
+          )}
+        </React.Fragment>
+      ))}
 
-              {/* Agent node */}
-              <motion.div
-                initial={{ scale: 0, opacity: 0 }}
-                animate={{
-                  scale: 1,
-                  opacity: 1,
-                  y: [0, -4, 0],
-                }}
-                transition={{
-                  scale: { delay: 0.8 + i * 0.1, duration: 0.4 },
-                  opacity: { delay: 0.8 + i * 0.1, duration: 0.4 },
-                  y: {
-                    delay: 2 + i * 0.2,
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                  }
-                }}
-                className="absolute flex flex-col items-center justify-center gap-0.5 z-10"
-                style={{
-                  left: '50%',
-                  top: '50%',
-                  transform: `translate(-50%, -50%) rotate(${angle}deg) translateX(${radius}px) rotate(${-angle}deg)`,
-                }}
-              >
-                <motion.div
-                  whileHover={{ scale: 1.1 }}
-                  className="h-10 w-10 rounded-full flex items-center justify-center text-base backdrop-blur-sm border shadow-lg"
-                  style={{
-                    background: `${color}25`,
-                    borderColor: `${color}50`,
-                    boxShadow: `0 0 20px ${color}40`,
-                  }}
-                >
-                  {icon}
-                </motion.div>
-                <span className="text-[9px] font-semibold text-white/80 mt-0.5">{label}</span>
-              </motion.div>
-
-              {/* Data pulse particles */}
-              <motion.div
-                initial={{ scale: 0, opacity: 0 }}
-                animate={{
-                  scale: [0, 1, 0],
-                  opacity: [0, 1, 0],
-                  x: [0, Math.cos((angle * Math.PI) / 180) * radius],
-                  y: [0, Math.sin((angle * Math.PI) / 180) * radius],
-                }}
-                transition={{
-                  delay: 2 + i * 0.3,
-                  duration: 1.5,
-                  repeat: Infinity,
-                  repeatDelay: 2,
-                }}
-                className="absolute h-1.5 w-1.5 rounded-full"
-                style={{
-                  left: '50%',
-                  top: '50%',
-                  backgroundColor: color,
-                  boxShadow: `0 0 10px ${color}`,
-                }}
-              />
-            </React.Fragment>
-          );
-        })}
-      </div>
-
-      {/* Status indicators */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1.5, duration: 0.5 }}
-        className="flex flex-col gap-2 w-full"
+      {/* Footer status */}
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: PIPELINE.length * 0.18 + 0.4, duration: 0.4 }}
+        className="mt-3 text-center text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#9ca3af' }}
       >
-        <div className="flex items-center justify-between text-[10px] text-white/50">
-          <span>Analyzing dependencies...</span>
-          <motion.div
-            animate={{ opacity: [0.5, 1, 0.5] }}
-            transition={{ duration: 1.5, repeat: Infinity }}
-            className="flex gap-1"
-          >
-            <div className="h-1 w-1 rounded-full bg-violet-400" />
-            <div className="h-1 w-1 rounded-full bg-violet-400" />
-            <div className="h-1 w-1 rounded-full bg-violet-400" />
-          </motion.div>
-        </div>
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 2, duration: 0.5 }}
-          className="text-center text-[11px] text-white/70 tracking-wide uppercase font-semibold"
-        >
-          5 agents · Real-time collaboration
-        </motion.p>
-      </motion.div>
+        5 agents · Sequential pipeline
+      </motion.p>
     </div>
   );
 }
@@ -278,7 +236,8 @@ function DynamicRecalibrationCard() {
           x: phase === 'adjusted' ? -10 : 0,
         }}
         transition={{ duration: 0.5 }}
-        className="w-full rounded-xl bg-gradient-to-r from-red-500/20 to-rose-500/20 border border-red-400/40 px-4 py-3 relative overflow-hidden"
+        className="w-full rounded-xl px-4 py-3 relative overflow-hidden"
+        style={{ background: '#FAF9F7', border: '1px solid #E2DDD5' }}
       >
         {/* Scan line effect */}
         {phase === 'analyzing' && (
@@ -290,12 +249,16 @@ function DynamicRecalibrationCard() {
           />
         )}
         <div className="flex items-center gap-2 relative z-10">
-          <X className="h-4 w-4 text-red-300 flex-shrink-0" />
+          <X className="h-4 w-4 flex-shrink-0" style={{ color: '#9ca3af' }} />
           <div className="flex-1">
-            <span className="text-xs text-white/70 line-through block">Write 500 words</span>
-            <span className="text-[10px] text-white/40">Day 4 · Skipped</span>
+            <span className="text-xs line-through block" style={{ color: '#6b7280' }}>Write 500 words</span>
+            <span className="text-[10px]" style={{ color: '#9ca3af' }}>Day 4 · Skipped</span>
           </div>
-          <span className="text-[10px] font-semibold text-red-300">-2 streak</span>
+          <motion.span
+            animate={{ opacity: phase === 'adjusted' ? 0 : 1, x: phase === 'adjusted' ? 8 : 0 }}
+            transition={{ duration: 0.3 }}
+            className="text-[10px] font-semibold" style={{ color: '#9ca3af' }}
+          >missed</motion.span>
         </div>
       </motion.div>
 
@@ -316,7 +279,7 @@ function DynamicRecalibrationCard() {
               >
                 <Cpu className="h-3.5 w-3.5 text-violet-400" />
               </motion.div>
-              <span className="text-[10px] text-white/50">AI analyzing failure pattern...</span>
+              <span className="text-[10px]" style={{ color: '#6b7280' }}>AI analyzing failure pattern...</span>
             </div>
 
             {/* Analysis insights */}
@@ -337,9 +300,9 @@ function DynamicRecalibrationCard() {
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ delay: delay + 0.2, duration: 0.2 }}
-                    className="h-1 w-1 rounded-full bg-emerald-400"
+                    className="h-1 w-1 rounded-full bg-violet-400"
                   />
-                  <span className="text-white/60">{label}</span>
+                  <span style={{ color: '#6b7280' }}>{label}</span>
                 </motion.div>
               ))}
             </div>
@@ -347,24 +310,45 @@ function DynamicRecalibrationCard() {
         )}
       </AnimatePresence>
 
-      {/* Transformation arrow */}
-      <motion.div
-        animate={{
-          rotate: phase === 'analyzing' ? 360 : 0,
-          scale: phase === 'analyzing' ? 1.2 : 1,
-        }}
-        transition={{ duration: 0.6 }}
-        className="relative"
-      >
-        <RefreshCw className={`h-4 w-4 ${phase === 'analyzing' ? 'text-violet-400' : 'text-white/30'}`} />
-        {phase === 'analyzing' && (
-          <motion.div
-            animate={{ scale: [1, 1.5, 1], opacity: [0.5, 0, 0.5] }}
-            transition={{ duration: 1, repeat: Infinity }}
-            className="absolute inset-0 rounded-full bg-violet-400/30"
-          />
-        )}
-      </motion.div>
+      {/* Transformation section */}
+      <div className="flex w-full flex-col items-center gap-2 py-1">
+        <motion.div
+          animate={{
+            rotate: phase === 'analyzing' ? 360 : 0,
+            scale: phase === 'analyzing' ? 1.25 : 1,
+          }}
+          transition={{ duration: 0.6 }}
+          className="relative flex items-center justify-center"
+        >
+          <RefreshCw className={`h-5 w-5 ${phase === 'analyzing' ? 'text-violet-400' : 'text-white/25'}`} />
+          {phase === 'analyzing' && (
+            <motion.div
+              animate={{ scale: [1, 1.8, 1], opacity: [0.4, 0, 0.4] }}
+              transition={{ duration: 1, repeat: Infinity }}
+              className="absolute inset-0 rounded-full bg-violet-400/25"
+            />
+          )}
+        </motion.div>
+        {/* Progress bar during analysis */}
+        <AnimatePresence>
+          {phase === 'analyzing' && (
+            <motion.div
+              initial={{ opacity: 0, width: 0 }}
+              animate={{ opacity: 1, width: '100%' }}
+              exit={{ opacity: 0 }}
+              className="h-0.5 rounded-full bg-gray-800 overflow-hidden"
+              style={{ maxWidth: 120 }}
+            >
+              <motion.div
+                initial={{ width: '0%' }}
+                animate={{ width: '100%' }}
+                transition={{ duration: 1.3, ease: 'easeInOut' }}
+                className="h-full rounded-full bg-violet-500"
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* Adjusted task card */}
       <AnimatePresence>
@@ -373,28 +357,30 @@ function DynamicRecalibrationCard() {
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-            className="w-full rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-400/40 px-4 py-3 relative overflow-hidden"
+            className="w-full rounded-xl px-4 py-3 relative overflow-hidden"
+            style={{ background: '#f5f3ff', border: '1px solid #ede9fe' }}
           >
             {/* Success shimmer */}
             <motion.div
               initial={{ x: '-100%' }}
               animate={{ x: '100%' }}
               transition={{ duration: 1, delay: 0.2 }}
-              className="absolute inset-y-0 w-20 bg-gradient-to-r from-transparent via-emerald-400/20 to-transparent"
+              className="absolute inset-y-0 w-20 bg-gradient-to-r from-transparent via-white/8 to-transparent"
             />
             <div className="flex items-center gap-2 relative z-10">
-              <CheckCircle2 className="h-4 w-4 text-emerald-300 flex-shrink-0" />
+              <CheckCircle2 className="h-4 w-4 flex-shrink-0" style={{ color: '#7c3aed' }} />
               <div className="flex-1">
-                <span className="text-xs text-white/90 block font-medium">Write 1 sentence</span>
-                <span className="text-[10px] text-emerald-300/70">2 min · Momentum builder</span>
+                <span className="text-xs block font-medium" style={{ color: '#111' }}>Write 1 sentence</span>
+                <span className="text-[10px]" style={{ color: '#9ca3af' }}>2 min · Momentum builder</span>
               </div>
               <motion.span
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.3, type: "spring" }}
-                className="text-[10px] font-semibold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-full"
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.35, type: "spring" }}
+                className="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap"
+                style={{ color: '#7c3aed', background: '#f5f3ff', border: '1px solid #ede9fe' }}
               >
-                +1
+                streak safe ✓
               </motion.span>
             </div>
           </motion.div>
@@ -412,9 +398,9 @@ function DynamicRecalibrationCard() {
           <motion.div
             animate={{ scale: [1, 1.2, 1] }}
             transition={{ duration: 2, repeat: Infinity }}
-            className="h-1.5 w-1.5 rounded-full bg-emerald-400"
+            className="h-1.5 w-1.5 rounded-full bg-violet-400"
           />
-          <p className="text-[10px] text-emerald-300/70 tracking-wide font-medium">
+          <p className="text-[10px] tracking-wide font-medium" style={{ color: '#9ca3af' }}>
             Roadmap adapted · Streak preserved
           </p>
         </motion.div>
@@ -423,58 +409,105 @@ function DynamicRecalibrationCard() {
   );
 }
 
+const GHOST_TASKS = [
+  { text: 'Read 20 pages of habit book', time: '35 min' },
+  { text: 'Outline all 12 chapters', time: '60 min' },
+  { text: 'Research writing techniques', time: '45 min' },
+];
+
 function OneFocusCard() {
+  const [ghostsGone, setGhostsGone] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setGhostsGone(true), 900);
+    return () => clearTimeout(t);
+  }, []);
+
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-4 px-6">
-      {/* Notification card */}
+    <div className="flex h-full w-full flex-col items-center justify-center gap-0 px-6">
+
+      {/* Ghost tasks — filtered away */}
+      <AnimatePresence>
+        {!ghostsGone && (
+          <motion.div
+            exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            className="w-full overflow-hidden mb-2"
+          >
+            {GHOST_TASKS.map((t, i) => (
+              <motion.div
+                key={t.text}
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 0.18 - i * 0.04, y: 0 }}
+                transition={{ delay: i * 0.08, duration: 0.3 }}
+                className="w-full rounded-xl px-3 py-2 mb-1.5 flex items-center gap-2"
+                style={{ background: '#FAF9F7', border: '1px solid #E2DDD5' }}
+              >
+                <span className="flex-1 text-[11px] line-through truncate" style={{ color: '#d1d5db' }}>{t.text}</span>
+                <span className="text-[10px]" style={{ color: '#e5e7eb' }}>{t.time}</span>
+              </motion.div>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* The ONE focus card */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        initial={{ opacity: 0, scale: 0.92, y: 16 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-        className="w-full rounded-2xl bg-white/10 border border-white/20 p-4"
+        transition={{ delay: 0.5, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+        className="w-full rounded-2xl p-4"
+        style={{ background: '#FAF9F7', border: '1px solid #E2DDD5', boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}
       >
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.3, duration: 0.5 }}
+          transition={{ delay: 0.75, duration: 0.4 }}
           className="flex items-center gap-2 mb-3"
         >
           <motion.div
             animate={{ scale: [1, 1.2, 1] }}
             transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-            className="h-6 w-6 rounded-full bg-white/20 flex items-center justify-center"
+            className="h-6 w-6 rounded-full flex items-center justify-center"
+            style={{ background: '#f5f3ff' }}
           >
-            <Zap className="h-3 w-3 text-yellow-300" />
+            <Zap className="h-3 w-3" style={{ color: '#7c3aed' }} />
           </motion.div>
-          <span className="text-xs font-medium text-white/60 uppercase tracking-wider">Today's focus</span>
+          <span className="text-xs font-medium uppercase tracking-wider" style={{ color: '#9ca3af' }}>Today's focus</span>
         </motion.div>
+
         <motion.p
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5, duration: 0.5 }}
-          className="text-sm font-medium text-white leading-snug"
+          transition={{ delay: 0.9, duration: 0.4 }}
+          className="text-sm font-medium leading-snug"
+          style={{ color: '#111' }}
         >
           Write the opening line of Chapter 1.
         </motion.p>
+
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.7, duration: 0.5 }}
+          transition={{ delay: 1.1, duration: 0.4 }}
           className="mt-3 flex items-center gap-1.5"
         >
           <motion.span
             animate={{ scale: [1, 1.3, 1], opacity: [1, 0.7, 1] }}
             transition={{ duration: 1.5, repeat: Infinity }}
-            className="h-1.5 w-1.5 rounded-full bg-emerald-400"
+            className="h-1.5 w-1.5 rounded-full"
+            style={{ background: '#7c3aed' }}
           />
-          <span className="text-[10px] text-white/40">Est. 12 min · Day 3 of 90</span>
+          <span className="text-[10px]" style={{ color: '#9ca3af' }}>Est. 12 min · Day 3 of 90</span>
         </motion.div>
       </motion.div>
+
       <motion.p
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 1, duration: 0.5 }}
-        className="text-[10px] text-white/30 tracking-wide"
+        transition={{ delay: 1.4, duration: 0.5 }}
+        className="mt-3 text-[10px] tracking-wide"
+        style={{ color: '#9ca3af' }}
       >
         Nothing else. Just this.
       </motion.p>

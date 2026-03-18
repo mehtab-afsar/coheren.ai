@@ -153,7 +153,34 @@ ${context.behavioralFlags && context.behavioralFlags.length > 0
 - Never ask what's already known`;
 }
 
-function validateOutput(raw: unknown): Agent2Output {
+// Keyword safety net: reject questions whose core topic overlaps with chat-collected fields.
+// Maps Shadow Extractor field names → keywords that indicate a question is re-asking that data.
+const CHAT_FIELD_KEYWORDS: Record<string, string[]> = {
+  dailyTime:          ['how much time', 'how many hours', 'how many minutes', 'time per day', 'daily time', 'time commitment'],
+  currentSkillLevel:  ['experience level', 'how experienced', 'skill level', 'beginner or', 'what level'],
+  energyPattern:      ['morning or evening', 'time of day do you', 'when do you have the most energy', 'morning person'],
+  timeline:           ['how long do you want', 'target date', 'deadline', 'how many weeks', 'how many months'],
+  specificGoal:       ['what is your goal', 'what do you want to achieve', 'what are you trying'],
+};
+
+function questionOverlapsChat(questionText: string, context: AgentContext): boolean {
+  const lower = questionText.toLowerCase();
+  for (const [field, keywords] of Object.entries(CHAT_FIELD_KEYWORDS)) {
+    // Only filter if we already have this data
+    const hasField = field === 'dailyTime' ? context.dailyTimeAvailable > 0
+      : field === 'currentSkillLevel' ? !!context.skillLevel
+      : field === 'energyPattern' ? !!context.energyPattern
+      : field === 'timeline' ? context.timeline > 0
+      : field === 'specificGoal' ? !!context.goal
+      : false;
+    if (hasField && keywords.some(kw => lower.includes(kw))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function validateOutput(raw: unknown, context?: AgentContext): Agent2Output {
   const parsed = raw as Agent2Output;
   if (!Array.isArray(parsed?.requiredStones)) {
     throw new Error('Agent 2 Mode 1: Missing requiredStones array');
@@ -166,6 +193,14 @@ function validateOutput(raw: unknown): Agent2Output {
   parsed.requiredStones = parsed.requiredStones.filter(
     s => s.stoneId && s.stoneName && s.question?.text
   );
+
+  // Keyword safety net: filter out questions that re-ask chat-collected data
+  if (context) {
+    parsed.requiredStones = parsed.requiredStones.filter(
+      s => !questionOverlapsChat(s.question.text, context)
+    );
+  }
+
 
   return parsed;
 }
@@ -188,5 +223,5 @@ export async function generateQuestions(
   }
 
   const raw = JSON.parse(content) as unknown;
-  return validateOutput(raw);
+  return validateOutput(raw, context);
 }

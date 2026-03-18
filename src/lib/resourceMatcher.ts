@@ -18,7 +18,8 @@ import {
 // ============================================
 
 /**
- * Maps common task keywords to resource topics
+ * Maps common task keywords to resource topics.
+ * Includes synonyms for broader matching.
  */
 const KEYWORD_TO_TOPIC_MAP: Record<string, string[]> = {
   // Guitar
@@ -29,8 +30,11 @@ const KEYWORD_TO_TOPIC_MAP: Record<string, string[]> = {
   'warm': ['warm_up'],
   'scale': ['scales', 'theory'],
   'song': ['songs', 'easy_songs'],
+  'fret': ['technique', 'chords'],
+  'pick': ['strumming', 'technique'],
+  'arpeggio': ['technique', 'theory'],
 
-  // Boxing
+  // Boxing — expanded with synonyms
   'jab': ['jab', 'punches'],
   'cross': ['cross', 'punches'],
   'hook': ['hook', 'punches'],
@@ -40,6 +44,17 @@ const KEYWORD_TO_TOPIC_MAP: Record<string, string[]> = {
   'shadow': ['shadowboxing'],
   'combo': ['combos', 'combinations'],
   'defense': ['defense', 'blocking'],
+  'punch': ['punches', 'jab', 'cross'],
+  'guard': ['stance', 'defense'],
+  'spar': ['shadowboxing', 'combos'],
+  'boxing': ['stance', 'fundamentals', 'jab'],
+  'fight': ['fundamentals', 'combos', 'defense'],
+  'bag': ['punches', 'combos'],
+  'slip': ['defense', 'movement'],
+  'bob': ['defense', 'movement'],
+  'weave': ['defense', 'movement'],
+  'round': ['shadowboxing', 'workout'],
+  'drill': ['fundamentals', 'shadowboxing'],
 
   // Coding
   'html': ['html', 'html_basics'],
@@ -50,6 +65,10 @@ const KEYWORD_TO_TOPIC_MAP: Record<string, string[]> = {
   'layout': ['layout', 'flexbox', 'grid'],
   'form': ['forms', 'html'],
   'api': ['api', 'backend'],
+  'node': ['backend', 'javascript'],
+  'function': ['javascript', 'javascript_basics'],
+  'component': ['react', 'frameworks'],
+  'database': ['backend', 'full_stack'],
 
   // Fitness
   'push': ['push_ups', 'chest'],
@@ -59,6 +78,10 @@ const KEYWORD_TO_TOPIC_MAP: Record<string, string[]> = {
   'cardio': ['cardio', 'hiit'],
   'stretch': ['flexibility', 'stretching'],
   'workout': ['workout', 'full_body'],
+  'lunge': ['legs', 'workout'],
+  'burpee': ['hiit', 'full_body'],
+  'deadlift': ['strength', 'legs'],
+  'bench': ['chest', 'strength'],
 };
 
 /**
@@ -97,23 +120,32 @@ export async function matchTaskToResources(
   skillLevel: 'beginner' | 'intermediate' | 'advanced' = 'beginner'
 ): Promise<MatchedResource> {
 
-  console.log(`🔍 Matching resources for: "${taskTitle}"`);
 
   // Step 1: Get resources for this category
-  const categoryResources = getResourcesForCategory(category);
+  let categoryResources = getResourcesForCategory(category);
 
   if (!categoryResources) {
-    console.warn(`⚠️ No resource library found for category: ${category}`);
-    return {
-      primary: null,
-      supplementary: [],
-      matchMethod: 'none'
-    };
+    // Fallback: try to find resources by tokenizing the category or task title
+    const fallbackKeys = [category, taskTitle].join(' ').toLowerCase().split(/\s+/);
+    for (const key of fallbackKeys) {
+      const fallback = getResourcesForCategory(key);
+      if (fallback) {
+        categoryResources = fallback;
+        break;
+      }
+    }
+    if (!categoryResources) {
+      console.warn(`⚠️ No resource library found for category: ${category}`);
+      return {
+        primary: null,
+        supplementary: [],
+        matchMethod: 'none'
+      };
+    }
   }
 
   // Step 2: Extract topics from task
   const topics = extractTopicsFromTask(taskTitle, taskDescription);
-  console.log(`📌 Extracted topics:`, topics);
 
   if (topics.length === 0) {
     // No keywords matched - use AI to suggest topics
@@ -125,7 +157,6 @@ export async function matchTaskToResources(
   const matchedResources = searchResourcesByTopic(category, topics);
 
   if (matchedResources.length > 0) {
-    console.log(`✅ Found ${matchedResources.length} resources in library`);
 
     // Filter by skill level
     const levelMatched = matchedResources.filter(
@@ -143,7 +174,6 @@ export async function matchTaskToResources(
   }
 
   // Step 4: Fallback - Generate resource suggestions with AI
-  console.log(`🤖 No library match, generating AI suggestions...`);
   return await generateResourceWithAI(taskTitle, taskDescription, category, skillLevel, categoryResources);
 }
 
@@ -256,7 +286,6 @@ Return ONLY this JSON (no markdown, no code blocks):
       topics: []
     };
 
-    console.log(`🤖 Generated AI resource:`, aiResource.title);
 
     return {
       primary: aiResource,
@@ -325,9 +354,7 @@ export interface ResourceRating {
 }
 
 // Placeholder for future implementation
-export async function rateResource(rating: ResourceRating): Promise<void> {
-  // TODO: Save to Supabase
-  console.log('Resource rated:', rating);
+export async function rateResource(_rating: ResourceRating): Promise<void> {
 }
 
 /**
@@ -335,7 +362,5 @@ export async function rateResource(rating: ResourceRating): Promise<void> {
  * (Future feature)
  */
 export async function getTopRatedResources(): Promise<ResourceLink[]> {
-  // TODO: Add category and topic parameters when implementing
-  // TODO: Query Supabase for highest rated resources
   return [];
 }

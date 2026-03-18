@@ -5,7 +5,7 @@
  */
 
 import { supabase } from './supabase';
-import type { Agent1Output, Agent3Output, StoneAnswer } from '@types-app/agents';
+import type { Agent1Output, Agent2ProfileOutput, Agent3Output, StoneAnswer } from '@types-app/agents';
 
 // ============================================
 // GOAL OPERATIONS
@@ -17,7 +17,6 @@ export async function createGoal(
   description: string,
   goalAnalysis: Agent1Output
 ) {
-  console.log('🔍 createGoal called with:', { userId, title });
 
   try {
     // Trim goal_analysis to essential fields only — prevents JSONB payload timeouts
@@ -37,7 +36,6 @@ export async function createGoal(
       status: 'active'
     };
 
-    console.log('📤 Inserting goal (payload size ~', JSON.stringify(goalData).length, 'bytes)');
 
     // INSERT without .select() to avoid RLS SELECT round-trip causing timeout
     const { error } = await supabase
@@ -65,7 +63,6 @@ export async function createGoal(
       return { id: crypto.randomUUID(), title, status: 'active' };
     }
 
-    console.log('✅ Goal created successfully:', createdGoal.id);
     return createdGoal;
   } catch (err) {
     console.error('❌ Exception in createGoal:', err);
@@ -118,7 +115,7 @@ export async function saveStones(goalId: string, stoneAnswers: StoneAnswer[]) {
 // ROADMAP OPERATIONS
 // ============================================
 
-export async function createRoadmap(goalId: string, roadmap: Agent3Output) {
+export async function createRoadmap(goalId: string, roadmap: Agent3Output, stoneProfile?: Agent2ProfileOutput) {
   const { data, error } = await supabase
     .from('roadmaps')
     .insert({
@@ -129,6 +126,9 @@ export async function createRoadmap(goalId: string, roadmap: Agent3Output) {
         checkpoint_interval: 14,
         domain_pedagogy: roadmap.domainPedagogy ?? null,
         total_weeks: roadmap.roadmap.phases?.reduce((acc: number, p: { weeks: number[] }) => acc + (p.weeks?.length ?? 0), 0) ?? null,
+        // Full agent outputs for cross-device restore
+        agent_roadmap_json: roadmap,
+        stone_profile_json: stoneProfile ?? null,
       }
     })
     .select()
@@ -521,6 +521,76 @@ export async function getCheckpoints(roadmapId: string) {
 }
 
 // ============================================
+// DAILY TASK SYNC (rolling curriculum → DB)
+// ============================================
+
+/**
+ * Syncs locally-generated daily tasks to Supabase.
+ * Called after Agent 4 / fallback generates a new day's tasks.
+ * Only syncs tasks that don't already have a UUID (i.e. local-only tasks).
+ */
+export async function syncDailyTasksToDB(
+  roadmapId: string,
+  tasks: Array<{
+    id: string;
+    title: string;
+    description: string;
+    type: string;
+    duration: number;
+    day: number;
+    steps?: string[];
+    tips?: string[];
+    successCriteria?: string;
+    scheduledFor?: string;
+    resources?: unknown;
+    completed?: boolean;
+    skipped?: boolean;
+  }>
+) {
+  // Only sync tasks that are locally generated (non-UUID ids)
+  const isUUID = (id: string) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+  const localOnly = tasks.filter(t => !isUUID(t.id));
+  if (localOnly.length === 0) return [];
+
+  const rows = localOnly.map(t => ({
+    roadmap_id: roadmapId,
+    day_number: t.day,
+    title: t.title,
+    content: {
+      description: t.description,
+      type: t.type,
+      duration: t.duration,
+      steps: t.steps || [],
+      tips: t.tips || [],
+      successCriteria: t.successCriteria,
+      scheduledFor: t.scheduledFor,
+      resources: t.resources || null,
+    },
+    is_completed: t.completed || false,
+    skipped: t.skipped || false,
+  }));
+
+  try {
+    const { data, error } = await supabase
+      .from('daily_tasks')
+      .insert(rows)
+      .select('id, day_number');
+
+    if (error) {
+      console.error('❌ syncDailyTasksToDB failed:', error.message);
+      return [];
+    }
+
+    return data; // [{id: uuid, day_number: N}] — caller can update local IDs
+  } catch (err) {
+    console.error('❌ syncDailyTasksToDB exception:', err);
+    return [];
+  }
+}
+
+// ============================================
 // SYNC HELPER
 // ============================================
 
@@ -534,31 +604,23 @@ export async function syncCompleteRoadmap(
   goalAnalysis: Agent1Output,
   stoneAnswers: StoneAnswer[],
   roadmap: Agent3Output,
-  tasks: Array<Record<string, unknown>>
+  tasks: Array<Record<string, unknown>>,
+  stoneProfile?: Agent2ProfileOutput
 ) {
   try {
     // Wrap the entire sync operation in a race with a shorter timeout
     const syncOperation = async () => {
-      console.log('📝 Step 1/4: Creating goal...');
       // 1. Create goal
       const goal = await createGoal(userId, goalTitle, goalDescription, goalAnalysis);
-      console.log('✅ Step 1/4: Goal created:', goal.id);
 
-      console.log('📝 Step 2/4: Saving stones...');
       // 2. Save stones
       await saveStones(goal.id, stoneAnswers);
-      console.log('✅ Step 2/4: Stones saved');
 
-      console.log('📝 Step 3/4: Creating roadmap...');
       // 3. Create roadmap
-      const roadmapRecord = await createRoadmap(goal.id, roadmap);
-      console.log('✅ Step 3/4: Roadmap created:', roadmapRecord.id);
+      const roadmapRecord = await createRoadmap(goal.id, roadmap, stoneProfile);
 
-      console.log('📝 Step 4/4: Saving tasks...');
-      console.log('   Tasks to save:', tasks.length);
       // 4. Save tasks
       await saveTasks(roadmapRecord.id, tasks);
-      console.log('✅ Step 4/4: Tasks saved');
 
       return {
         goal,

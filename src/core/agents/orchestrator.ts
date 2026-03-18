@@ -3,11 +3,12 @@
  * Coordinates the multi-agent curriculum generation pipeline
  */
 
-import { analyzeGoal } from './goal-analyzer';
-import { identifyStones, extractStones } from './stone-identifier';
-import { buildCurriculum } from './curriculum-builder';
+import { analyzeGoal, buildClarifications } from './goal-analyzer';
+import { identifyStones, extractStones, extractPreliminary, crossValidateStones } from './stone-identifier';
+import { buildCurriculum, buildCurriculumPreview, resolvePaceCalibration } from './curriculum-builder';
 import { generateTask } from './task-generator';
 import { recalibrateCurriculum, convertToFeedback } from './recalibrator';
+import { withAgentLogging } from '@lib/agent-logger';
 
 import type {
   AgentContext,
@@ -18,19 +19,33 @@ import type {
   Agent5Output,
   StoneAnswer,
   DailyTask,
-  Roadmap
+  Roadmap,
+  GoalClarificationOutput,
+  StoneRound2Output,
+  CrossValidationResult,
+  CurriculumPreview,
+  PaceCalibration,
+  PaceChoice,
 } from '@types-app/agents';
 // Minimal interface to avoid circular import with @core/store/useStore
 interface Task {
   day?: number;
   dayNumber?: number;
   title: string;
+  type?: string;
   difficultyRating?: number;
   actualDuration?: number;
   duration: number;
   userComment?: string;
   skipped: boolean;
   skipReason?: 'time' | 'health' | 'difficulty' | 'external';
+  assessmentResults?: Array<{
+    questionId: string;
+    userAnswer: string | number;
+    selfScore?: number;
+    correct?: boolean;
+    confidence: string;
+  }>;
 }
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -63,11 +78,15 @@ export async function runOnboardingAgents(
     ...chatContext,
   };
 
-  console.log('🤖 Agent 1: Analyzing goal...');
-  const goalAnalysis = await analyzeGoal(context);
+  const goalAnalysis = await withAgentLogging(
+    { agentName: 'agent1_goal_analyzer', runType: 'onboarding', input: { goal, timeline, dailyTime }, metadata: { behavioralFlags } },
+    () => analyzeGoal(context)
+  );
 
-  console.log('🧱 Agent 2: Identifying building stones...');
-  const stones = await identifyStones(context, goalAnalysis);
+  const stones = await withAgentLogging(
+    { agentName: 'agent2_stone_identifier', runType: 'onboarding', input: { goal }, metadata: { category: chatContext?.category } },
+    () => identifyStones(context, goalAnalysis)
+  );
 
   return {
     goalAnalysis,
@@ -92,8 +111,10 @@ export async function runCurriculumBuilder(
     dailyTimeAvailable: dailyTime
   };
 
-  console.log('🏛️ Agent 3: Building curriculum...');
-  const curriculum = await buildCurriculum(context, goalAnalysis, stoneProfile);
+  const curriculum = await withAgentLogging(
+    { agentName: 'agent3_curriculum_builder', runType: 'onboarding', input: { goal, timeline, dailyTime } },
+    () => buildCurriculum(context, goalAnalysis, stoneProfile)
+  );
 
   return curriculum;
 }
@@ -106,15 +127,24 @@ export async function runTaskGenerator(
   roadmap: Agent3Output,
   stoneProfile: Agent2ProfileOutput,
   dailyTimeAvailable: number,
-  previousTasksContext?: string
+  previousTasksContext?: string,
+  goalText?: string,
+  category?: string,
+  skillLevel?: 'beginner' | 'intermediate' | 'advanced'
 ): Promise<DailyTask> {
-  console.log(`📝 Agent 4: Generating task for Day ${dayNumber}...`);
-  const task = await generateTask(
-    dayNumber,
-    roadmap,
-    stoneProfile,
-    dailyTimeAvailable,
-    previousTasksContext
+  const task = await withAgentLogging(
+    { agentName: 'agent4_task_generator', runType: 'daily_task', input: { dayNumber }, metadata: { category, skillLevel } },
+    () => generateTask(
+      dayNumber,
+      roadmap,
+      stoneProfile,
+      dailyTimeAvailable,
+      previousTasksContext,
+      category,
+      skillLevel ?? 'beginner',
+      undefined, // ragContext
+      goalText
+    )
   );
 
   return task;
@@ -137,7 +167,6 @@ export async function generateCompleteRoadmap(
   firstTask: DailyTask;
   stoneProfile: Agent2ProfileOutput;
 }> {
-  console.log('🚀 Starting complete roadmap generation...');
 
   const context: AgentContext = {
     userId: 'temp',
@@ -149,7 +178,6 @@ export async function generateCompleteRoadmap(
 
   const goalAnalysis = await analyzeGoal(context);
 
-  console.log('🧱 Extracting stone profile from answers...');
   const stoneProfile = await extractStones(context, goalAnalysis, stoneAnswers);
 
   const roadmap = await buildCurriculum(context, goalAnalysis, stoneProfile);
@@ -164,7 +192,6 @@ export async function generateCompleteRoadmap(
     skillLevel || 'beginner'
   );
 
-  console.log('✅ Roadmap generation complete!');
 
   return {
     goalAnalysis,
@@ -186,7 +213,6 @@ export async function generateTaskBatch(
   category?: string,
   skillLevel?: 'beginner' | 'intermediate' | 'advanced'
 ): Promise<DailyTask[]> {
-  console.log(`📋 Generating tasks for days ${startDay} to ${endDay} (parallel batches)...`);
 
   const days = Array.from({ length: endDay - startDay + 1 }, (_, i) => startDay + i);
   const BATCH_SIZE = 3; // Run 3 tasks concurrently to stay well within rate limits
@@ -213,7 +239,6 @@ export async function generateTaskBatch(
     }
   }
 
-  console.log(`✅ Generated ${allTasks.length} tasks`);
   return allTasks;
 }
 
@@ -230,7 +255,6 @@ export async function runCheckpointRecalibration(
   completedTasks: Task[], // Tasks from store
   currentDay: number
 ): Promise<Agent5Output> {
-  console.log(`🔄 Agent 5: Running checkpoint analysis for Day ${currentDay}...`);
 
   const context: AgentContext = {
     userId: 'temp',
@@ -242,17 +266,34 @@ export async function runCheckpointRecalibration(
   // Convert store tasks to feedback format
   const taskFeedback = convertToFeedback(completedTasks);
 
-  const recalibration = await recalibrateCurriculum({
-    context,
-    roadmap,
-    stoneProfile,
-    completedTasks: taskFeedback,
-    currentDay
-  });
+  // Summarize assessment results for recalibration context
+  const assessmentTasks = completedTasks.filter(t =>
+    t.assessmentResults && t.assessmentResults.length > 0
+  );
+  if (assessmentTasks.length > 0) {
+    assessmentTasks.map(t => {
+      const results = t.assessmentResults!;
+      const correct = results.filter(r => r.correct === true).length;
+      const total = results.length;
+      const avgSelfScore = results
+        .filter(r => r.selfScore !== undefined)
+        .reduce((sum, r) => sum + (r.selfScore ?? 0), 0) / Math.max(1, results.filter(r => r.selfScore !== undefined).length);
+      const highConfWrong = results.filter(r => (r.confidence === 'confident' || r.confidence === 'certain') && r.correct === false).length;
+      return `Day ${t.day ?? t.dayNumber}: ${correct}/${total} correct, avg self-score ${avgSelfScore.toFixed(1)}/5${highConfWrong > 0 ? `, ${highConfWrong} misconception(s) detected` : ''}`;
+    }).join('\n');
+  }
 
-  console.log('✅ Checkpoint analysis complete!');
-  console.log(`   Mastery Level: ${recalibration.checkpointAnalysis.overallMastery}`);
-  console.log(`   Pace Adjustment: ${recalibration.checkpointAnalysis.paceAdjustment}`);
+  const recalibration = await withAgentLogging(
+    { agentName: 'agent5_recalibrator', runType: 'checkpoint', input: { currentDay, taskCount: taskFeedback.length } },
+    () => recalibrateCurriculum({
+      context,
+      roadmap,
+      stoneProfile,
+      completedTasks: taskFeedback,
+      currentDay
+    })
+  );
+
 
   return recalibration;
 }
@@ -269,8 +310,6 @@ export async function generateAdaptedSprint(
 ): Promise<DailyTask[]> {
   const { startDay, endDay } = recalibration.recalibratedSprint;
 
-  console.log(`📋 Generating adapted sprint (Days ${startDay}-${endDay})...`);
-  console.log(`   Focus: ${recalibration.checkpointAnalysis.nextSprintFocus}`);
 
   const tasks: DailyTask[] = [];
 
@@ -325,7 +364,6 @@ Generate tasks that reflect these adjustments.
     }
   }
 
-  console.log(`✅ Generated ${tasks.length} adapted tasks for sprint ${recalibration.recalibratedSprint.sprintNumber}`);
   return tasks;
 }
 
@@ -348,12 +386,12 @@ export async function handleCheckpoint(
     userId?: string;
     goalId?: string;
     supabase?: SupabaseClient;
+    agentRoadmap?: Agent3Output; // full Agent3Output when available — preserves domainPedagogy
   }
 ): Promise<{
   analysis: Agent5Output;
   adaptedTasks: DailyTask[];
 }> {
-  console.log('🎯 Starting checkpoint workflow...');
 
   // Step 1: Run checkpoint analysis
   const analysis = await runCheckpointRecalibration(
@@ -368,7 +406,6 @@ export async function handleCheckpoint(
 
   // Step 2: CRITICAL - Delete future tasks to avoid duplicates
   if (options?.supabase && options?.goalId) {
-    console.log(`🗑️ Deleting future tasks (Day ${currentDay + 1} onwards)...`);
     try {
       const { error } = await options.supabase
         .from('daily_tasks')
@@ -378,8 +415,6 @@ export async function handleCheckpoint(
 
       if (error) {
         console.error('Failed to delete future tasks:', error);
-      } else {
-        console.log('✅ Future tasks cleared');
       }
     } catch (error) {
       console.error('Error deleting future tasks:', error);
@@ -387,7 +422,9 @@ export async function handleCheckpoint(
   }
 
   // Step 3: Generate adapted sprint tasks
-  const roadmapOutput: Agent3Output = { roadmap, domainPedagogy: '', stoneModificationSummary: '' };
+  // Prefer the full Agent3Output (preserves domainPedagogy) over a stub
+  const roadmapOutput: Agent3Output = options?.agentRoadmap
+    ?? { roadmap, domainPedagogy: '', stoneModificationSummary: '' };
   const adaptedTasks = await generateAdaptedSprint(
     analysis,
     roadmapOutput,
@@ -410,16 +447,88 @@ export async function handleCheckpoint(
         next_sprint_focus: analysis.checkpointAnalysis.nextSprintFocus,
         personalized_message: analysis.recalibratedSprint.personalizedMessage
       });
-      console.log('✅ Checkpoint saved to Supabase');
     } catch (error) {
       console.error('Failed to save checkpoint:', error);
     }
   }
 
-  console.log('✅ Checkpoint workflow complete!');
 
   return {
     analysis,
     adaptedTasks
   };
 }
+
+// ============================================
+// MULTI-STAGE VALIDATION PIPELINE HELPERS
+// ============================================
+
+/**
+ * Stage 1b: After Agent 1 runs, determine if goal clarifications are needed.
+ * Returns GoalClarificationOutput — caller checks needsClarification before showing UI.
+ */
+export function getGoalClarifications(agent1Output: Agent1Output): GoalClarificationOutput {
+  return buildClarifications(agent1Output);
+}
+
+/**
+ * Stage 2b: Preliminary stone extraction after Round 1 answers.
+ * Returns follow-up questions + preliminary stone list.
+ */
+export async function runStoneRound2(
+  goal: string,
+  timeline: number,
+  dailyTime: number,
+  agent1Output: Agent1Output,
+  round1Answers: StoneAnswer[],
+): Promise<StoneRound2Output> {
+  const context: AgentContext = {
+    userId: 'temp',
+    goal,
+    timeline,
+    dailyTimeAvailable: dailyTime,
+  };
+
+  return withAgentLogging(
+    { agentName: 'agent2_stone_round2', runType: 'onboarding', input: { goal, round1Answers: round1Answers.length } },
+    () => extractPreliminary(context, agent1Output, round1Answers)
+  );
+}
+
+/**
+ * Stage 2c: Cross-validate Round 1 + Round 2 answers to detect stone misattributions.
+ */
+export function runStoneCrossValidation(
+  preliminary: StoneRound2Output,
+  round2Answers: StoneAnswer[],
+): CrossValidationResult {
+  return crossValidateStones(preliminary.preliminaryStones, round2Answers);
+}
+
+/**
+ * Stage 3b: Generate 7-day preview from Agent 3 output. No LLM call.
+ */
+export function getCurriculumPreview(
+  agent3Output: Agent3Output,
+  category: string,
+  dailyMinutes: number,
+): CurriculumPreview {
+  return buildCurriculumPreview(agent3Output, category, dailyMinutes);
+}
+
+/**
+ * Stage 3c: Resolve user's pace choice into calibration params.
+ */
+export function getPaceCalibration(choice: PaceChoice): PaceCalibration {
+  return resolvePaceCalibration(choice);
+}
+
+// Re-export for convenience
+export type {
+  GoalClarificationOutput,
+  StoneRound2Output,
+  CrossValidationResult,
+  CurriculumPreview,
+  PaceCalibration,
+  PaceChoice,
+};

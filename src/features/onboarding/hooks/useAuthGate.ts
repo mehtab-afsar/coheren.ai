@@ -68,7 +68,6 @@ export function useAuthGate({
 
       // Sync roadmap to Supabase
       if (pendingSyncData) {
-        console.log('📤 Syncing roadmap after signup...');
         syncCompleteRoadmap(
           userId,
           collectedData.goal,
@@ -77,9 +76,7 @@ export function useAuthGate({
           pendingSyncData.answers,
           pendingSyncData.agentRoadmap,
           pendingSyncData.initialTasksData as Parameters<typeof syncCompleteRoadmap>[6]
-        ).then(result => {
-          if (result.success) console.log('✅ Roadmap synced after signup!');
-        }).catch(err => console.warn('⚠️ Sync after signup failed:', err));
+        ).catch(err => console.warn('⚠️ Sync after signup failed:', err));
       }
 
       // Go to dashboard

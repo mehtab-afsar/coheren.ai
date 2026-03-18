@@ -19,5 +19,5 @@
  */
 
 export { generateQuestions as identifyStones } from './question-generator';
-export { extractStones } from './stone-extractor';
+export { extractStones, extractPreliminary, crossValidateStones } from './stone-extractor';
 export { STONE_CATEGORIES, STONE_TO_CATEGORY, STONE_DESCRIPTIONS, DOMAIN_GAPS, ALL_STONE_TYPES } from './stone-taxonomy';

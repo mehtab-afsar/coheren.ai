@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { tokens } from '@core/design-system';
+import { useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ChevronRight } from 'lucide-react';
 import type { BuildingStone, StoneAnswer } from '@types-app/agents';
 
 interface StoneQuestionsProps {
@@ -10,373 +11,358 @@ interface StoneQuestionsProps {
 export default function StoneQuestions({ stones, onComplete }: StoneQuestionsProps) {
   const [currentStoneIndex, setCurrentStoneIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, { answer: string | number; impact: Record<string, unknown> }>>({});
+  const [direction, setDirection] = useState(1); // 1 = forward, -1 = back
 
   const currentStone = stones[currentStoneIndex];
-  const progress = ((currentStoneIndex + 1) / stones.length) * 100;
+  const isAnswered = !!answers[currentStone?.stoneId];
+  const isLast = currentStoneIndex === stones.length - 1;
 
-  // Just update the answer without advancing (for text input)
-  const updateAnswer = (optionValue: string | number, impact: Record<string, unknown>) => {
-    setAnswers({
-      ...answers,
-      [currentStone.stoneId]: {
-        answer: optionValue,
-        impact
-      }
-    });
-  };
+  const advance = useCallback(() => {
+    if (!isAnswered) return;
+    setDirection(1);
 
-  // Handle answer and auto-advance (for buttons)
-  const handleAnswer = (optionValue: string, impact: Record<string, unknown>) => {
-    const newAnswers = {
-      ...answers,
-      [currentStone.stoneId]: {
-        answer: optionValue,
-        impact
-      }
-    };
-    setAnswers(newAnswers);
-
-    // Move to next question or complete
-    if (currentStoneIndex < stones.length - 1) {
-      setCurrentStoneIndex(currentStoneIndex + 1);
-    } else {
-      // All questions answered
-      const stoneAnswers: StoneAnswer[] = Object.entries(newAnswers).map(([stoneId, data]) => ({
-        stoneId,
-        answer: data.answer,
-        impact: data.impact
-      }));
-      onComplete(stoneAnswers);
-    }
-  };
-
-  const handleNext = () => {
-    // Check if current question is answered
-    if (!answers[currentStone.stoneId]) {
-      return; // Don't advance if not answered
-    }
-
-    if (currentStoneIndex < stones.length - 1) {
-      setCurrentStoneIndex(currentStoneIndex + 1);
-    } else {
-      // All questions answered - complete
+    if (isLast) {
       const stoneAnswers: StoneAnswer[] = Object.entries(answers).map(([stoneId, data]) => ({
         stoneId,
         answer: data.answer,
         impact: data.impact
       }));
       onComplete(stoneAnswers);
+    } else {
+      setCurrentStoneIndex(i => i + 1);
+    }
+  }, [isAnswered, isLast, answers, onComplete]);
+
+  const handleOptionSelect = (optionValue: string, impact: Record<string, unknown>) => {
+    setAnswers(prev => ({
+      ...prev,
+      [currentStone.stoneId]: { answer: optionValue, impact }
+    }));
+
+    // Auto-advance for multiple choice and yes/no after a brief delay
+    if (currentStone.question.type === 'multiple_choice' || currentStone.question.type === 'yes_no') {
+      setDirection(1);
+      setTimeout(() => {
+        if (currentStoneIndex < stones.length - 1) {
+          setCurrentStoneIndex(i => i + 1);
+        } else {
+          const newAnswers = {
+            ...answers,
+            [currentStone.stoneId]: { answer: optionValue, impact }
+          };
+          const stoneAnswers: StoneAnswer[] = Object.entries(newAnswers).map(([stoneId, data]) => ({
+            stoneId,
+            answer: data.answer,
+            impact: data.impact
+          }));
+          onComplete(stoneAnswers);
+        }
+      }, 350);
     }
   };
 
-  const handleBack = () => {
-    if (currentStoneIndex > 0) {
-      setCurrentStoneIndex(currentStoneIndex - 1);
-    }
+  const updateTextAnswer = (val: string | number, impact: Record<string, unknown>) => {
+    setAnswers(prev => ({
+      ...prev,
+      [currentStone.stoneId]: { answer: val, impact }
+    }));
   };
 
   if (!currentStone) return null;
 
+  const slideVariants = {
+    enter: (d: number) => ({ x: d > 0 ? 60 : -60, opacity: 0 }),
+    center: { x: 0, opacity: 1 },
+    exit: (d: number) => ({ x: d > 0 ? -60 : 60, opacity: 0 }),
+  };
+
   return (
     <div style={{
-      padding: tokens.spacing.xl,
-      backgroundColor: 'white',
-      borderRadius: tokens.borderRadius.xl,
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-      maxWidth: '600px',
-      margin: '0 auto'
+      maxWidth: 520,
+      margin: '0 auto',
+      padding: '0 20px',
     }}>
-      {/* Progress Bar */}
-      <div style={{
-        marginBottom: tokens.spacing.xl
-      }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          marginBottom: tokens.spacing.xs,
-          fontSize: tokens.typography.sizes.sm,
-          color: tokens.colors.text.secondary
-        }}>
-          <span>Question {currentStoneIndex + 1} of {stones.length}</span>
-          <span>{Math.round(progress)}%</span>
+      {/* ── Segmented Progress ── */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ display: 'flex', gap: 3, marginBottom: 8 }}>
+          {stones.map((_, i) => (
+            <div
+              key={i}
+              style={{
+                flex: 1,
+                height: 4,
+                borderRadius: 2,
+                overflow: 'hidden',
+                background: '#e5e7eb',
+              }}
+            >
+              <motion.div
+                initial={false}
+                animate={{
+                  width: i < currentStoneIndex ? '100%' : i === currentStoneIndex ? '50%' : '0%',
+                }}
+                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                style={{
+                  height: '100%',
+                  borderRadius: 2,
+                  background: i <= currentStoneIndex
+                    ? 'linear-gradient(90deg, #7c3aed, #a78bfa)'
+                    : 'transparent',
+                }}
+              />
+            </div>
+          ))}
         </div>
-        <div style={{
-          width: '100%',
-          height: '6px',
-          backgroundColor: '#F1F5F9',
-          borderRadius: '3px',
-          overflow: 'hidden'
-        }}>
-          <div style={{
-            width: `${progress}%`,
-            height: '100%',
-            backgroundColor: tokens.colors.primary,
-            transition: 'width 0.3s ease'
-          }} />
-        </div>
-      </div>
-
-      {/* Question Header */}
-      <div style={{
-        marginBottom: tokens.spacing.lg
-      }}>
-        <div style={{
-          display: 'inline-block',
-          padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`,
-          backgroundColor: currentStone.importance === 'critical' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(67, 56, 202, 0.1)',
-          color: currentStone.importance === 'critical' ? '#EF4444' : tokens.colors.primary,
-          borderRadius: tokens.borderRadius.md,
-          fontSize: tokens.typography.sizes.xs,
-          fontWeight: tokens.typography.weights.semibold,
-          textTransform: 'uppercase',
-          marginBottom: tokens.spacing.md
-        }}>
-          {currentStone.importance}
-        </div>
-
-        <h3 style={{
-          fontSize: 'clamp(17px, 5vw, 28px)',
-          fontWeight: tokens.typography.weights.semibold,
-          color: tokens.colors.text.primary,
-          marginBottom: tokens.spacing.sm,
-          lineHeight: 1.3,
-        }}>
-          {currentStone.question.text}
-        </h3>
-
         <p style={{
-          fontSize: tokens.typography.sizes.sm,
-          color: tokens.colors.text.secondary,
-          lineHeight: 1.6
+          fontSize: 12,
+          color: '#9ca3af',
+          margin: 0,
+          fontWeight: 500,
         }}>
-          {currentStone.reasoning}
+          Question {currentStoneIndex + 1} of {stones.length}
         </p>
       </div>
 
-      {/* Options */}
+      {/* ── Question Card ── */}
       <div style={{
+        background: '#fff',
+        borderRadius: 24,
+        boxShadow: '0 4px 24px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03)',
+        padding: '32px 28px',
+        minHeight: 320,
         display: 'flex',
         flexDirection: 'column',
-        gap: tokens.spacing.md,
-        marginBottom: tokens.spacing.xl
       }}>
-        {currentStone.question.type === 'multiple_choice' && currentStone.question.options?.map((option) => (
-          <button
-            key={option.value}
-            onClick={() => handleAnswer(option.value, option.impact)}
-            style={{
-              borderRadius: tokens.borderRadius.lg,
-              fontWeight: tokens.typography.weights.medium,
-              padding: tokens.spacing.lg,
-              minHeight: '52px',
-              fontSize: tokens.typography.sizes.base,
-              backgroundColor: answers[currentStone.stoneId]?.answer === option.value
-                ? 'rgba(67, 56, 202, 0.1)'
-                : 'white',
-              border: answers[currentStone.stoneId]?.answer === option.value
-                ? `2px solid ${tokens.colors.primary}`
-                : '2px solid #E2E8F0',
-              color: tokens.colors.text.primary,
-              textAlign: 'left',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-            }}
-            onMouseEnter={(e) => {
-              if (answers[currentStone.stoneId]?.answer !== option.value) {
-                e.currentTarget.style.borderColor = tokens.colors.primary;
-                e.currentTarget.style.backgroundColor = 'rgba(67, 56, 202, 0.05)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (answers[currentStone.stoneId]?.answer !== option.value) {
-                e.currentTarget.style.borderColor = '#E2E8F0';
-                e.currentTarget.style.backgroundColor = 'white';
-              }
-            }}
+        <AnimatePresence mode="wait" custom={direction}>
+          <motion.div
+            key={currentStone.stoneId}
+            custom={direction}
+            variants={slideVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
           >
-            <div style={{
-              fontWeight: tokens.typography.weights.medium,
-              marginBottom: tokens.spacing.xs
+            {/* Question text */}
+            <h2 style={{
+              fontSize: 'clamp(17px, 4.5vw, 20px)',
+              fontWeight: 600,
+              color: '#1a1a2e',
+              lineHeight: 1.4,
+              margin: '0 0 8px',
+              letterSpacing: '-0.02em',
             }}>
-              {option.label}
-            </div>
-            {option.impact && Object.keys(option.impact).length > 0 && (
-              <div style={{
-                fontSize: tokens.typography.sizes.sm,
-                color: tokens.colors.text.secondary
+              {currentStone.question.text}
+            </h2>
+
+            {currentStone.reasoning && (
+              <p style={{
+                fontSize: 13,
+                color: '#9ca3af',
+                lineHeight: 1.55,
+                margin: '0 0 24px',
               }}>
-                {Object.entries(option.impact).slice(0, 2).map(([key, value]) => (
-                  <div key={key}>• {String(value)}</div>
-                ))}
+                {currentStone.reasoning}
+              </p>
+            )}
+
+            {/* ── Multiple Choice Options ── */}
+            {currentStone.question.type === 'multiple_choice' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+                {currentStone.question.options?.map((option, idx) => {
+                  const isSelected = answers[currentStone.stoneId]?.answer === option.value;
+                  return (
+                    <motion.button
+                      key={option.value}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.25, delay: idx * 0.06 }}
+                      onClick={() => handleOptionSelect(option.value, option.impact)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 12,
+                        padding: '14px 16px',
+                        borderRadius: 14,
+                        border: isSelected ? '2px solid #7c3aed' : '2px solid #f3f4f6',
+                        background: isSelected ? 'rgba(124,58,237,0.04)' : '#fafafa',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        transition: 'all 0.2s ease',
+                        outline: 'none',
+                      }}
+                      onMouseEnter={e => {
+                        if (!isSelected) {
+                          e.currentTarget.style.borderColor = '#c4b5fd';
+                          e.currentTarget.style.background = 'rgba(124,58,237,0.02)';
+                        }
+                      }}
+                      onMouseLeave={e => {
+                        if (!isSelected) {
+                          e.currentTarget.style.borderColor = '#f3f4f6';
+                          e.currentTarget.style.background = '#fafafa';
+                        }
+                      }}
+                    >
+                      {/* Radio circle */}
+                      <div style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: '50%',
+                        border: isSelected ? '6px solid #7c3aed' : '2px solid #d1d5db',
+                        background: '#fff',
+                        flexShrink: 0,
+                        marginTop: 1,
+                        transition: 'all 0.2s ease',
+                      }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{
+                          fontSize: 14,
+                          fontWeight: 500,
+                          color: isSelected ? '#1a1a2e' : '#374151',
+                          lineHeight: 1.4,
+                        }}>
+                          {option.label}
+                        </span>
+                      </div>
+                    </motion.button>
+                  );
+                })}
               </div>
             )}
-          </button>
-        ))}
 
-        {/* Open-ended / Yes-No / Scale questions */}
-        {(currentStone.question.type === 'open_ended' ||
-          currentStone.question.type === 'yes_no' ||
-          currentStone.question.type === 'scale') && (
-          <div style={{ marginTop: tokens.spacing.md }}>
+            {/* ── Yes/No ── */}
             {currentStone.question.type === 'yes_no' && (
-              <div style={{ display: 'flex', gap: tokens.spacing.md }}>
-                <button
-                  onClick={() => handleAnswer('yes', { answer: 'yes' })}
-                  style={{
-                    flex: 1,
-                    borderRadius: tokens.borderRadius.lg,
-                    fontWeight: tokens.typography.weights.medium,
-                    padding: tokens.spacing.lg,
-                    backgroundColor: answers[currentStone.stoneId]?.answer === 'yes'
-                      ? 'rgba(67, 56, 202, 0.1)'
-                      : 'white',
-                    border: answers[currentStone.stoneId]?.answer === 'yes'
-                      ? `2px solid ${tokens.colors.primary}`
-                      : '2px solid #E2E8F0',
-                    color: tokens.colors.text.primary,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  Yes
-                </button>
-                <button
-                  onClick={() => handleAnswer('no', { answer: 'no' })}
-                  style={{
-                    flex: 1,
-                    borderRadius: tokens.borderRadius.lg,
-                    fontWeight: tokens.typography.weights.medium,
-                    padding: tokens.spacing.lg,
-                    backgroundColor: answers[currentStone.stoneId]?.answer === 'no'
-                      ? 'rgba(67, 56, 202, 0.1)'
-                      : 'white',
-                    border: answers[currentStone.stoneId]?.answer === 'no'
-                      ? `2px solid ${tokens.colors.primary}`
-                      : '2px solid #E2E8F0',
-                    color: tokens.colors.text.primary,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  No
-                </button>
+              <div style={{ display: 'flex', gap: 10 }}>
+                {['yes', 'no'].map((val) => {
+                  const isSelected = answers[currentStone.stoneId]?.answer === val;
+                  return (
+                    <motion.button
+                      key={val}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.25 }}
+                      onClick={() => handleOptionSelect(val, { answer: val })}
+                      style={{
+                        flex: 1,
+                        padding: '16px 20px',
+                        borderRadius: 14,
+                        border: isSelected ? '2px solid #7c3aed' : '2px solid #f3f4f6',
+                        background: isSelected ? 'rgba(124,58,237,0.04)' : '#fafafa',
+                        cursor: 'pointer',
+                        fontSize: 15,
+                        fontWeight: 600,
+                        color: isSelected ? '#7c3aed' : '#374151',
+                        textTransform: 'capitalize',
+                        transition: 'all 0.2s ease',
+                        outline: 'none',
+                      }}
+                    >
+                      {val}
+                    </motion.button>
+                  );
+                })}
               </div>
             )}
 
+            {/* ── Open Ended ── */}
             {currentStone.question.type === 'open_ended' && (
-              <textarea
-                value={(answers[currentStone.stoneId]?.answer as string) || ''}
-                onChange={(e) => updateAnswer(e.target.value, { answer: e.target.value })}
-                placeholder="Type your answer here..."
-                style={{
-                  width: '100%',
-                  minHeight: '120px',
-                  borderRadius: tokens.borderRadius.lg,
-                  padding: tokens.spacing.lg,
-                  border: '2px solid #E2E8F0',
-                  fontSize: tokens.typography.sizes.base,
-                  fontFamily: 'inherit',
-                  resize: 'vertical',
-                  outline: 'none',
-                  transition: 'border-color 0.2s ease'
-                }}
-                onFocus={(e) => e.currentTarget.style.borderColor = tokens.colors.primary}
-                onBlur={(e) => e.currentTarget.style.borderColor = '#E2E8F0'}
-              />
-            )}
-
-            {currentStone.question.type === 'scale' && (
               <div>
-                <input
-                  type="range"
-                  min="1"
-                  max="5"
-                  value={typeof answers[currentStone.stoneId]?.answer === 'number' ? answers[currentStone.stoneId].answer : 3}
-                  onChange={(e) => updateAnswer(Number(e.target.value), { score: Number(e.target.value) })}
+                <textarea
+                  value={(answers[currentStone.stoneId]?.answer as string) || ''}
+                  onChange={e => updateTextAnswer(e.target.value, { answer: e.target.value })}
+                  placeholder="Share your thoughts..."
                   style={{
                     width: '100%',
-                    marginBottom: tokens.spacing.md
+                    minHeight: 120,
+                    borderRadius: 14,
+                    padding: 16,
+                    border: '2px solid #f3f4f6',
+                    fontSize: 14,
+                    fontFamily: 'inherit',
+                    resize: 'vertical',
+                    outline: 'none',
+                    transition: 'border-color 0.2s ease',
+                    background: '#fafafa',
+                    color: '#1a1a2e',
+                    lineHeight: 1.6,
+                    boxSizing: 'border-box',
                   }}
+                  onFocus={e => { e.currentTarget.style.borderColor = '#7c3aed'; e.currentTarget.style.background = '#fff'; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = '#f3f4f6'; e.currentTarget.style.background = '#fafafa'; }}
                 />
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: tokens.typography.sizes.sm,
-                  color: tokens.colors.text.secondary
-                }}>
-                  <span>1</span>
-                  <span>2</span>
-                  <span>3</span>
-                  <span>4</span>
-                  <span>5</span>
+              </div>
+            )}
+
+            {/* ── Scale ── */}
+            {currentStone.question.type === 'scale' && (
+              <div>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 12 }}>
+                  {[1, 2, 3, 4, 5].map(val => {
+                    const isSelected = answers[currentStone.stoneId]?.answer === val;
+                    return (
+                      <button
+                        key={val}
+                        onClick={() => updateTextAnswer(val, { score: val })}
+                        style={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: 12,
+                          border: isSelected ? '2px solid #7c3aed' : '2px solid #f3f4f6',
+                          background: isSelected ? 'rgba(124,58,237,0.08)' : '#fafafa',
+                          color: isSelected ? '#7c3aed' : '#374151',
+                          fontSize: 16,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          outline: 'none',
+                        }}
+                      >
+                        {val}
+                      </button>
+                    );
+                  })}
                 </div>
-                <div style={{
-                  textAlign: 'center',
-                  marginTop: tokens.spacing.sm,
-                  fontSize: tokens.typography.sizes.base,
-                  fontWeight: tokens.typography.weights.medium,
-                  color: tokens.colors.text.primary
-                }}>
-                  Selected: {typeof answers[currentStone.stoneId]?.answer === 'number' ? answers[currentStone.stoneId].answer : 3}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#9ca3af' }}>
+                  <span>Not at all</span>
+                  <span>Very much</span>
                 </div>
               </div>
             )}
-          </div>
-        )}
-      </div>
+          </motion.div>
+        </AnimatePresence>
 
-      {/* Navigation */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        gap: tokens.spacing.md,
-        alignItems: 'center',
-        flexWrap: 'wrap',
-      }}>
-        <button
-          onClick={handleBack}
-          disabled={currentStoneIndex === 0}
-          style={{
-            borderRadius: tokens.borderRadius.lg,
-            fontWeight: tokens.typography.weights.medium,
-            padding: `${tokens.spacing.md} ${tokens.spacing.xl}`,
-            backgroundColor: 'white',
-            border: `2px solid ${tokens.colors.primary}`,
-            color: tokens.colors.primary,
-            opacity: currentStoneIndex === 0 ? 0.5 : 1,
-            cursor: currentStoneIndex === 0 ? 'not-allowed' : 'pointer'
-          }}
-        >
-          Back
-        </button>
-
-        <div style={{
-          fontSize: tokens.typography.sizes.sm,
-          color: tokens.colors.text.secondary,
-          display: 'flex',
-          alignItems: 'center'
-        }}>
-          {answers[currentStone.stoneId] ? '✓ Answered' : 'Select an option above'}
-        </div>
-
-        {/* Show Next button for open_ended and scale questions */}
+        {/* ── Next Button (for non-auto-advance types) ── */}
         {(currentStone.question.type === 'open_ended' || currentStone.question.type === 'scale') && (
-          <button
-            onClick={handleNext}
-            disabled={!answers[currentStone.stoneId]}
-            style={{
-              borderRadius: tokens.borderRadius.lg,
-              fontWeight: tokens.typography.weights.medium,
-              padding: `${tokens.spacing.md} ${tokens.spacing.xl}`,
-              backgroundColor: answers[currentStone.stoneId] ? tokens.colors.primary : '#E2E8F0',
-              border: 'none',
-              color: 'white',
-              opacity: answers[currentStone.stoneId] ? 1 : 0.5,
-              cursor: answers[currentStone.stoneId] ? 'pointer' : 'not-allowed'
-            }}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: isAnswered ? 1 : 0.4 }}
+            style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end' }}
           >
-            {currentStoneIndex === stones.length - 1 ? 'Complete' : 'Next'}
-          </button>
+            <button
+              onClick={advance}
+              disabled={!isAnswered}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '12px 24px',
+                borderRadius: 12,
+                background: isAnswered ? 'linear-gradient(135deg, #7c3aed, #a78bfa)' : '#e5e7eb',
+                color: '#fff',
+                border: 'none',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: isAnswered ? 'pointer' : 'default',
+                boxShadow: isAnswered ? '0 4px 14px rgba(124,58,237,0.3)' : 'none',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              {isLast ? 'Complete' : 'Next'}
+              <ChevronRight size={16} strokeWidth={2.5} />
+            </button>
+          </motion.div>
         )}
       </div>
     </div>

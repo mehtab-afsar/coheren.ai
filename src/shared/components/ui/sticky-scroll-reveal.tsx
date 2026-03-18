@@ -35,10 +35,10 @@ export const StickyScroll = ({
   });
 
   const gradients = [
-    "linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)",
-    "linear-gradient(135deg, #4338ca 0%, #2563eb 100%)",
-    "linear-gradient(135deg, #6d28d9 0%, #9333ea 100%)",
-    "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
+    "#FAF9F7",
+    "#FAF9F7",
+    "#FAF9F7",
+    "#FAF9F7",
   ];
 
   return (
@@ -97,7 +97,7 @@ export const StickyScroll = ({
           </div>
 
           {/* Right: cross-fading visual panel */}
-          <div className="hidden lg:block w-[420px] flex-shrink-0">
+          <div className="hidden lg:block w-[520px] flex-shrink-0">
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeCard}
@@ -108,7 +108,7 @@ export const StickyScroll = ({
                 className="h-[420px] w-full rounded-3xl overflow-hidden flex items-center justify-center"
                 style={{
                   background: gradients[activeCard % gradients.length],
-                  boxShadow: "0 32px 80px -12px rgba(124,58,237,0.4)",
+                  boxShadow: "0 8px 40px -8px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06)",
                 }}
               >
                 {content[activeCard].content ?? null}

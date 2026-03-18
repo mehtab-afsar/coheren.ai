@@ -121,7 +121,6 @@ export const signUp = async (email: string, password: string, metadata?: { full_
       // Dynamically import to avoid circular dependency
       const { createProfile } = await import('./database');
       await createProfile(data.user.id, metadata?.full_name);
-      console.log('✅ Profile created for user:', data.user.id);
     } catch (profileError) {
       console.error('❌ Failed to create profile:', profileError);
       // Don't fail the signup if profile creation fails

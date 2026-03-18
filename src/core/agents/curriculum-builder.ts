@@ -27,6 +27,11 @@ import type {
   AgentContext,
   Phase,
   Roadmap,
+  ReviewMoment,
+  CurriculumPreview,
+  CurriculumPreviewTask,
+  PaceCalibration,
+  PaceChoice,
 } from '@types-app/agents';
 import { callPremium as callReasoning } from '@lib/ai-router'; // Sonnet for curriculum quality
 import { retrieveKnowledgeSemantic } from '@core/rag/semantic-retriever';
@@ -269,7 +274,150 @@ RESOLUTION — apply ALL of the following:
 5. adaptationRules.if_completing_easily for all phases: "Publish what you have now — do not refine further."`,
 };
 
+// ─── Spaced Repetition Assessment Schedule ──────────────────────────────────
+// Deterministic schedule for when to insert retrieval/challenge/assessment days.
+// These are injected post-LLM into reviewMoments to ensure testing happens.
+
+const SPACED_REPETITION_SCHEDULE: { afterDays: number; type: ReviewMoment['type'] }[] = [
+  { afterDays: 1,  type: 'reflection' },       // next-day quick recall
+  { afterDays: 3,  type: 'checkpoint' },        // 3-day retrieval
+  { afterDays: 7,  type: 'mid_assessment' },    // weekly challenge
+  { afterDays: 14, type: 'mid_assessment' },    // bi-weekly assessment
+];
+
+/**
+ * Generate assessment ReviewMoments based on spaced repetition schedule.
+ * For each phase, creates retrieval and assessment days relative to phase start.
+ * Also adds a final_assessment on the last day of the roadmap.
+ */
+function generateAssessmentMoments(phases: Phase[], totalDays: number): ReviewMoment[] {
+  const moments: ReviewMoment[] = [];
+  const usedDays = new Set<number>();
+
+  let phaseStartDay = 1;
+  for (const phase of phases) {
+    const phaseEndDay = phaseStartDay + phase.durationDays - 1;
+
+    // Insert spaced repetition moments relative to phase start
+    for (const schedule of SPACED_REPETITION_SCHEDULE) {
+      const assessDay = phaseStartDay + schedule.afterDays;
+      // Only add if within this phase and within total days
+      if (assessDay <= phaseEndDay && assessDay <= totalDays && !usedDays.has(assessDay)) {
+        usedDays.add(assessDay);
+        moments.push({
+          day: assessDay,
+          type: schedule.type,
+          prompt: schedule.type === 'reflection'
+            ? `Quick recall: What did you learn in the last session? Name 2-3 key points.`
+            : schedule.type === 'checkpoint'
+            ? `Retrieval check: Can you demonstrate the core skills from this phase so far?`
+            : `Assessment: Show what you know from ${phase.phaseName}.`,
+          relatedSkills: phase.primaryGoals?.slice(0, 3) ?? [],
+          relatedDays: Array.from(
+            { length: Math.min(schedule.afterDays, assessDay - phaseStartDay) },
+            (_, i) => phaseStartDay + i
+          ),
+        });
+      }
+    }
+
+    // End-of-phase assessment (if phase is long enough)
+    if (phase.durationDays >= 7) {
+      const endAssessDay = phaseEndDay;
+      if (!usedDays.has(endAssessDay) && endAssessDay <= totalDays) {
+        usedDays.add(endAssessDay);
+        moments.push({
+          day: endAssessDay,
+          type: 'mid_assessment',
+          prompt: `Phase ${phase.phaseNumber} assessment: Demonstrate mastery of ${phase.phaseName}.`,
+          relatedSkills: phase.primaryGoals ?? [],
+          relatedDays: Array.from(
+            { length: phase.durationDays },
+            (_, i) => phaseStartDay + i
+          ),
+        });
+      }
+    }
+
+    phaseStartDay = phaseEndDay + 1;
+  }
+
+  // Final assessment on last day
+  if (!usedDays.has(totalDays)) {
+    moments.push({
+      day: totalDays,
+      type: 'final_assessment',
+      prompt: 'Final assessment: Comprehensive review of everything you have learned.',
+      relatedSkills: phases.flatMap(p => p.primaryGoals?.slice(0, 2) ?? []),
+      relatedDays: Array.from({ length: Math.min(totalDays, 7) }, (_, i) => totalDays - i).reverse(),
+    });
+  }
+
+  return moments.sort((a, b) => a.day - b.day);
+}
+
 // ─── System Prompt ────────────────────────────────────────────────────────────
+
+const FEW_SHOT_EXAMPLES = `
+## CONCRETE OUTPUT EXAMPLES — Study these before generating
+
+### GOOD PHASE (specific, verifiable, actionable):
+{
+  "phaseNumber": 1,
+  "phaseName": "Core Mechanics",
+  "durationDays": 45,
+  "primaryGoals": [
+    "Solve 20 beginner algorithm problems without looking at solutions",
+    "Build a working CLI application from scratch"
+  ],
+  "focusAreas": { "variables-and-data-types": 20, "control-flow": 30, "functions-and-scope": 30, "arrays-and-objects": 20 },
+  "keyMilestones": [
+    "Complete 20 HackerRank Easy problems — timed at under 15 min each without hints",
+    "CLI number guessing game working: accepts input, tracks guesses, announces winner"
+  ],
+  "scienceRationale": "Deliberate practice research (Ericsson): beginners need 30+ repetitions per concept before transfer occurs. Blocked practice first (variables → loops → functions) builds schema before interleaving.",
+  "adaptationRules": {
+    "if_completing_easily": "Add 5-minute time pressure to each problem — speed is the next challenge",
+    "if_struggling": "Spend 2 extra days on control flow; only move to functions when loops feel automatic"
+  }
+}
+
+### BAD PHASE (vague, unverifiable — NEVER produce this):
+{
+  "phaseName": "Foundation Building",
+  "primaryGoals": ["Learn the basics", "Get comfortable with the material"],
+  "keyMilestones": ["Understand core concepts", "Feel more confident"]
+}
+WHY IT'S BAD: "Learn the basics" is not a goal. "Understand core concepts" cannot be verified. Agent 4 cannot generate a specific daily task from these.
+
+### GOOD PHASE (kinesthetic example):
+{
+  "phaseNumber": 1,
+  "phaseName": "Technique Foundation",
+  "durationDays": 28,
+  "primaryGoals": [
+    "Run 3km continuously at a conversational pace (can hold a sentence while running)",
+    "Establish correct foot strike and posture mechanics"
+  ],
+  "focusAreas": { "easy-aerobic-runs": 60, "form-drills": 25, "mobility-and-warmup": 15 },
+  "keyMilestones": [
+    "Complete a 3km run without stopping — pace does not matter, only continuity",
+    "Pass posture checklist: heel not striking first, arms at 90 degrees, looking 10m ahead"
+  ],
+  "scienceRationale": "Sports periodization: technique must be established at low intensity (RPE 4-5) before volume increases. Muscle memory of poor form is very hard to unlearn once volume rises.",
+  "adaptationRules": {
+    "if_completing_easily": "Extend long run by 500m per week — do NOT increase pace yet",
+    "if_struggling": "Switch to run/walk intervals: 2 min run, 1 min walk, total 20 min"
+  }
+}
+
+## MILESTONE QUALITY RULES (read carefully):
+- BAD: "understand X" / "learn Y" / "get comfortable with Z" / "feel ready" — these are UNVERIFIABLE
+- BAD: "practice regularly" / "work on fundamentals" — too vague for Agent 4 to act on
+- GOOD: "solve 15 problems without hints in under 10 min each" — measurable, binary (done/not done)
+- GOOD: "produce a 500-word rough draft — quality irrelevant, existence is the milestone"
+- GOOD: "complete 3 full practice sets of 20 reps each with a 60-second rest" — specific, countable
+`;
 
 function buildSystemPrompt(domain: string): string {
   const pedagogy = DOMAIN_PEDAGOGY[domain] ?? DOMAIN_PEDAGOGY['Lifestyle'];
@@ -295,6 +443,20 @@ ${pedagogy}
 - Long-term goal (>365 days): 4–5 phases
 Never create more or fewer phases than these rules permit.
 
+## Day-Level Skeletons (REQUIRED)
+Each phase MUST include a "daySkeleton" array with one entry per day in the phase.
+Each entry specifies: day number (1-indexed within phase), theme (what the day covers),
+taskType (learning|practice|reflection|challenge|retrieval|rest), intensity (0.0–1.0),
+and focusArea (must match a key from that phase's focusAreas).
+Rules:
+- Every 7th day should be "rest" type with intensity ≤ 0.2
+- Intensity should ramp within each phase (start low, peak mid-phase, taper at end)
+- Include at least 1 "reflection" day per 7 days
+- Include at least 1 "retrieval" day per 14 days (spaced repetition)
+- Themes must be specific enough for Agent 4 to generate a real task (NOT "learn basics")
+
+${FEW_SHOT_EXAMPLES}
+
 ## Return ONLY valid JSON. No commentary, no markdown.`;
 }
 
@@ -310,9 +472,23 @@ function buildUserPrompt(
   const g = goalAnalysis.goalAnalysis;
   const sp = stoneProfile.stoneProfile;
 
-  // Stone modification instructions for this specific user
+  // Stone modification instructions — severity-weighted
+  // Critical/High: full application. Moderate: apply but softer. Low: mention but don't restructure.
   const stoneInstructions = sp.stones
-    .map(s => STONE_MODIFICATIONS[s.type] ?? '')
+    .sort((a, b) => {
+      const order: Record<string, number> = { Critical: 0, High: 1, Moderate: 2, Low: 3 };
+      return (order[a.severity] ?? 2) - (order[b.severity] ?? 2);
+    })
+    .map(s => {
+      const mod = STONE_MODIFICATIONS[s.type];
+      if (!mod) return '';
+      const severityNote =
+        s.severity === 'Critical' ? `\n⚠️ CRITICAL SEVERITY (riskImpact: ${s.riskImpact}) — Apply ALL rules aggressively. This stone WILL derail the plan if ignored.` :
+        s.severity === 'High'     ? `\n🔴 HIGH SEVERITY (riskImpact: ${s.riskImpact}) — Apply all rules fully.` :
+        s.severity === 'Moderate' ? `\n🟡 MODERATE SEVERITY (riskImpact: ${s.riskImpact}) — Apply rules but with lighter touch. Soft-enforce, don't restructure entire phases.` :
+        `\n🟢 LOW SEVERITY (riskImpact: ${s.riskImpact}) — Acknowledge in adaptationRules only. Do not restructure phases for this stone.`;
+      return mod + severityNote;
+    })
     .filter(Boolean)
     .join('\n');
 
@@ -384,6 +560,10 @@ ${ragContext || '(No RAG context available — use domain pedagogy defaults)'}
         "keyMilestones": ["concrete, measurable milestone"],
         "scienceRationale": "Why this phase structure works — cite source if RAG provided it",
         "buildingOn": "what this phase relies on from the previous phase",
+        "daySkeleton": [
+          { "day": 1, "theme": "specific topic/drill for this day", "taskType": "learning", "intensity": 0.3, "focusArea": "area_name" },
+          { "day": 2, "theme": "...", "taskType": "practice", "intensity": 0.4, "focusArea": "area_name_2" }
+        ],
         "adaptationRules": {
           "if_completing_easily": "specific next step, not just 'do more'",
           "if_struggling": "specific reduction, not just 'slow down'"
@@ -413,6 +593,21 @@ ${ragContext || '(No RAG context available — use domain pedagogy defaults)'}
   "domainPedagogy": "name of the pedagogical framework applied (e.g. 'Sports Periodization')",
   "stoneModificationSummary": "1-2 sentence summary of how the stone profile changed the default curriculum"
 }`;
+}
+
+// ─── JSON Repair ──────────────────────────────────────────────────────────────
+
+function repairJSON(raw: string): string {
+  const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) raw = fenceMatch[1];
+  const start = raw.indexOf('{');
+  const end   = raw.lastIndexOf('}');
+  if (start !== -1 && end !== -1 && end > start) raw = raw.substring(start, end + 1);
+  return raw
+    .replace(/,\s*}/g, '}')
+    .replace(/,\s*]/g, ']')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"');
 }
 
 // ─── Phase Count Derivation ───────────────────────────────────────────────────
@@ -455,6 +650,36 @@ function validateAndNormalize(raw: unknown, context: AgentContext, phaseCount: n
     p.keyMilestones  = Array.isArray(p.keyMilestones) ? p.keyMilestones : [];
     p.scienceRationale ??= '';
     p.focusAreas     ??= {};
+
+    // Validate/generate daySkeleton
+    if (!Array.isArray(p.daySkeleton) || p.daySkeleton.length === 0) {
+      // Generate a basic skeleton if the LLM didn't provide one
+      const focusKeys = Object.keys(p.focusAreas);
+      p.daySkeleton = Array.from({ length: p.durationDays }, (_, d) => {
+        const dayNum = d + 1;
+        const isRest = dayNum % 7 === 0;
+        const isReflection = dayNum % 7 === 6;
+        const isRetrieval = dayNum % 14 === 13;
+        return {
+          day: dayNum,
+          theme: isRest ? 'Rest & recovery' : isReflection ? 'Weekly reflection' : `${p.phaseName} practice`,
+          taskType: isRest ? 'rest' as const : isReflection ? 'reflection' as const : isRetrieval ? 'retrieval' as const : 'practice' as const,
+          intensity: isRest ? 0.1 : Math.min(0.3 + (dayNum / p.durationDays) * 0.5, 0.9),
+          focusArea: focusKeys[d % Math.max(focusKeys.length, 1)] ?? 'general',
+        };
+      });
+    } else {
+      // Validate existing skeleton entries
+      const validTypes = ['practice', 'learning', 'reflection', 'challenge', 'retrieval', 'rest'];
+      p.daySkeleton = p.daySkeleton.map((ds, d) => ({
+        day: ds.day ?? d + 1,
+        theme: ds.theme ?? `${p.phaseName} day ${d + 1}`,
+        taskType: validTypes.includes(ds.taskType) ? ds.taskType : 'practice' as const,
+        intensity: typeof ds.intensity === 'number' ? Math.min(1, Math.max(0, ds.intensity)) : 0.5,
+        focusArea: ds.focusArea ?? 'general',
+      }));
+    }
+
     return p;
   });
 
@@ -473,13 +698,21 @@ function validateAndNormalize(raw: unknown, context: AgentContext, phaseCount: n
     });
   }
 
-  // Ensure reviewMoments
+  // Ensure reviewMoments from LLM
   if (!Array.isArray(roadmap.reviewMoments)) {
-    roadmap.reviewMoments = [
-      { day: 7,  type: 'reflection', prompt: 'How did week 1 go? What felt hard?' },
-      { day: 14, type: 'checkpoint', prompt: 'Am I on track with Phase 1 milestones?' },
-    ];
+    roadmap.reviewMoments = [];
   }
+
+  // Merge spaced repetition assessment moments into reviewMoments
+  const assessmentMoments = generateAssessmentMoments(roadmap.phases, roadmap.totalDays);
+  const existingDays = new Set(roadmap.reviewMoments.map(rm => rm.day));
+  for (const am of assessmentMoments) {
+    if (!existingDays.has(am.day)) {
+      roadmap.reviewMoments.push(am);
+      existingDays.add(am.day);
+    }
+  }
+  roadmap.reviewMoments.sort((a, b) => a.day - b.day);
 
   // Ensure restDays
   roadmap.restDays ??= { pattern: 'every_7th_day', customDays: [], restType: 'active_recovery' };
@@ -515,13 +748,21 @@ export async function buildCurriculum(
   // Derive phase count from timeline/horizon (never from LLM)
   const phaseCount = derivePhaseCount(context.timeline, g.horizon);
 
-  // Fetch RAG context if not provided by caller
+  // Fetch RAG context if not provided by caller — multi-query for richer context
   let science = ragContext ?? '';
   if (!science) {
-    const query = `${g.domain} learning pedagogy ${g.complexity} ${g.goal} ${
-      stoneProfile.stoneProfile.stones.map(s => s.type).join(' ')
-    }`;
-    science = await retrieveKnowledgeSemantic({ query, matchCount: 3 });
+    const primaryStone = stoneProfile.stoneProfile.primaryStone;
+    const stoneTypes = stoneProfile.stoneProfile.stones.map(s => s.type);
+    science = await retrieveKnowledgeSemantic({
+      query: `${g.domain} ${g.goal} skill progression phases milestones daily activities specific`,
+      additionalQueries: [
+        `${primaryStone} ${g.domain} intervention curriculum modification coaching`,
+        `${g.complexity} learner ${g.domain} pedagogical approach evidence-based`,
+      ],
+      boostCategories: [g.domain.toLowerCase(), ...stoneTypes.map(s => s.toLowerCase())],
+      boostKeywords: [g.domain.toLowerCase(), primaryStone.toLowerCase()],
+      matchCount: 6,
+    });
   }
 
   const { content } = await callReasoning({
@@ -535,6 +776,130 @@ export async function buildCurriculum(
   });
   if (!content) throw new Error('Agent 3: No response received from model');
 
-  const raw = JSON.parse(content) as unknown;
+  const raw = JSON.parse(repairJSON(content)) as unknown;
   return validateAndNormalize(raw, context, phaseCount);
+}
+
+// ============================================
+// CURRICULUM PREVIEW (deterministic — no LLM)
+// ============================================
+
+const TASK_TYPE_LABELS: Record<string, CurriculumPreviewTask['type']> = {
+  practice: 'practice',
+  learning: 'learning',
+  reflection: 'reflection',
+  challenge: 'challenge',
+  retrieval: 'retrieval',
+  rest: 'practice', // map rest → practice as fallback for preview
+};
+
+/**
+ * Derive a 7-day curriculum preview from Agent 3 output.
+ * Completely deterministic — no LLM call needed.
+ * Uses the phase daySkeleton if available, otherwise synthesizes from phase goals.
+ */
+export function buildCurriculumPreview(
+  curriculum: Agent3Output,
+  category: string,
+  dailyMinutes: number,
+): CurriculumPreview {
+  const phase1 = curriculum.roadmap.phases[0];
+  if (!phase1) {
+    return { tasks: [], weekTheme: 'Getting started', endOfWeekOutcome: 'Your journey begins' };
+  }
+
+  const tasks: CurriculumPreviewTask[] = [];
+  const skeleton = phase1.daySkeleton ?? [];
+
+  for (let day = 1; day <= 7; day++) {
+    const skeletonDay = skeleton.find(s => s.day === day);
+    const focusAreas = Object.keys(phase1.focusAreas);
+    const focusArea = focusAreas[(day - 1) % Math.max(1, focusAreas.length)];
+
+    // Alternate types through the week for variety
+    const weekPattern: CurriculumPreviewTask['type'][] =
+      ['learning', 'practice', 'practice', 'reflection', 'practice', 'challenge', 'reflection'];
+    const taskType = skeletonDay
+      ? (TASK_TYPE_LABELS[skeletonDay.taskType] ?? weekPattern[day - 1])
+      : weekPattern[day - 1];
+
+    const theme = skeletonDay?.theme ?? `${phase1.primaryGoals[0] ?? category} — Day ${day}`;
+
+    // Vary duration slightly to feel realistic
+    const durationVariance = [0, 5, -5, 0, 5, 10, -5][day - 1];
+    const estimatedMinutes = Math.max(15, dailyMinutes + durationVariance);
+
+    tasks.push({
+      day,
+      title: theme,
+      type: taskType,
+      estimatedMinutes,
+      summary: buildDaySummary(day, taskType, focusArea, phase1.primaryGoals),
+      phase: 1,
+    });
+  }
+
+  const weekTheme = phase1.phaseName ?? `${category} Foundations`;
+  const endOfWeekOutcome = phase1.keyMilestones[0] ?? `You'll have completed your first week of ${category}`;
+
+  return { tasks, weekTheme, endOfWeekOutcome };
+}
+
+function buildDaySummary(
+  day: number,
+  type: CurriculumPreviewTask['type'],
+  focusArea: string,
+  primaryGoals: string[],
+): string {
+  const goal = primaryGoals[0] ?? 'core skills';
+  const area = focusArea ?? 'fundamentals';
+
+  switch (type) {
+    case 'learning':
+      return `Study ${area} — understand the core concepts behind ${goal}`;
+    case 'practice':
+      return `Drill session — apply ${area} with focused repetition`;
+    case 'reflection':
+      return `Review what's working, identify your key improvement area`;
+    case 'challenge':
+      return `Push beyond comfort — a stretch exercise on ${area}`;
+    case 'retrieval':
+      return `Recall and test yourself on ${area} without notes`;
+    default:
+      return `Day ${day} — ${area} session`;
+  }
+}
+
+/**
+ * Convert the user's pace choice into concrete calibration parameters
+ * that get injected into Agent 4's task generation prompt.
+ */
+export function resolvePaceCalibration(choice: PaceChoice): PaceCalibration {
+  switch (choice) {
+    case 'too_easy':
+      return {
+        choice,
+        difficultyMultiplier: 1.25,
+        phaseDurationMultiplier: 0.9,
+        maxStepsPerTask: 6,
+        note: 'User found preview pace too easy. Increase task complexity and challenge level. Include harder variations and bonus challenge steps.',
+      };
+    case 'too_intense':
+      return {
+        choice,
+        difficultyMultiplier: 0.75,
+        phaseDurationMultiplier: 1.2,
+        maxStepsPerTask: 3,
+        note: 'User found preview pace too intense. Simplify tasks: max 3 steps, shorter sessions, lighter cognitive load. Prioritize momentum over depth.',
+      };
+    case 'just_right':
+    default:
+      return {
+        choice: 'just_right',
+        difficultyMultiplier: 1.0,
+        phaseDurationMultiplier: 1.0,
+        maxStepsPerTask: 4,
+        note: 'User confirmed pace is well-calibrated. Maintain standard progression curve.',
+      };
+  }
 }

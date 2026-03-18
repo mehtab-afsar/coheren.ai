@@ -7,18 +7,21 @@ import { ViewErrorBoundary } from '@features/dashboard/components/ViewErrorBound
 import { ViewSkeleton } from '@features/dashboard/components/ViewSkeleton';
 // TodayView is the default landing — keep static for instant first paint
 import TodayView from './views/TodayView';
-// Remaining views are lazy-loaded for better initial bundle size
-const JourneyView  = lazy(() => import('./views/JourneyView'));
-const ProfileView  = lazy(() => import('./views/ProfileView'));
-const ProgressView = lazy(() => import('./views/ProgressView'));
-const GoalsView    = lazy(() => import('./views/GoalsView'));
+// Views — lazy-loaded
+const RoadmapView  = lazy(() => import('./views/RoadmapView'));
+const InsightsView = lazy(() => import('./views/InsightsView'));
+const YouView      = lazy(() => import('./views/YouView'));
 const LibraryView  = lazy(() => import('./views/LibraryView'));
+const AgentHealthDashboard = lazy(() => import('./components/AgentHealthDashboard'));
 
 import CheckpointScreen from '@features/dashboard/components/CheckpointScreen';
 import DifficultyPrompt from '@features/dashboard/components/DifficultyPrompt';
 import OfflineBanner from '@features/dashboard/components/OfflineBanner';
-import NotificationCenter, { getNotifications, addNotification } from '@features/dashboard/components/NotificationCenter';
+import NotificationCenter from '@features/dashboard/components/NotificationCenter';
+import { getNotifications, addNotification } from '@features/dashboard/components/notification-utils';
 import ShareableCard from '@features/dashboard/components/ShareableCard';
+import CoachThread from '@features/dashboard/components/CoachThread';
+import { useCoachMessages } from './hooks/useCoachMessages';
 
 import { getSprintNumber } from '@lib/checkpointHelpers';
 import { useStore } from '@core/store/useStore';
@@ -34,9 +37,9 @@ export default function Dashboard() {
   useNotifications();
   useAutoAdvance();
   const { currentView, setCurrentView, sidebarOpen, setSidebarOpen } = useDashboardNav();
-  const { checkpointData, isRecalibrating, recalibrationResult, handleCheckpointComplete } = useCheckpoint();
+  const { checkpointData, isRecalibrating, recalibrationResult, handleCheckpointComplete, triggerEarlyRecalibration } = useCheckpoint();
   const { isMobile } = useBreakpoint();
-  const { shouldPrompt, dismiss } = useDifficultyMonitor();
+  const { shouldPrompt, shouldTriggerEarlyRecalibration, dismiss, dismissEarlyRecalibration } = useDifficultyMonitor();
   const { isOnline, pendingCount } = useOfflineSync();
 
   const currentDay = useStore(s => s.currentDay);
@@ -44,10 +47,19 @@ export default function Dashboard() {
   const streak = useStore(s => s.streak);
   const currentGoal = useStore(s => s.currentGoal);
 
+  const { generateStreakMessage, generatePlanAdjustment } = useCoachMessages();
+
   const [showDifficultyPrompt, setShowDifficultyPrompt] = useState(false);
   const [showNotificationCenter, setShowNotificationCenter] = useState(false);
   const [showShareCard, setShowShareCard] = useState(false);
+  const [coachOpen, setCoachOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(() => getNotifications().filter(n => !n.read).length);
+  const [showDebugPanel] = useState(() => new URLSearchParams(window.location.search).get('debug') === 'agents');
+
+  // Generate streak milestone coach messages
+  useEffect(() => {
+    if (streak > 0) generateStreakMessage(streak);
+  }, [streak]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Show difficulty prompt once cooldown clears
   useEffect(() => {
@@ -57,26 +69,36 @@ export default function Dashboard() {
     }
   }, [shouldPrompt]);
 
+  // Auto-trigger early recalibration on 3 consecutive skips
+  useEffect(() => {
+    if (shouldTriggerEarlyRecalibration && !isRecalibrating) {
+      dismissEarlyRecalibration();
+      triggerEarlyRecalibration('simplify').then(() => {
+        generatePlanAdjustment("I noticed you've been skipping tasks — I've simplified the next few days to help you get back on track.");
+        addNotification({ type: 'plan_adjustment', title: 'Plan Auto-Adjusted', body: 'Your plan was simplified after 3 consecutive skips.' });
+        setUnreadCount(c => c + 1);
+      });
+    }
+  }, [shouldTriggerEarlyRecalibration]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSimplify = () => {
-    addNotification({
-      type: 'plan_adjustment',
-      title: 'Plan Simplified',
-      body: 'Your remaining week tasks have been adjusted for a gentler pace. Keep going — sustainable beats fast.',
-    });
     dismiss();
     setShowDifficultyPrompt(false);
-    setUnreadCount(c => c + 1);
+    triggerEarlyRecalibration('simplify').then(() => {
+      generatePlanAdjustment("I've simplified your remaining week — fewer tasks, shorter sessions. Sustainable beats fast every time.");
+      addNotification({ type: 'plan_adjustment', title: 'Plan Simplified', body: 'Your remaining week tasks have been adjusted for a gentler pace.' });
+      setUnreadCount(c => c + 1);
+    });
   };
 
   const handleExtend = () => {
-    addNotification({
-      type: 'plan_adjustment',
-      title: 'Timeline Extended',
-      body: 'Your roadmap has been extended by 1–2 weeks. You'll get there — at the right pace.',
-    });
     dismiss();
     setShowDifficultyPrompt(false);
-    setUnreadCount(c => c + 1);
+    triggerEarlyRecalibration('extend').then(() => {
+      generatePlanAdjustment("I've extended your roadmap by 1–2 weeks. The goal hasn't changed — just the pace. You'll get there.");
+      addNotification({ type: 'plan_adjustment', title: 'Timeline Extended', body: "Your roadmap has been extended by 1-2 weeks." });
+      setUnreadCount(c => c + 1);
+    });
   };
 
   const handleKeep = () => {
@@ -88,28 +110,27 @@ export default function Dashboard() {
   const totalMinutes = tasks.filter(t => t.completed).reduce((sum, t) => sum + (t.duration || 0), 0);
   const hoursInvested = Math.round((totalMinutes / 60) * 10) / 10;
 
-  const handleFocusTap = () => setCurrentView('today');
-
   // Desktop-only: shift content right when sidebar is open
   const marginLeft = isMobile ? '0' : sidebarOpen ? '260px' : '0';
   const paddingLeft = isMobile ? '16px' : sidebarOpen ? tokens.spacing['4xl'] : 'calc(44px + 48px)';
 
   const renderView = () => {
+    // Debug panel overrides all views when ?debug=agents is in URL
+    if (showDebugPanel) return <AgentHealthDashboard />;
+
     switch (currentView) {
       case 'today':
-        return <TodayView onNavigate={setCurrentView} />;
-      case 'journey':
-        return <JourneyView />;
-      case 'profile':
-        return <ProfileView />;
-      case 'progress':
-        return <ProgressView />;
-      case 'goals':
-        return <GoalsView onNavigate={setCurrentView} />;
+        return <TodayView onNavigate={(v) => setCurrentView(v as Parameters<typeof setCurrentView>[0])} />;
+      case 'roadmap':
+        return <RoadmapView />;
+      case 'insights':
+        return <InsightsView />;
       case 'library':
         return <LibraryView />;
+      case 'you':
+        return <YouView />;
       default:
-        return <TodayView onNavigate={setCurrentView} />;
+        return <TodayView onNavigate={(v) => setCurrentView(v as Parameters<typeof setCurrentView>[0])} />;
     }
   };
 
@@ -117,6 +138,15 @@ export default function Dashboard() {
     <>
       {/* Offline banner */}
       {!isOnline && <OfflineBanner pendingCount={pendingCount} />}
+
+      {/* Difficulty prompt — inline coach card (only on Today view) */}
+      {showDifficultyPrompt && currentView === 'today' && (
+        <DifficultyPrompt
+          onSimplify={handleSimplify}
+          onExtend={handleExtend}
+          onKeep={handleKeep}
+        />
+      )}
 
       {/* Notification bell — shown when unread > 0 */}
       {unreadCount > 0 && (
@@ -144,10 +174,11 @@ export default function Dashboard() {
       <ViewErrorBoundary>
         <Suspense fallback={
           <ViewSkeleton type={
-            currentView === 'progress' ? 'progress'
-            : currentView === 'journey' ? 'journey'
-            : currentView === 'profile' ? 'me'
+            currentView === 'insights' ? 'progress'
+            : currentView === 'roadmap' ? 'journey'
+            : currentView === 'you'     ? 'me'
             : currentView === 'today'   ? 'today'
+            : currentView === 'library' ? 'generic'
             : 'generic'
           } />
         }>
@@ -171,6 +202,7 @@ export default function Dashboard() {
           <DashboardSidebar
             currentView={currentView}
             onViewChange={setCurrentView}
+            onCoachOpen={() => setCoachOpen(true)}
             isOpen={sidebarOpen}
             onToggle={setSidebarOpen}
           />
@@ -188,7 +220,7 @@ export default function Dashboard() {
             maxWidth: '800px',
             padding: isMobile ? '20px 16px' : `${tokens.spacing['4xl']} ${tokens.spacing['4xl']}`,
             paddingLeft,
-            paddingBottom: isMobile ? '96px' : undefined,
+            paddingBottom: isMobile ? 'calc(96px + env(safe-area-inset-bottom))' : undefined,
           }}>
             <ViewErrorBoundary>
               <CheckpointScreen
@@ -208,7 +240,7 @@ export default function Dashboard() {
         </div>
 
         {isMobile && (
-          <BottomNav activeTab={currentView} onTabChange={setCurrentView} onFocusTap={handleFocusTap} />
+          <BottomNav activeTab={currentView} onTabChange={setCurrentView} />
         )}
       </div>
     );
@@ -225,6 +257,7 @@ export default function Dashboard() {
         <DashboardSidebar
           currentView={currentView}
           onViewChange={setCurrentView}
+          onCoachOpen={() => setCoachOpen(true)}
           isOpen={sidebarOpen}
           onToggle={setSidebarOpen}
         />
@@ -244,25 +277,20 @@ export default function Dashboard() {
           padding: isMobile ? '20px 16px' : `${tokens.spacing['4xl']} ${tokens.spacing['4xl']}`,
           paddingLeft,
           // Extra bottom padding on mobile so content isn't hidden behind BottomNav
-          paddingBottom: isMobile ? '96px' : undefined,
+          paddingBottom: isMobile ? 'calc(96px + env(safe-area-inset-bottom))' : undefined,
         }}>
           {contentInner}
         </div>
       </div>
 
       {isMobile && (
-        <BottomNav activeTab={currentView} onTabChange={setCurrentView} onFocusTap={handleFocusTap} />
+        <BottomNav activeTab={currentView} onTabChange={setCurrentView} />
       )}
+
+      {/* Coach Thread */}
+      <CoachThread isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
 
       {/* Modals */}
-      {showDifficultyPrompt && (
-        <DifficultyPrompt
-          onSimplify={handleSimplify}
-          onExtend={handleExtend}
-          onKeep={handleKeep}
-        />
-      )}
-
       {showNotificationCenter && (
         <NotificationCenter onClose={() => setShowNotificationCenter(false)} />
       )}

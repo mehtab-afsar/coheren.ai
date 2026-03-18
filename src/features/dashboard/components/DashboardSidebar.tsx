@@ -1,4 +1,4 @@
-import { Home, User, TrendingUp, Target, Menu, X, Map, BookOpen } from 'lucide-react';
+import { Home, User, BarChart2, Menu, X, Map, MessageCircle, BookMarked } from 'lucide-react';
 import { useState } from 'react';
 import { tokens } from '@core/design-system';
 import { useStore } from '@core/store/useStore';
@@ -6,8 +6,9 @@ import { Icons } from '@shared/components/ui/icons';
 import { useUserLevel } from '@hooks/useUserLevel';
 
 interface DashboardSidebarProps {
-  currentView: 'today' | 'profile' | 'progress' | 'goals' | 'journey' | 'library';
-  onViewChange: (view: 'today' | 'profile' | 'progress' | 'goals' | 'journey' | 'library') => void;
+  currentView: 'today' | 'roadmap' | 'insights' | 'library' | 'you';
+  onViewChange: (view: 'today' | 'roadmap' | 'insights' | 'library' | 'you') => void;
+  onCoachOpen?: () => void;
   isOpen?: boolean;
   onToggle?: (open: boolean) => void;
 }
@@ -20,7 +21,7 @@ const NAV_ACTIVE_BG = 'rgba(124,58,237,0.12)';
 const NAV_ACTIVE_BORDER = '#7c3aed';
 const NAV_HOVER_BG = 'rgba(255,255,255,0.05)';
 
-export default function DashboardSidebar({ currentView, onViewChange, isOpen: controlledIsOpen, onToggle }: DashboardSidebarProps) {
+export default function DashboardSidebar({ currentView, onViewChange, onCoachOpen, isOpen: controlledIsOpen, onToggle }: DashboardSidebarProps) {
   const setStep = useStore((state) => state.setStep);
   const { universalProfile, roadmap } = useStore();
   const level = useUserLevel();
@@ -39,12 +40,11 @@ export default function DashboardSidebar({ currentView, onViewChange, isOpen: co
   };
 
   const menuItems = [
-    { id: 'today' as const, label: 'Today', icon: Home },
-    { id: 'journey' as const, label: 'Journey', icon: Map },
-    { id: 'progress' as const, label: 'Progress', icon: TrendingUp },
-    { id: 'goals' as const, label: 'Goals', icon: Target },
-    { id: 'library' as const, label: 'Library', icon: BookOpen },
-    { id: 'profile' as const, label: 'Profile', icon: User },
+    { id: 'today'    as const, label: 'Today',    icon: Home },
+    { id: 'roadmap'  as const, label: 'Journey',  icon: Map },
+    { id: 'insights' as const, label: 'Progress', icon: BarChart2 },
+    { id: 'library'  as const, label: 'Library',  icon: BookMarked },
+    { id: 'you'      as const, label: 'You',       icon: User },
   ];
 
   return (
@@ -226,6 +226,48 @@ export default function DashboardSidebar({ currentView, onViewChange, isOpen: co
           })}
         </nav>
 
+        {/* Coach separator + button */}
+        <div style={{ padding: `0 0 ${tokens.spacing.sm} 0`, borderTop: `1px solid ${SIDEBAR_BORDER}` }}>
+          <button
+            onClick={() => onCoachOpen?.()}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: tokens.spacing.md,
+              padding: `10px ${tokens.spacing.xl}`,
+              backgroundColor: 'transparent',
+              border: 'none',
+              borderLeft: '2px solid transparent',
+              cursor: 'pointer',
+              transition: 'all 180ms cubic-bezier(0.4,0,0.2,1)',
+              textAlign: 'left',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = NAV_HOVER_BG;
+              e.currentTarget.style.transform = 'translateX(3px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.transform = 'translateX(0)';
+            }}
+          >
+            <MessageCircle
+              size={17}
+              strokeWidth={1.5}
+              color={NAV_INACTIVE}
+              style={{ transition: 'all 180ms ease' }}
+            />
+            <span style={{
+              fontSize: tokens.typography.sizes.base,
+              color: NAV_INACTIVE,
+              fontWeight: tokens.typography.weights.light,
+            }}>
+              Coach
+            </span>
+          </button>
+        </div>
+
         {/* Footer */}
         <div style={{
           padding: `${tokens.spacing.lg} ${tokens.spacing.xl}`,
@@ -323,22 +365,6 @@ export default function DashboardSidebar({ currentView, onViewChange, isOpen: co
         </div>
       </div>
 
-      {/* Mobile backdrop */}
-      {isOpen && (
-        <div
-          onClick={() => setIsOpen(false)}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            backgroundColor: 'rgba(0,0,0,0.45)',
-            zIndex: 998,
-            display: 'block',
-          }}
-        />
-      )}
     </>
   );
 }

@@ -17,7 +17,7 @@
  *   - Powers everything downstream — must be accurate
  */
 
-import type { Agent1Output, AgentContext } from '@types-app/agents';
+import type { Agent1Output, AgentContext, GoalClarificationOutput } from '@types-app/agents';
 import { callReasoning } from '@lib/ai-router';
 
 const SYSTEM_PROMPT = `You are Agent 1: Goal Analyzer — a precision intelligence module.
@@ -127,7 +127,41 @@ Return a JSON object with this exact schema:
 }`;
 }
 
-function validateAndNormalize(raw: unknown): Agent1Output {
+/**
+ * Domain keyword override map — catches common misclassifications by LLM.
+ * Keys: lowercase keyword fragments that appear in goals.
+ * Values: correct domain classification.
+ */
+const DOMAIN_KEYWORD_OVERRIDES: Record<string, string> = {
+  // Financial
+  'invest': 'Financial', 'stock': 'Financial', 'crypto': 'Financial',
+  'budget': 'Financial', 'saving': 'Financial', 'debt': 'Financial',
+  'net worth': 'Financial', 'passive income': 'Financial', 'retire': 'Financial',
+  // Career
+  'promotion': 'Career', 'job search': 'Career', 'resume': 'Career',
+  'freelanc': 'Career', 'side hustle': 'Career', 'startup': 'Career',
+  'business': 'Career', 'interview': 'Career',
+  // Kinesthetic
+  'marathon': 'Kinesthetic', 'pull-up': 'Kinesthetic', 'push-up': 'Kinesthetic',
+  'bench press': 'Kinesthetic', 'deadlift': 'Kinesthetic', 'squat': 'Kinesthetic',
+  'run a': 'Kinesthetic', 'swim': 'Kinesthetic', 'martial art': 'Kinesthetic',
+  // Health
+  'anxiety': 'Health', 'depression': 'Health', 'sleep': 'Health',
+  'therapy': 'Health', 'weight loss': 'Health', 'mental health': 'Health',
+  // Creative
+  'novel': 'Creative', 'album': 'Creative', 'paint': 'Creative',
+  'youtube': 'Creative', 'podcast': 'Creative', 'film': 'Creative',
+};
+
+function detectDomainOverride(goalText: string): string | null {
+  const lower = goalText.toLowerCase();
+  for (const [keyword, domain] of Object.entries(DOMAIN_KEYWORD_OVERRIDES)) {
+    if (lower.includes(keyword)) return domain;
+  }
+  return null;
+}
+
+function validateAndNormalize(raw: unknown, goalText?: string): Agent1Output {
   const parsed = raw as Agent1Output;
   const g = parsed?.goalAnalysis;
 
@@ -138,6 +172,14 @@ function validateAndNormalize(raw: unknown): Agent1Output {
   // Enforce valid domain
   const validDomains = ['Cognitive', 'Kinesthetic', 'Career', 'Financial', 'Creative', 'Health', 'Lifestyle', 'Hybrid'];
   if (!validDomains.includes(g.domain)) g.domain = 'Cognitive';
+
+  // Apply keyword override — catches common LLM misclassifications
+  if (goalText) {
+    const override = detectDomainOverride(goalText);
+    if (override && override !== g.domain) {
+      g.domain = override;
+    }
+  }
 
   // Enforce valid horizon
   const validHorizons = ['Short-term', 'Mid-term', 'Long-term'];
@@ -186,6 +228,148 @@ function validateAndNormalize(raw: unknown): Agent1Output {
   return parsed;
 }
 
+/**
+ * Generate clarifying questions when Agent 1 detects ambiguity or unrealistic goals.
+ * Returns needsClarification=false if the goal is already clear enough.
+ *
+ * Triggered when: confidence < 0.7 OR ambiguityScore > 0.4 OR realism is Unrealistic.
+ */
+export function buildClarifications(analysis: Agent1Output): GoalClarificationOutput {
+  const g = analysis.goalAnalysis;
+  const needsClarification = g.confidence < 0.7 || g.ambiguityScore > 0.4;
+  const realismUnrealistic =
+    g.realismChecks.timeRealism === 'Unrealistic' ||
+    g.realismChecks.effortRealism === 'Unrealistic';
+
+  // Build reality check if timeline/effort is flagged as unrealistic
+  const realityCheck = realismUnrealistic
+    ? {
+        triggered: true,
+        severity: 'warning' as const,
+        headline:
+          g.realismChecks.timeRealism === 'Unrealistic'
+            ? 'Your timeline looks very aggressive'
+            : 'The effort required may exceed your current plan',
+        detail: `Based on typical progress for ${g.category}, ${g.typicalTimeline.realistic} is usually needed. Your plan targets ${g.horizon.toLowerCase()}.`,
+        suggestedAdjustment: `We'll focus on solid fundamentals first and adjust milestones so you see real progress every week.`,
+        typicalTimeline: g.typicalTimeline.realistic,
+      }
+    : null;
+
+  if (!needsClarification) {
+    return { needsClarification: false, questions: [], realityCheck };
+  }
+
+  // Build targeted clarifying questions based on what's ambiguous
+  const questions: GoalClarificationOutput['questions'] = [];
+
+  // 1. Goal specificity — what does this actually mean to the user?
+  if (g.ambiguityScore > 0.4 || !g.smartStatus.specific) {
+    questions.push({
+      id: 'goal_specificity',
+      question: `What does "${g.category}" mean to you specifically?`,
+      type: 'multiple_choice',
+      probes: 'specific',
+      options: buildSpecificityOptions(g.domain, g.category),
+    });
+  }
+
+  // 2. Skill level (if missing or unclear)
+  if (!g.smartStatus.measurable && g.complexity === 'beginner') {
+    questions.push({
+      id: 'prior_experience',
+      question: `Have you tried ${g.category} before?`,
+      type: 'multiple_choice',
+      probes: 'complexity',
+      options: [
+        { value: 'never', label: 'No — complete beginner' },
+        { value: 'tried', label: 'Tried a few times, got basics' },
+        { value: 'some', label: 'Some experience, want to improve' },
+        { value: 'experienced', label: 'Experienced, looking to advance' },
+      ],
+    });
+  }
+
+  // 3. Primary motivation — affects stone detection
+  if (g.ambiguityScore > 0.5) {
+    questions.push({
+      id: 'primary_motivation',
+      question: "What's driving you to work on this right now?",
+      type: 'multiple_choice',
+      probes: 'motivation',
+      options: [
+        { value: 'personal_growth', label: 'Personal growth / challenge myself' },
+        { value: 'career', label: 'Career or income improvement' },
+        { value: 'health', label: 'Health or wellbeing' },
+        { value: 'social', label: 'Social or relationship reason' },
+        { value: 'passion', label: 'Pure passion / always wanted to' },
+      ],
+    });
+  }
+
+  return {
+    needsClarification: questions.length > 0,
+    questions: questions.slice(0, 3), // max 3
+    realityCheck,
+  };
+}
+
+/** Domain-aware specificity options so questions feel tailored. */
+function buildSpecificityOptions(
+  domain: string,
+  category: string
+): GoalClarificationOutput['questions'][0]['options'] {
+  const cat = category.toLowerCase();
+
+  if (cat.includes('boxing') || cat.includes('martial')) {
+    return [
+      { value: 'fitness', label: 'Fitness & cardio through boxing' },
+      { value: 'self_defense', label: 'Self-defense basics' },
+      { value: 'technique', label: 'Technique & form (bags, shadowboxing)' },
+      { value: 'competition', label: 'Competitive sparring or amateur bouts' },
+    ];
+  }
+  if (cat.includes('guitar') || cat.includes('music')) {
+    return [
+      { value: 'casual', label: 'Play songs for fun / personal enjoyment' },
+      { value: 'songs', label: 'Learn specific songs I love' },
+      { value: 'theory', label: 'Music theory & technique fundamentals' },
+      { value: 'perform', label: 'Perform or record music' },
+    ];
+  }
+  if (cat.includes('coding') || cat.includes('programming') || cat.includes('software')) {
+    return [
+      { value: 'job', label: 'Get a job as a developer' },
+      { value: 'project', label: 'Build a specific project or app' },
+      { value: 'freelance', label: 'Freelance / side income' },
+      { value: 'skills', label: 'Improve existing coding skills' },
+    ];
+  }
+  if (domain === 'Financial') {
+    return [
+      { value: 'save', label: 'Build savings / emergency fund' },
+      { value: 'invest', label: 'Start investing (stocks, index funds)' },
+      { value: 'debt', label: 'Pay off debt' },
+      { value: 'income', label: 'Increase income' },
+    ];
+  }
+  if (domain === 'Career') {
+    return [
+      { value: 'new_job', label: 'Land a new job' },
+      { value: 'promotion', label: 'Get promoted in current role' },
+      { value: 'skills', label: 'Build skills for career growth' },
+      { value: 'business', label: 'Start a business or freelance' },
+    ];
+  }
+  // Generic fallback
+  return [
+    { value: 'beginner_fundamentals', label: 'Learn the fundamentals from scratch' },
+    { value: 'intermediate_improve', label: 'Improve my existing skills' },
+    { value: 'specific_outcome', label: 'Achieve a specific measurable outcome' },
+    { value: 'habit', label: 'Make it a consistent habit in my life' },
+  ];
+}
+
 export async function analyzeGoal(context: AgentContext): Promise<Agent1Output> {
   const { content } = await callReasoning({
     messages: [
@@ -201,5 +385,5 @@ export async function analyzeGoal(context: AgentContext): Promise<Agent1Output> 
   }
 
   const raw = JSON.parse(content) as unknown;
-  return validateAndNormalize(raw);
+  return validateAndNormalize(raw, context.goal);
 }

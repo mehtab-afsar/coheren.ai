@@ -1,12 +1,20 @@
-import { CheckCircle2, Clock, ArrowRight, Sparkles, SkipForward, X, Zap, BookOpen, FileText, Flame, Brain, Rocket } from 'lucide-react';
+import { CheckCircle2, Clock, ArrowRight, Sparkles, SkipForward, X, Zap, Brain, BookOpen, Lightbulb, ListChecks } from 'lucide-react';
 import { useStore } from '@core/store/useStore';
 import { tokens, text, card } from '@core/design-system';
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { useCinemaMode } from '../hooks/useCinemaMode';
 import { useTaskActions } from '../hooks/useTaskActions';
 import { useBreakpoint } from '@hooks/useBreakpoint';
+import { useFocusSession } from '@hooks/useFocusSession';
 import TaskFeedbackModal from '../components/TaskFeedbackModal';
 import SwipeableCard from '../components/SwipeableCard';
+import TodayHeader from './today/TodayHeader';
+import SmartBannerSlot from './today/SmartBannerSlot';
+import FocusCard from './today/FocusCard';
+import AllDoneCard from './today/AllDoneCard';
+import RestDayCard from './today/RestDayCard';
+import FocusComplete from './today/FocusComplete';
+import AssessmentCard from '../components/AssessmentCard';
 
 export default function TodayView({
   onNavigate,
@@ -21,12 +29,13 @@ export default function TodayView({
     streak,
     completionRate,
     canAdvanceDay,
-    advanceDay,
   } = useStore();
 
   const { cinemaTaskId, setCinemaTaskId, getYouTubeId, timeToSeconds } = useCinemaMode();
   const { isMobile } = useBreakpoint();
+  const { startSession, updateElapsed, endSession } = useFocusSession();
   const completeTask = useStore((state) => state.completeTask);
+  const completeAssessment = useStore((state) => state.completeAssessment);
   const skipTask = useStore((state) => state.skipTask);
   const setTaskFeedback = useStore((state) => state.setTaskFeedback);
   const { completingTaskId, skippingTaskId, skipReasonTaskId, setSkipReasonTaskId, particles, showSkipMessage, pendingFeedbackTaskId, submitFeedback, dismissFeedback, handleCompleteTask, handleSkipTask, confirmSkip } = useTaskActions(completeTask, skipTask, setTaskFeedback);
@@ -35,50 +44,25 @@ export default function TodayView({
   const [quickMode, setQuickMode] = useState(false);
   // Ease Back Mode — auto-limits to 1 task on re-engagement, dismissed when user wants all
   const [easeBackMode, setEaseBackMode] = useState(true);
-  // Cinema Mode panel: null = closed, 'guide' | 'notes' | 'steps' = open
-  const [cinemaTab, setCinemaTab] = useState<'guide' | 'notes' | 'steps' | null>(null);
+  // Show all tasks below FocusCard
+  const [_showAllTasks, setShowAllTasks] = useState(false);
   // Ref to the YouTube iframe so we can postMessage it
   const cinemaIframeRef = useRef<HTMLIFrameElement>(null);
   // Tracks current video playback position from YouTube infoDelivery messages
   const cinemaCurrentTimeRef = useRef<number>(0);
-  // Saved resume position (seconds) from a previous session
-  const [cinemaResumeTime, setCinemaResumeTime] = useState<number | null>(null);
-  // Override the embed start time (null = use watchFrom, number = resume/seek target)
-  const [cinemaStartOverride, setCinemaStartOverride] = useState<number | null>(null);
   // Focus Timer (count-up while cinema is open)
   const [focusSeconds, setFocusSeconds] = useState(0);
   const [focusPaused, setFocusPaused] = useState(false);
   const focusIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Note entries: structured per-entry notes with optional video timestamp
-  interface NoteEntry { id: string; text: string; videoTs?: string; createdAt: string; }
-  const [noteEntries, setNoteEntries] = useState<NoteEntry[]>([]);
-  const [noteInput, setNoteInput] = useState('');
-  const loadNoteEntries = (taskId: string): NoteEntry[] => {
-    try {
-      const raw = localStorage.getItem(`note_entries_${taskId}`);
-      if (raw) return JSON.parse(raw);
-      // Migrate old single-string note to a single entry
-      const old = localStorage.getItem(`note_${taskId}`);
-      if (old?.trim()) return [{ id: 'legacy', text: old.trim(), createdAt: new Date().toISOString() }];
-    } catch { /* ignore */ }
-    return [];
-  };
-  const saveNoteEntries = (taskId: string, entries: NoteEntry[]) => {
-    try { localStorage.setItem(`note_entries_${taskId}`, JSON.stringify(entries)); } catch { /* ignore */ }
-  };
+  // FocusComplete overlay
+  const [showFocusComplete, setShowFocusComplete] = useState(false);
 
-  // Step completion state per task (set of completed step indices)
-  const [stepsCompleted, setStepsCompleted] = useState<Set<number>>(new Set());
-  const loadStepsCompleted = (taskId: string): Set<number> => {
-    try {
-      const raw = localStorage.getItem(`steps_done_${taskId}`);
-      return raw ? new Set<number>(JSON.parse(raw)) : new Set();
-    } catch { return new Set(); }
-  };
-  const saveStepsCompleted = (taskId: string, set: Set<number>) => {
-    try { localStorage.setItem(`steps_done_${taskId}`, JSON.stringify([...set])); } catch { /* ignore */ }
-  };
+  // Note input (single line, saved to localStorage per task)
+  const [noteInput, setNoteInput] = useState('');
+  // Focus mode: step checklist + mobile tab (steps vs watch)
+  const [checkedSteps, setCheckedSteps] = useState<Set<number>>(new Set());
+  const [focusTab, setFocusTab] = useState<'steps' | 'watch'>('steps');
 
   // Listen for YouTube infoDelivery postMessages to track current time
   useEffect(() => {
@@ -101,9 +85,15 @@ export default function TodayView({
       if (focusIntervalRef.current) { clearInterval(focusIntervalRef.current); focusIntervalRef.current = null; }
       return;
     }
-    focusIntervalRef.current = setInterval(() => setFocusSeconds(s => s + 1), 1000);
+    focusIntervalRef.current = setInterval(() => {
+      setFocusSeconds(s => {
+        const next = s + 1;
+        if (next % 10 === 0) updateElapsed(next);
+        return next;
+      });
+    }, 1000);
     return () => { if (focusIntervalRef.current) { clearInterval(focusIntervalRef.current); focusIntervalRef.current = null; } };
-  }, [cinemaTaskId, focusPaused]);
+  }, [cinemaTaskId, focusPaused, updateElapsed]);
 
   // Pause the embedded YouTube video via postMessage (requires enablejsapi=1)
   const pauseYouTube = useCallback(() => {
@@ -112,78 +102,8 @@ export default function TodayView({
       '*'
     );
   }, []);
-
-  // Seek back N seconds in the YouTube video
-  const seekBack = useCallback((seconds = 10) => {
-    const target = Math.max(0, cinemaCurrentTimeRef.current - seconds);
-    cinemaIframeRef.current?.contentWindow?.postMessage(
-      JSON.stringify({ event: 'command', func: 'seekTo', args: [target, true] }),
-      '*'
-    );
-    cinemaCurrentTimeRef.current = target;
-  }, []);
-
-  // Switch cinema panel — pause video whenever switching
-  const switchCinemaTab = useCallback((tab: 'guide' | 'notes' | 'steps') => {
-    pauseYouTube();
-    setCinemaTab(prev => prev === tab ? null : tab); // toggle: click active = close
-  }, [pauseYouTube]);
-  // ── Onboarding Checklist (first 7 days only) ─────────────────────────────
-  const CHECKLIST_DISMISS_KEY = 'onboard_checklist_dismissed';
-  const [checklistDismissed, setChecklistDismissed] = useState(
-    () => { try { return localStorage.getItem(CHECKLIST_DISMISS_KEY) === '1'; } catch { return false; } }
-  );
-  // Derive checklist item completion
-  const checklistItems = [
-    {
-      id: 'task1',
-      label: 'Complete your first task',
-      done: tasks.filter(t => t.completed).length > 0,
-    },
-    {
-      id: 'focus',
-      label: 'Try a Focus Session',
-      done: (() => { try { return localStorage.getItem('onboard_focus_done') === '1'; } catch { return false; } })(),
-    },
-    {
-      id: 'note',
-      label: 'Write a note during a session',
-      done: (() => { try { return Object.keys(localStorage).some(k => k.startsWith('note_') && Boolean(localStorage.getItem(k))); } catch { return false; } })(),
-    },
-    {
-      id: 'streak3',
-      label: 'Hit a 3-day streak',
-      done: streak >= 3,
-    },
-    {
-      id: 'journey',
-      label: 'Check your Journey map',
-      done: (() => { try { return localStorage.getItem('onboard_journey_done') === '1'; } catch { return false; } })(),
-    },
-  ];
-  const checklistAllDone = checklistItems.every(i => i.done);
-  const showChecklist = currentDay <= 7 && !checklistDismissed && !checklistAllDone;
-
-  // Weekly recap dismiss (persisted per session per week boundary)
-  const weekRecapKey = `weekRecap_dismissed_day${currentDay}`;
-  const [weekRecapDismissed, setWeekRecapDismissed] = useState(
-    () => sessionStorage.getItem(weekRecapKey) === '1'
-  );
-  const dismissWeekRecap = () => {
-    sessionStorage.setItem(weekRecapKey, '1');
-    setWeekRecapDismissed(true);
-  };
-
   // Streak milestone banner (Day 3, 7, 14, 30, 60, 90)
   const STREAK_MILESTONES = [3, 7, 14, 30, 60, 90];
-  const STREAK_MESSAGES: Record<number, string> = {
-    3:  "The first 3 days are the hardest. You did it.",
-    7:  "One full week. You're officially consistent.",
-    14: "Two weeks. Your brain is already rewiring.",
-    30: "30 days. This is who you are now.",
-    60: "60 days. Most people never make it here.",
-    90: "90 days. You are unstoppable.",
-  };
   const milestoneKey = `streak-milestone-${streak}`;
   const [milestoneDismissed, setMilestoneDismissed] = useState(
     () => { try { return Boolean(localStorage.getItem(milestoneKey)); } catch { return false; } }
@@ -218,30 +138,26 @@ export default function TodayView({
   // List tasks: everything except the hero task (still respects quickMode/easeBack filtering)
   const listTasks = heroTask ? visibleTasks.filter(t => t.id !== heroTask.id) : visibleTasks;
 
-  // Weekly recap: first day of a new week (day 8, 15, 22…)
-  const isNewWeekStart = currentDay > 7 && currentDay % 7 === 1;
-  const lastWeekTasks = tasks.filter(t => t.day >= currentDay - 7 && t.day < currentDay);
-  const lastWeekCompleted = lastWeekTasks.filter(t => t.completed).length;
-  const lastWeekRate = lastWeekTasks.length > 0
-    ? Math.round((lastWeekCompleted / lastWeekTasks.length) * 100)
-    : 0;
-  const showWeekRecap = isNewWeekStart && !weekRecapDismissed && lastWeekTasks.length > 0;
+  // Derived values for new sub-components
+  const isRestDay = todaysTasks.some(t =>
+    (t.type as string) === 'rest' || t.title.toLowerCase().includes('rest')
+  );
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
-  };
+  // AllDoneCard recap stats
+  const minutesToday = completedTasks.reduce((sum, t) => sum + (t.duration ?? 0), 0);
+  const taskTypeSummary = (() => {
+    const counts: Record<string, number> = {};
+    completedTasks.forEach(t => { counts[t.type] = (counts[t.type] ?? 0) + 1; });
+    return Object.entries(counts).map(([type, n]) => `${n} ${type}`).join(' · ');
+  })();
+
+  const userName = universalProfile?.name ?? roadmap?.title ?? 'there';
+  const currentGoalTitle = useStore(s => s.currentGoal?.specificGoal) ?? roadmap?.title;
+  const goalSubtitle = currentGoalTitle ? `Day ${currentDay} of your ${currentGoalTitle.toLowerCase()} journey` : undefined;
 
   const formatDuration = (minutes: number) => {
     if (minutes < 60) return `${minutes} min`;
     return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
-  };
-
-  const handleAdvanceDay = () => {
-    const success = advanceDay();
-    if (success) window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // ── Cinema Mode data ─────────────────────────────────────────────────────
@@ -250,84 +166,38 @@ export default function TodayView({
   const cinemaVideoId = cinemaResource?.type === 'video' ? getYouTubeId(cinemaResource.url) : null;
   const cinemaEmbedUrl = cinemaVideoId ? (() => {
     const p = new URLSearchParams();
-    // cinemaStartOverride: user chose Resume (specific second) or seek back
-    if (cinemaStartOverride !== null) {
-      p.set('start', String(cinemaStartOverride));
-    } else if (cinemaResource?.watchFrom) {
-      p.set('start', String(timeToSeconds(cinemaResource.watchFrom)));
-    }
+    if (cinemaResource?.watchFrom) p.set('start', String(timeToSeconds(cinemaResource.watchFrom)));
     if (cinemaResource?.watchTo) p.set('end', String(timeToSeconds(cinemaResource.watchTo)));
     p.set('autoplay', '1');
     p.set('rel', '0');
-    p.set('enablejsapi', '1'); // required for postMessage pause/play/seek control
+    p.set('enablejsapi', '1');
     return `https://www.youtube.com/embed/${cinemaVideoId}?${p.toString()}`;
   })() : null;
 
-  const hasCinemaMode = (task: typeof todaysTasks[0]) =>
-    !task.completed && (
-      (task.resources?.primary?.type === 'video') ||
-      (task.steps?.length ?? 0) > 0 ||
-      (task.tips?.length ?? 0) > 0
-    );
+  const hasCinemaMode = (task: typeof todaysTasks[0]) => !task.completed;
 
-  // Check if a task has a saved resume position
-  const hasResumePosition = (task: typeof todaysTasks[0]) => {
-    if (!hasCinemaMode(task)) return false;
-    const vidId = task.resources?.primary?.type === 'video'
-      ? getYouTubeId(task.resources.primary.url)
-      : null;
-    const savedRaw = vidId ? localStorage.getItem(`cinema_pos_${vidId}`) : null;
-    const savedSecs = savedRaw ? parseInt(savedRaw) : 0;
-    return savedSecs > 10;
-  };
-
-  // Open cinema: check for saved resume position, load note, open guide panel
+  // Open cinema: start timer and session
   const openCinema = (taskId: string) => {
     try { localStorage.setItem('onboard_focus_done', '1'); } catch { /* ignore */ }
     setFocusSeconds(0);
     setFocusPaused(false);
-    setNoteEntries(loadNoteEntries(taskId));
     setNoteInput('');
-    setStepsCompleted(loadStepsCompleted(taskId));
-    const task = todaysTasks.find(t => t.id === taskId);
-    const vidId = task?.resources?.primary?.type === 'video'
-      ? getYouTubeId(task.resources.primary.url)
-      : null;
-    const savedRaw = vidId ? localStorage.getItem(`cinema_pos_${vidId}`) : null;
-    const savedSecs = savedRaw ? parseInt(savedRaw) : 0;
+    setCheckedSteps(new Set());
+    setFocusTab('steps');
     cinemaCurrentTimeRef.current = 0;
-    setCinemaResumeTime(savedSecs > 10 ? savedSecs : null); // only offer resume if meaningfully past start
-    setCinemaStartOverride(null);
     setCinemaTaskId(taskId);
-    setCinemaTab('guide');
+    const task = todaysTasks.find(t => t.id === taskId);
+    startSession(taskId, task?.title ?? taskId);
   };
 
-
-  // Close cinema: save current position for future resume, then pause & close
+  // Close cinema: save video position, pause, end session
   const closeCinema = () => {
     if (cinemaVideoId && cinemaCurrentTimeRef.current > 5) {
       localStorage.setItem(`cinema_pos_${cinemaVideoId}`, String(Math.floor(cinemaCurrentTimeRef.current)));
     }
     pauseYouTube();
+    endSession();
     setCinemaTaskId(null);
-    setCinemaStartOverride(null);
-    setCinemaResumeTime(null);
-  };
-
-  // Format raw seconds as M:SS for resume prompt
-  const formatSeconds = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
-    return `${m}:${String(sec).padStart(2, '0')}`;
-  };
-
-  // Format MM:SS for display
-  const formatTimestamp = (t?: string) => {
-    if (!t) return null;
-    const parts = t.split(':').map(Number);
-    if (parts.length === 2) return `${parts[0]}:${String(parts[1]).padStart(2, '0')}`;
-    if (parts.length === 3) return `${parts[0]}h ${parts[1]}m ${String(parts[2]).padStart(2, '0')}s`;
-    return t;
   };
 
   return (
@@ -411,626 +281,394 @@ export default function TodayView({
         }
       `}</style>
 
-      {/* ── Cinema / Focus Mode ─────────────────────────────────────────── */}
+      {/* ── Focus Mode ───────────────────────────────────────────────────── */}
       {cinemaTask && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9800, display: 'flex', backgroundColor: '#04040c' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9800, display: 'flex', flexDirection: 'column', backgroundColor: '#04040c' }}>
 
-          {/* ── Main area: video + footer ── */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative' }}>
+          {/* Top bar: title + timer + close */}
+          <div style={{ padding: '0 24px 0', paddingTop: 'max(20px, env(safe-area-inset-top))', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+            <span style={{ flex: 1, fontSize: 13, color: 'rgba(255,255,255,0.5)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {cinemaTask.title}
+            </span>
+            {/* Focus timer — count-up with ring */}
+            {(() => {
+              const estSecs = cinemaTask.duration * 60;
+              const progress = Math.min(focusSeconds / estSecs, 1);
+              const circumference = 2 * Math.PI * 13;
+              const mins = Math.floor(focusSeconds / 60);
+              const secs = focusSeconds % 60;
+              return (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 }}>
+                  <svg width="32" height="32" viewBox="0 0 32 32" style={{ transform: 'rotate(-90deg)' }}>
+                    <circle cx="16" cy="16" r="13" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="2.5" />
+                    <circle cx="16" cy="16" r="13" fill="none" stroke={progress >= 1 ? '#a78bfa' : tokens.colors.primary} strokeWidth="2.5"
+                      strokeDasharray={`${progress * circumference} ${circumference}`} strokeLinecap="round"
+                      style={{ transition: 'stroke-dasharray 1s linear' }} />
+                  </svg>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.75)', fontVariantNumeric: 'tabular-nums' }}>
+                    {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
+                  </span>
+                  <button
+                    onClick={() => setFocusPaused(p => !p)}
+                    title={focusPaused ? 'Resume timer' : 'Pause timer'}
+                    style={{ width: 28, height: 28, borderRadius: 7, border: 'none', cursor: 'pointer', backgroundColor: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    {focusPaused
+                      ? <svg width="10" height="12" viewBox="0 0 10 12" fill="currentColor"><path d="M0 0l10 6-10 6z"/></svg>
+                      : <svg width="10" height="12" viewBox="0 0 10 12" fill="currentColor"><rect x="0" y="0" width="3.5" height="12"/><rect x="6.5" y="0" width="3.5" height="12"/></svg>
+                    }
+                  </button>
+                </div>
+              );
+            })()}
+            <button
+              onClick={closeCinema}
+              style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, cursor: 'pointer', color: 'rgba(255,255,255,0.6)' }}
+            >
+              <X size={16} strokeWidth={2} />
+            </button>
+          </div>
 
-            {/* Task meta — top bar */}
-            <div style={{ padding: '20px 24px 0', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
-                {(() => {
-                  const typeColors: Record<string, { bg: string; text: string }> = {
-                    practice: { bg: 'rgba(124,58,237,0.15)', text: '#a78bfa' },
-                    learning: { bg: 'rgba(14,165,233,0.15)', text: '#38bdf8' },
-                    reflection: { bg: 'rgba(124,58,237,0.15)', text: '#a78bfa' },
-                  };
-                  const c = typeColors[cinemaTask.type] ?? { bg: 'rgba(255,255,255,0.08)', text: 'rgba(255,255,255,0.5)' };
-                  return (
-                    <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: c.text, backgroundColor: c.bg, padding: '2px 8px', borderRadius: 99, flexShrink: 0 }}>
-                      {cinemaTask.type}
-                    </span>
-                  );
-                })()}
-                <span style={{ fontSize: 13, fontWeight: 400, color: 'rgba(255,255,255,0.65)', lineHeight: 1.4, letterSpacing: '-0.01em', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {cinemaTask.title}
-                </span>
-              </div>
+          {/* Main content — split layout on desktop, tabs on mobile */}
+          <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
 
-              {/* Focus Timer — count-up with circular progress */}
-              {(() => {
-                const estSecs = cinemaTask.duration * 60;
-                const progress = Math.min(focusSeconds / estSecs, 1);
-                const circumference = 2 * Math.PI * 13;
-                const mins = Math.floor(focusSeconds / 60);
-                const secs = focusSeconds % 60;
-                return (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                    {/* Ring + time */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                      <svg width="32" height="32" viewBox="0 0 32 32" style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
-                        <circle cx="16" cy="16" r="13" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="2.5" />
-                        <circle
-                          cx="16" cy="16" r="13" fill="none"
-                          stroke={progress >= 1 ? '#a78bfa' : tokens.colors.primary}
-                          strokeWidth="2.5"
-                          strokeDasharray={`${progress * circumference} ${circumference}`}
-                          strokeLinecap="round"
-                          style={{ transition: 'stroke-dasharray 1s linear' }}
-                        />
-                      </svg>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.75)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
-                        {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
-                      </span>
-                    </div>
-                    {/* Pause/resume */}
-                    <button
-                      onClick={() => setFocusPaused(p => !p)}
-                      title={focusPaused ? 'Resume timer' : 'Pause timer'}
-                      style={{ width: 28, height: 28, borderRadius: 7, border: 'none', cursor: 'pointer', backgroundColor: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}
-                      onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; }}
-                    >
-                      {focusPaused
-                        ? <svg width="10" height="12" viewBox="0 0 10 12" fill="currentColor"><path d="M0 0l10 6-10 6z"/></svg>
-                        : <svg width="10" height="12" viewBox="0 0 10 12" fill="currentColor"><rect x="0" y="0" width="3.5" height="12"/><rect x="6.5" y="0" width="3.5" height="12"/></svg>
-                      }
-                    </button>
-                  </div>
-                );
-              })()}
-
-              {/* Close button */}
-              <button
-                onClick={closeCinema}
-                title="Close and save position"
-                style={{
+            {/* Desktop split: Left panel = steps/tips, Right = video */}
+            {!isMobile ? (
+              <>
+                {/* ── Left: Step checklist ── */}
+                <div style={{
+                  width: cinemaVideoId ? '380px' : '100%',
+                  display: 'flex', flexDirection: 'column',
+                  overflowY: 'auto', padding: '28px 24px 28px 32px',
+                  borderRight: cinemaVideoId ? '1px solid rgba(255,255,255,0.06)' : 'none',
                   flexShrink: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 32,
-                  height: 32,
-                  backgroundColor: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  color: 'rgba(255,255,255,0.6)',
-                  transition: 'all 0.15s'
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.12)';
-                  e.currentTarget.style.color = 'rgba(255,255,255,0.9)';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)';
-                  e.currentTarget.style.color = 'rgba(255,255,255,0.6)';
-                }}
-              >
-                <X size={16} strokeWidth={2} />
-              </button>
-            </div>
+                }}>
+                  {/* Task title */}
+                  <h2 style={{ fontSize: 'clamp(18px, 2.5vw, 24px)', fontWeight: 700, color: '#f3e8ff', letterSpacing: '-0.025em', margin: '0 0 6px', lineHeight: 1.25 }}>
+                    {cinemaTask.title}
+                  </h2>
+                  {cinemaTask.description && (
+                    <p style={{ fontSize: 13, color: 'rgba(196,181,253,0.55)', lineHeight: 1.6, margin: '0 0 20px' }}>
+                      {cinemaTask.description.split('. ').slice(0, 2).join('. ')}{cinemaTask.description.split('. ').length > 2 ? '.' : ''}
+                    </p>
+                  )}
 
-            {/* Resume banner — shown when a previous session position was saved */}
-            {cinemaResumeTime && cinemaVideoId && (
-              <div style={{ margin: '10px 24px 0', padding: '10px 16px', backgroundColor: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.25)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, animation: 'cinemaSlideIn 0.2s ease' }}>
-                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', flex: 1 }}>
-                  Last session: <span style={{ color: 'rgba(255,255,255,0.8)', fontVariantNumeric: 'tabular-nums' }}>{formatSeconds(cinemaResumeTime)}</span>
-                </span>
-                <button
-                  onClick={() => { setCinemaStartOverride(cinemaResumeTime); setCinemaResumeTime(null); }}
-                  style={{ padding: '5px 14px', backgroundColor: tokens.colors.primary, border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 600, color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap', transition: 'opacity 0.15s' }}
-                  onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
-                  onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-                >
-                  Resume
-                </button>
-                <button
-                  onClick={() => setCinemaResumeTime(null)}
-                  style={{ padding: '5px 12px', background: 'none', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 7, fontSize: 12, color: 'rgba(255,255,255,0.35)', cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.15s' }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)'; e.currentTarget.style.color = 'rgba(255,255,255,0.65)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = 'rgba(255,255,255,0.35)'; }}
-                >
-                  Start over
-                </button>
-              </div>
-            )}
+                  {/* Steps */}
+                  {Array.isArray((cinemaTask as Record<string, unknown>).steps) && ((cinemaTask as Record<string, unknown>).steps as string[]).length > 0 && (
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                        <ListChecks size={13} color="#a78bfa" strokeWidth={2} />
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                          Steps ({checkedSteps.size}/{((cinemaTask as Record<string, unknown>).steps as string[]).length})
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {((cinemaTask as Record<string, unknown>).steps as string[]).map((step, i) => {
+                          const done = checkedSteps.has(i);
+                          return (
+                            <button
+                              key={i}
+                              onClick={() => setCheckedSteps(prev => {
+                                const next = new Set(prev);
+                                if (next.has(i)) next.delete(i); else next.add(i);
+                                return next;
+                              })}
+                              style={{
+                                display: 'flex', alignItems: 'flex-start', gap: 12,
+                                background: done ? 'rgba(167,139,250,0.1)' : 'rgba(255,255,255,0.04)',
+                                border: `1px solid ${done ? 'rgba(167,139,250,0.25)' : 'rgba(255,255,255,0.07)'}`,
+                                borderRadius: 12, padding: '14px 16px',
+                                cursor: 'pointer', textAlign: 'left', width: '100%',
+                                transition: 'all 150ms ease',
+                              }}
+                            >
+                              <div style={{
+                                width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                                border: `2px solid ${done ? '#a78bfa' : 'rgba(255,255,255,0.2)'}`,
+                                background: done ? '#7c3aed' : 'transparent',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                marginTop: 2, transition: 'all 150ms ease',
+                              }}>
+                                {done && <svg width="9" height="7" viewBox="0 0 9 7" fill="none"><path d="M1 3.5L3.5 6L8 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <span style={{
+                                  display: 'block',
+                                  fontSize: 10, fontFamily: 'monospace',
+                                  fontVariantNumeric: 'tabular-nums',
+                                  color: done ? '#a78bfa' : 'rgba(167,139,250,0.4)',
+                                  marginBottom: 3, letterSpacing: '0.05em',
+                                  transition: 'color 150ms ease',
+                                }}>
+                                  {String(i + 1).padStart(2, '0')}
+                                </span>
+                                <span style={{
+                                  fontSize: 15, color: done ? 'rgba(196,181,253,0.5)' : 'rgba(255,255,255,0.85)',
+                                  lineHeight: 1.55, textDecoration: done ? 'line-through' : 'none',
+                                  transition: 'all 150ms ease',
+                                }}>
+                                  {typeof step === 'string' ? step : (step as Record<string, unknown>).details as string ?? String(step)}
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
-            {/* Video — centered */}
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px 24px', minHeight: 0 }}>
-              {cinemaVideoId && cinemaEmbedUrl ? (
-                <div style={{ width: '100%', maxWidth: 960 }}>
-                  <div style={{ position: 'relative', paddingBottom: '56.25%' }}>
+                  {/* Tips */}
+                  {Array.isArray((cinemaTask as Record<string, unknown>).tips) && ((cinemaTask as Record<string, unknown>).tips as string[]).length > 0 && (
+                    <div style={{
+                      background: 'rgba(251,191,36,0.06)',
+                      border: '1px solid rgba(251,191,36,0.15)',
+                      borderRadius: 12, padding: '16px 18px',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                        <Lightbulb size={12} color="#fbbf24" strokeWidth={2} />
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Coach Tips</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {((cinemaTask as Record<string, unknown>).tips as string[]).slice(0, 3).map((tip, i) => (
+                          <p key={i} style={{ fontSize: 12, color: 'rgba(251,191,36,0.8)', margin: 0, lineHeight: 1.5 }}>
+                            · {tip}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Right: Video player — fills edge-to-edge ── */}
+                {cinemaVideoId && cinemaEmbedUrl && (
+                  <div style={{ flex: 1, position: 'relative', background: '#000', minWidth: 0 }}>
                     <iframe
-                      key={cinemaEmbedUrl} /* remount when URL changes (resume/start-over) */
+                      key={cinemaEmbedUrl}
                       ref={cinemaIframeRef}
                       src={cinemaEmbedUrl}
                       title={cinemaTask.title}
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                       allowFullScreen
-                      onLoad={() => {
-                        // Subscribe to YouTube infoDelivery events
-                        cinemaIframeRef.current?.contentWindow?.postMessage('{"event":"listening"}', '*');
-                      }}
-                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none', borderRadius: 10 }}
+                      onLoad={() => { cinemaIframeRef.current?.contentWindow?.postMessage('{"event":"listening"}', '*'); }}
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
                     />
-                  </div>
-
-                  {/* Video controls row — rewind + timeline */}
-                  <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
-                    {/* Rewind 10s button */}
-                    <button
-                      onClick={() => seekBack(10)}
-                      title="Go back 10 seconds"
-                      style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', backgroundColor: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12, color: 'rgba(255,255,255,0.5)', cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.15s' }}
-                      onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = 'rgba(255,255,255,0.8)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(255,255,255,0.5)'; }}
-                    >
-                      ↩ 10s
-                    </button>
-
-                    {/* Timeline indicator */}
-                    {(cinemaResource?.watchFrom || cinemaResource?.watchTo) && (
-                      <div style={{ flex: 1, padding: '7px 12px', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: tokens.colors.primary, boxShadow: `0 0 5px ${tokens.colors.primary}`, flexShrink: 0 }} />
-                          <span style={{ fontSize: 10, color: tokens.colors.primary, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Segment</span>
-                          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', fontVariantNumeric: 'tabular-nums' }}>
-                            {formatTimestamp(cinemaResource?.watchFrom) ?? '0:00'}
-                          </span>
-                          <div style={{ flex: 1, height: 2, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 99, overflow: 'hidden' }}>
-                            <div style={{ height: '100%', background: `linear-gradient(90deg, ${tokens.colors.primary}70, ${tokens.colors.primary})`, borderRadius: 99 }} />
-                          </div>
-                          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', fontVariantNumeric: 'tabular-nums' }}>
-                            {formatTimestamp(cinemaResource?.watchTo) ?? '—'}
-                          </span>
-                          {cinemaResource?.watchMinutes && (
-                            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', whiteSpace: 'nowrap' }}>{cinemaResource.watchMinutes} min</span>
-                          )}
-                        </div>
-                      </div>
+                    {cinemaResource?.watchFrom && (
+                      <p style={{ position: 'absolute', bottom: 8, left: 0, right: 0, fontSize: 11, color: 'rgba(255,255,255,0.3)', textAlign: 'center', margin: 0, pointerEvents: 'none' }}>
+                        Watch from {cinemaResource.watchFrom}{cinemaResource.watchTo ? ` to ${cinemaResource.watchTo}` : ''}
+                      </p>
                     )}
                   </div>
+                )}
 
-                  {/* Video title / channel */}
-                  {cinemaResource?.title && (
-                    <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.28)', marginTop: 8, lineHeight: 1.5 }}>
-                      {cinemaResource.title}
-                      {cinemaResource.channel && <span style={{ marginLeft: 6, color: 'rgba(255,255,255,0.14)' }}>· {cinemaResource.channel}</span>}
+                {/* No video: show description centered */}
+                {!cinemaVideoId && !Array.isArray((cinemaTask as Record<string, unknown>).steps) && cinemaTask.description && (
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
+                    <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.45)', lineHeight: 1.75, textAlign: 'center', maxWidth: 480, margin: 0 }}>
+                      {cinemaTask.description}
                     </p>
-                  )}
-                </div>
-              ) : (
-                /* No video — show description centered */
-                <div style={{ maxWidth: 600, textAlign: 'center' }}>
-                  <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.45)', lineHeight: 1.8 }}>{cinemaTask.description}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Action footer */}
-            <div style={{ padding: '0 24px 24px', flexShrink: 0 }}>
-              {skipReasonTaskId === cinemaTask.id ? (
-                <div style={{ maxWidth: 480, margin: '0 auto' }}>
-                  <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginBottom: 10, textAlign: 'center' }}>What's getting in the way?</p>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-                    {([
-                      { reason: 'time'       as const, storeReason: 'time'       as const, emoji: '⏱️', label: 'No time' },
-                      { reason: 'health'     as const, storeReason: 'health'     as const, emoji: '😓', label: 'Not feeling well' },
-                      { reason: 'difficulty' as const, storeReason: 'difficulty' as const, emoji: '😕', label: 'Too hard' },
-                      { reason: 'external'   as const, storeReason: 'external'   as const, emoji: '📅', label: 'Something came up' },
-                      { reason: 'motivation' as const, storeReason: 'external'   as const, emoji: '🌪️', label: 'Lost motivation' },
-                    ]).map(({ storeReason, emoji, label }) => (
+                  </div>
+                )}
+              </>
+            ) : (
+              /* ── Mobile: Tab switcher ── */
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                {/* Tab bar */}
+                {cinemaVideoId && (
+                  <div style={{ display: 'flex', gap: 0, padding: '0 16px', paddingTop: 8, flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                    {(['steps', 'watch'] as const).map(tab => (
                       <button
-                        key={label}
-                        onClick={() => confirmSkip(cinemaTask.id, storeReason, setCinemaTaskId)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.6)', transition: 'all 120ms ease' }}
-                        onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; }}
+                        key={tab}
+                        onClick={() => setFocusTab(tab)}
+                        style={{
+                          flex: 1, height: 48, border: 'none', cursor: 'pointer',
+                          fontSize: 13, fontWeight: focusTab === tab ? 700 : 400,
+                          background: 'transparent',
+                          color: focusTab === tab ? '#c4b5fd' : 'rgba(255,255,255,0.3)',
+                          borderRadius: 0, transition: 'all 150ms ease',
+                          borderBottom: focusTab === tab ? '2.5px solid #a78bfa' : '2.5px solid transparent',
+                          textTransform: 'capitalize',
+                          letterSpacing: '0.01em',
+                        }}
                       >
-                        <span>{emoji}</span><span>{label}</span>
+                        {tab === 'steps' ? `Steps (${checkedSteps.size}/${((cinemaTask as Record<string, unknown>).steps as string[] | undefined)?.length ?? 0})` : 'Watch'}
                       </button>
                     ))}
                   </div>
-                  <button onClick={() => setSkipReasonTaskId(null)} style={{ width: '100%', background: 'none', border: 'none', fontSize: 12, color: 'rgba(255,255,255,0.2)', cursor: 'pointer', padding: '6px 0' }}>
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', gap: 10, maxWidth: 480, margin: '0 auto' }}>
-                  <button
-                    onClick={() => handleCompleteTask(cinemaTask.id, window.innerWidth / 2, window.innerHeight / 2)}
-                    style={{ flex: 1, padding: '12px 0', backgroundColor: tokens.colors.primary, color: '#fff', border: 'none', borderRadius: 11, fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, boxShadow: `0 4px 20px ${tokens.colors.primary}45`, transition: 'all 0.15s', letterSpacing: '-0.01em' }}
-                    onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 6px 26px ${tokens.colors.primary}55`; }}
-                    onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = `0 4px 20px ${tokens.colors.primary}45`; }}
-                  >
-                    <CheckCircle2 size={15} strokeWidth={2.5} /> Mark done
-                  </button>
-                  <button
-                    onClick={e => handleSkipTask(cinemaTask.id, e)}
-                    style={{ padding: '12px 18px', backgroundColor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 11, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.15s' }}
-                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'rgba(255,255,255,0.35)'; }}
-                  >
-                    <SkipForward size={13} /> Skip
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* ── Right panel: Guide or Notes ── */}
-          {cinemaTab && (
-            <div
-              style={{
-                // Mobile: covers entire cinema screen as an overlay
-                // Desktop: fixed 340px column to the right of the video
-                ...(isMobile
-                  ? { position: 'absolute', inset: 0, zIndex: 10, width: '100%' }
-                  : { width: 340, borderLeft: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }
-                ),
-                backgroundColor: '#0B0C13',
-                display: 'flex',
-                flexDirection: 'column',
-                animation: 'panelSlideIn 0.22s cubic-bezier(0.22,1,0.36,1)',
-              }}
-            >
-              {/* Panel header */}
-              <div style={{ padding: '20px 20px 14px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', gap: 2, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 9, padding: 3 }}>
-                  {([
-                    { id: 'guide' as const, icon: <BookOpen size={12} />, label: 'Guide' },
-                    { id: 'notes' as const, icon: <FileText size={12} />, label: 'Notes' },
-                    ...(cinemaTask.steps?.length ? [{ id: 'steps' as const, icon: <CheckCircle2 size={12} />, label: 'Steps' }] : []),
-                  ]).map(({ id, icon, label }) => (
-                    <button
-                      key={id}
-                      onClick={() => switchCinemaTab(id)}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 5,
-                        padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                        fontSize: 12, fontWeight: 500, transition: 'all 0.15s',
-                        backgroundColor: cinemaTab === id ? 'rgba(255,255,255,0.1)' : 'transparent',
-                        color: cinemaTab === id ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.3)',
-                      }}
-                    >
-                      {icon}{label}
-                    </button>
-                  ))}
-                </div>
-                {/* Back to video — mobile only (panel covers full screen) */}
-                {isMobile && (
-                  <button
-                    onClick={() => setCinemaTab(null)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.4)', padding: '4px 8px' }}
-                  >
-                    <X size={14} /> Close
-                  </button>
-                )}
-              </div>
-
-              {/* Panel content */}
-              <div style={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {cinemaTab === 'guide' && (
-                  <>
-                    {cinemaTask.description && (
-                      <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.75, margin: 0 }}>
-                        {cinemaTask.description}
-                      </p>
-                    )}
-
-                    {(cinemaTask.steps?.length ?? 0) > 0 && (
-                      <div>
-                        <p style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>Steps</p>
-                        <ol style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                          {cinemaTask.steps!.map((step, i) => (
-                            <li key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                              <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: '50%', backgroundColor: `${tokens.colors.primary}20`, border: `1px solid ${tokens.colors.primary}35`, color: tokens.colors.primary, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                {i + 1}
-                              </span>
-                              <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 1.65, paddingTop: 1 }}>{step}</span>
-                            </li>
-                          ))}
-                        </ol>
-                      </div>
-                    )}
-
-                    {(cinemaTask.tips?.length ?? 0) > 0 && (
-                      <div>
-                        <p style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>Tips</p>
-                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          {cinemaTask.tips!.map((tip, i) => (
-                            <li key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                              <span style={{ color: tokens.colors.primary, fontSize: 14, lineHeight: 1.4, flexShrink: 0, marginTop: 1 }}>·</span>
-                              <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', lineHeight: 1.65 }}>{tip}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {cinemaTask.successCriteria && (
-                      <div style={{ padding: '12px 14px', backgroundColor: `${tokens.colors.primary}10`, borderRadius: 10, border: `1px solid ${tokens.colors.primary}22` }}>
-                        <p style={{ fontSize: 10, fontWeight: 700, color: tokens.colors.primary, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 5 }}>Done when</p>
-                        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', lineHeight: 1.65, margin: 0 }}>{cinemaTask.successCriteria}</p>
-                      </div>
-                    )}
-                  </>
                 )}
 
-                {cinemaTab === 'notes' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
-                    {/* Existing entries */}
-                    {noteEntries.length > 0 && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {noteEntries.map(entry => (
-                          <div key={entry.id} style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 9, padding: '10px 12px', border: '1px solid rgba(255,255,255,0.07)' }}>
-                            {entry.videoTs && (
-                              <span style={{ fontSize: 10, color: tokens.colors.primary, fontFamily: 'monospace', display: 'block', marginBottom: 4 }}>⏱ {entry.videoTs}</span>
-                            )}
-                            <p style={{ margin: 0, fontSize: 13, color: 'rgba(255,255,255,0.65)', lineHeight: 1.65 }}>{entry.text}</p>
-                          </div>
+                {/* Steps tab */}
+                {(focusTab === 'steps' || !cinemaVideoId) && (
+                  <div style={{ flex: 1, overflowY: 'auto', padding: '20px 18px 8px' }}>
+                    {/* Task title */}
+                    <h2 style={{ fontSize: 20, fontWeight: 700, color: '#f3e8ff', letterSpacing: '-0.025em', margin: '0 0 12px', lineHeight: 1.25 }}>
+                      {cinemaTask.title}
+                    </h2>
+
+                    {/* Steps */}
+                    {Array.isArray((cinemaTask as Record<string, unknown>).steps) && ((cinemaTask as Record<string, unknown>).steps as string[]).length > 0 && (
+                      <div style={{ marginBottom: 16 }}>
+                        <p style={{ fontSize: 10, fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 10px' }}>
+                          Steps
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {((cinemaTask as Record<string, unknown>).steps as string[]).map((step, i) => {
+                            const done = checkedSteps.has(i);
+                            return (
+                              <button
+                                key={i}
+                                onClick={() => setCheckedSteps(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(i)) next.delete(i); else next.add(i);
+                                  return next;
+                                })}
+                                style={{
+                                  display: 'flex', alignItems: 'flex-start', gap: 12,
+                                  background: done ? 'rgba(167,139,250,0.1)' : 'rgba(255,255,255,0.04)',
+                                  border: `1px solid ${done ? 'rgba(167,139,250,0.25)' : 'rgba(255,255,255,0.07)'}`,
+                                  borderRadius: 12, padding: '14px 16px',
+                                  cursor: 'pointer', textAlign: 'left', width: '100%',
+                                }}
+                              >
+                                <div style={{
+                                  width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                                  border: `2px solid ${done ? '#a78bfa' : 'rgba(255,255,255,0.2)'}`,
+                                  background: done ? '#7c3aed' : 'transparent',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 2,
+                                }}>
+                                  {done && <svg width="9" height="7" viewBox="0 0 9 7" fill="none"><path d="M1 3.5L3.5 6L8 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                  <span style={{
+                                    display: 'block',
+                                    fontSize: 10, fontFamily: 'monospace',
+                                    fontVariantNumeric: 'tabular-nums',
+                                    color: done ? '#a78bfa' : 'rgba(167,139,250,0.4)',
+                                    marginBottom: 3, letterSpacing: '0.05em',
+                                    transition: 'color 150ms ease',
+                                  }}>
+                                    {String(i + 1).padStart(2, '0')}
+                                  </span>
+                                  <span style={{
+                                    fontSize: 15, color: done ? 'rgba(196,181,253,0.5)' : 'rgba(255,255,255,0.85)',
+                                    lineHeight: 1.55, textDecoration: done ? 'line-through' : 'none',
+                                    transition: 'all 150ms ease',
+                                  }}>
+                                    {typeof step === 'string' ? step : (step as Record<string, unknown>).details as string ?? String(step)}
+                                  </span>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Tips */}
+                    {Array.isArray((cinemaTask as Record<string, unknown>).tips) && ((cinemaTask as Record<string, unknown>).tips as string[]).length > 0 && (
+                      <div style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.15)', borderRadius: 12, padding: '12px 14px', marginBottom: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                          <Lightbulb size={12} color="#fbbf24" strokeWidth={2} />
+                          <span style={{ fontSize: 10, fontWeight: 700, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Tips</span>
+                        </div>
+                        {((cinemaTask as Record<string, unknown>).tips as string[]).slice(0, 3).map((tip, i) => (
+                          <p key={i} style={{ fontSize: 12, color: 'rgba(251,191,36,0.8)', margin: '0 0 4px', lineHeight: 1.5 }}>· {tip}</p>
                         ))}
                       </div>
                     )}
-                    {noteEntries.length === 0 && (
-                      <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.22)', margin: 0, lineHeight: 1.5 }}>
-                        Capture key takeaways. Notes are saved per task.
-                      </p>
-                    )}
-                    {/* Input row */}
-                    <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
-                      <input
-                        value={noteInput}
-                        onChange={e => setNoteInput(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter' && noteInput.trim()) {
-                            const entry: NoteEntry = {
-                              id: Date.now().toString(),
-                              text: noteInput.trim(),
-                              videoTs: cinemaCurrentTimeRef.current > 5
-                                ? (() => { const m = Math.floor(cinemaCurrentTimeRef.current / 60); const s = Math.floor(cinemaCurrentTimeRef.current % 60); return `${m}:${String(s).padStart(2, '0')}`; })()
-                                : undefined,
-                              createdAt: new Date().toISOString(),
-                            };
-                            const updated = [...noteEntries, entry];
-                            setNoteEntries(updated);
-                            saveNoteEntries(cinemaTask.id, updated);
-                            setNoteInput('');
-                            try { localStorage.setItem('onboard_note_done', '1'); } catch { /* ignore */ }
-                          }
-                        }}
-                        placeholder="Add a note... (Enter to save)"
-                        style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 9, padding: '9px 12px', fontSize: 13, color: 'rgba(255,255,255,0.75)', outline: 'none', fontFamily: 'inherit' }}
-                        onFocus={e => e.currentTarget.style.borderColor = `${tokens.colors.primary}50`}
-                        onBlur={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'}
-                      />
-                    </div>
                   </div>
                 )}
 
-                {cinemaTab === 'steps' && cinemaTask.steps && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.25)', fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase' }}>Sub-steps</p>
-                      <span style={{ fontSize: 11, color: stepsCompleted.size === cinemaTask.steps.length ? tokens.colors.primary : 'rgba(255,255,255,0.3)' }}>
-                        {stepsCompleted.size}/{cinemaTask.steps.length}
-                      </span>
-                    </div>
-                    {/* Progress bar */}
-                    <div style={{ height: 3, backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 99, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${(stepsCompleted.size / cinemaTask.steps.length) * 100}%`, backgroundColor: tokens.colors.primary, borderRadius: 99, transition: 'width 0.3s ease' }} />
-                    </div>
-                    {cinemaTask.steps.map((step, i) => {
-                      const done = stepsCompleted.has(i);
-                      return (
-                        <button
-                          key={i}
-                          onClick={() => {
-                            const next = new Set(stepsCompleted);
-                            if (done) next.delete(i); else next.add(i);
-                            setStepsCompleted(next);
-                            saveStepsCompleted(cinemaTask.id, next);
-                          }}
-                          style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 12px', backgroundColor: done ? `${tokens.colors.primary}0D` : 'rgba(255,255,255,0.04)', border: `1px solid ${done ? tokens.colors.primary + '30' : 'rgba(255,255,255,0.07)'}`, borderRadius: 10, cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s' }}
-                        >
-                          <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${done ? tokens.colors.primary : 'rgba(255,255,255,0.2)'}`, backgroundColor: done ? tokens.colors.primary : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1, transition: 'all 0.15s' }}>
-                            {done && <CheckCircle2 size={10} color="#fff" strokeWidth={3} />}
-                          </div>
-                          <span style={{ fontSize: 13, color: done ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.7)', lineHeight: 1.65, textDecoration: done ? 'line-through' : 'none', transition: 'all 0.15s' }}>
-                            {step}
-                          </span>
-                        </button>
-                      );
-                    })}
+                {/* Watch tab — fills full height edge-to-edge */}
+                {focusTab === 'watch' && cinemaVideoId && cinemaEmbedUrl && (
+                  <div style={{ flex: 1, position: 'relative', background: '#000' }}>
+                    <iframe
+                      key={cinemaEmbedUrl}
+                      ref={cinemaIframeRef}
+                      src={cinemaEmbedUrl}
+                      title={cinemaTask.title}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      onLoad={() => { cinemaIframeRef.current?.contentWindow?.postMessage('{"event":"listening"}', '*'); }}
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
+                    />
                   </div>
                 )}
               </div>
-            </div>
-          )}
-
-          {/* ── Right rail: side buttons ── */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '20px 12px', backgroundColor: 'rgba(0,0,0,0.3)', borderLeft: '1px solid rgba(255,255,255,0.04)', flexShrink: 0 }}>
-            {/* Guide button */}
-            <button
-              onClick={() => switchCinemaTab('guide')}
-              title="Guide"
-              style={{
-                width: 40, height: 40, borderRadius: 10, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
-                backgroundColor: cinemaTab === 'guide' ? tokens.colors.primary : 'rgba(255,255,255,0.06)',
-                color: cinemaTab === 'guide' ? '#fff' : 'rgba(255,255,255,0.4)',
-                boxShadow: cinemaTab === 'guide' ? `0 4px 16px ${tokens.colors.primary}50` : 'none',
-              }}
-              onMouseEnter={e => { if (cinemaTab !== 'guide') { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; } }}
-              onMouseLeave={e => { if (cinemaTab !== 'guide') { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; } }}
-            >
-              <BookOpen size={16} />
-            </button>
-
-            {/* Notes button */}
-            <button
-              onClick={() => switchCinemaTab('notes')}
-              title="Notes"
-              style={{
-                width: 40, height: 40, borderRadius: 10, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
-                backgroundColor: cinemaTab === 'notes' ? tokens.colors.primary : 'rgba(255,255,255,0.06)',
-                color: cinemaTab === 'notes' ? '#fff' : 'rgba(255,255,255,0.4)',
-                boxShadow: cinemaTab === 'notes' ? `0 4px 16px ${tokens.colors.primary}50` : 'none',
-              }}
-              onMouseEnter={e => { if (cinemaTab !== 'notes') { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; } }}
-              onMouseLeave={e => { if (cinemaTab !== 'notes') { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; } }}
-            >
-              <FileText size={16} />
-            </button>
-
-            {/* Steps button — only if task has steps */}
-            {(cinemaTask.steps?.length ?? 0) > 0 && (
-              <button
-                onClick={() => switchCinemaTab('steps')}
-                title="Steps"
-                style={{
-                  width: 40, height: 40, borderRadius: 10, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
-                  backgroundColor: cinemaTab === 'steps' ? tokens.colors.primary : 'rgba(255,255,255,0.06)',
-                  color: cinemaTab === 'steps' ? '#fff' : 'rgba(255,255,255,0.4)',
-                  boxShadow: cinemaTab === 'steps' ? `0 4px 16px ${tokens.colors.primary}50` : 'none',
-                }}
-                onMouseEnter={e => { if (cinemaTab !== 'steps') { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = 'rgba(255,255,255,0.75)'; } }}
-                onMouseLeave={e => { if (cinemaTab !== 'steps') { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; } }}
-              >
-                <CheckCircle2 size={16} />
-              </button>
             )}
+          </div>
 
-            {/* Spacer then close */}
-            <div style={{ flex: 1 }} />
-            <button
-              onClick={closeCinema}
-              title="Close"
-              style={{ width: 40, height: 40, borderRadius: 10, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.35)', transition: 'all 0.15s' }}
-              onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.14)'; e.currentTarget.style.color = 'rgba(255,255,255,0.8)'; }}
-              onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(255,255,255,0.35)'; }}
-            >
-              <X size={16} />
-            </button>
+          {/* Note input */}
+          <div style={{ padding: '0 24px 12px', flexShrink: 0 }}>
+            <input
+              value={noteInput}
+              onChange={e => setNoteInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && noteInput.trim()) {
+                  try { localStorage.setItem(`note_${cinemaTask.id}`, noteInput.trim()); } catch { /* ignore */ }
+                  setNoteInput('');
+                }
+              }}
+              placeholder="Quick note... (Enter to save)"
+              style={{ width: '100%', backgroundColor: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: 'rgba(255,255,255,0.7)', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          {/* Action footer */}
+          <div style={{ padding: '0 24px', paddingBottom: 'calc(24px + env(safe-area-inset-bottom))', flexShrink: 0 }}>
+            {skipReasonTaskId === cinemaTask.id ? (
+              <div style={{ maxWidth: 480, margin: '0 auto' }}>
+                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginBottom: 10, textAlign: 'center' }}>What's getting in the way?</p>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                  {([
+                    { storeReason: 'time'       as const, emoji: '⏱️', label: 'No time' },
+                    { storeReason: 'health'     as const, emoji: '😓', label: 'Not feeling well' },
+                    { storeReason: 'difficulty' as const, emoji: '😕', label: 'Too hard' },
+                    { storeReason: 'external'   as const, emoji: '📅', label: 'Something came up' },
+                    { storeReason: 'external'   as const, emoji: '🌪️', label: 'Lost motivation' },
+                  ]).map(({ storeReason, emoji, label }) => (
+                    <button
+                      key={label}
+                      onClick={() => confirmSkip(cinemaTask.id, storeReason, setCinemaTaskId)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.6)' }}
+                    >
+                      <span>{emoji}</span><span>{label}</span>
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setSkipReasonTaskId(null)} style={{ width: '100%', background: 'none', border: 'none', fontSize: 12, color: 'rgba(255,255,255,0.2)', cursor: 'pointer', padding: '6px 0' }}>
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 10, maxWidth: 480, margin: '0 auto' }}>
+                <button
+                  onClick={() => setShowFocusComplete(true)}
+                  style={{ flex: 1, padding: '13px 0', backgroundColor: tokens.colors.primary, color: '#fff', border: 'none', borderRadius: 11, fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, boxShadow: `0 4px 20px ${tokens.colors.primary}45`, letterSpacing: '-0.01em' }}
+                >
+                  <CheckCircle2 size={15} strokeWidth={2.5} /> Complete ✓
+                </button>
+                <button
+                  onClick={e => handleSkipTask(cinemaTask.id, e)}
+                  style={{ padding: '13px 18px', backgroundColor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 11, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                >
+                  <SkipForward size={13} /> End early
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* ── Header — greeting + week dots ───────────────────────────────── */}
-      <div style={{ marginBottom: tokens.spacing.xl }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: '10px' }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{
-              fontSize: tokens.typography.sizes.xs,
-              color: tokens.colors.text.tertiary,
-              margin: 0,
-              letterSpacing: '0.01em',
-              lineHeight: 1,
-              marginBottom: '3px',
-            }}>
-              {getGreeting()}
-            </p>
-            <h1 style={{
-              fontSize: 'clamp(18px, 5vw, 24px)',
-              fontWeight: tokens.typography.weights.semibold,
-              color: tokens.colors.text.primary,
-              letterSpacing: '-0.03em',
-              margin: 0,
-              lineHeight: 1.1,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap' as const,
-            }}>
-              {universalProfile.name || 'Welcome back'}
-            </h1>
-          </div>
-          <span style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            padding: '3px 10px',
-            background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-            borderRadius: '99px',
-            fontSize: '11px',
-            fontWeight: tokens.typography.weights.medium,
-            color: '#fff',
-            letterSpacing: '0.02em',
-            boxShadow: '0 2px 8px rgba(124,58,237,0.35)',
-            flexShrink: 0,
-          }}>
-            Day {currentDay}
-          </span>
-        </div>
-
-        {/* Week dots — 7 dots showing this week's progress */}
-        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-          {[1, 2, 3, 4, 5, 6, 7].map(dotDay => {
-            const weekStart = Math.floor((currentDay - 1) / 7) * 7 + 1;
-            const absDay = weekStart + dotDay - 1;
-            const currentWeekDay = ((currentDay - 1) % 7) + 1;
-            const dayTasks = tasks.filter(t => t.day === absDay && !t.skipped);
-            const dayCompleted = dayTasks.length > 0 && dayTasks.every(t => t.completed);
-            const isCurrent = dotDay === currentWeekDay;
-            const isPast = dotDay < currentWeekDay;
-            return (
-              <div
-                key={dotDay}
-                style={{
-                  width: isCurrent ? '10px' : '8px',
-                  height: isCurrent ? '10px' : '8px',
-                  borderRadius: '50%',
-                  backgroundColor: isCurrent
-                    ? '#7c3aed'
-                    : isPast && dayCompleted
-                    ? '#7c3aed'
-                    : isPast && !dayCompleted
-                    ? 'rgba(239,68,68,0.45)'
-                    : '#e5e7eb',
-                  boxShadow: isCurrent ? '0 0 0 2px rgba(124,58,237,0.22)' : 'none',
-                  transition: 'all 0.2s ease',
-                  flexShrink: 0,
-                }}
-              />
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── Stats Strip — streak + energy ───────────────────────────────── */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-        <div style={{
-          flex: 1, display: 'flex', alignItems: 'center', gap: '6px',
-          background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.06)',
-          borderRadius: '12px', padding: '10px 14px',
-        }}>
-          <Flame size={15} strokeWidth={2} color={streak > 0 ? '#f97316' : '#d1d5db'} />
-          <span style={{ fontWeight: 700, fontSize: '14px', color: tokens.colors.text.primary }}>
-            {streak}
-          </span>
-          <span style={{ fontSize: '12px', color: tokens.colors.text.tertiary }}>streak</span>
-        </div>
-        <div style={{
-          flex: 1, display: 'flex', alignItems: 'center', gap: '6px',
-          background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.06)',
-          borderRadius: '12px', padding: '10px 14px',
-        }}>
-          <Zap size={15} strokeWidth={2} color={completionRate >= 80 ? '#22c55e' : completionRate >= 50 ? '#eab308' : '#ef4444'} />
-          <span style={{ fontWeight: 700, fontSize: '14px', color: tokens.colors.text.primary }}>
-            {Math.round(completionRate)}%
-          </span>
-          <span style={{ fontSize: '12px', color: tokens.colors.text.tertiary }}>energy</span>
-          <div style={{ flex: 1, height: '4px', background: '#e5e7eb', borderRadius: '99px', marginLeft: '2px', overflow: 'hidden' }}>
-            <div style={{
-              width: `${Math.round(completionRate)}%`,
-              height: '100%',
-              background: completionRate >= 80 ? '#22c55e' : completionRate >= 50 ? '#eab308' : '#ef4444',
-              borderRadius: '99px',
-              transition: 'width 1s ease-out',
-            }} />
-          </div>
-        </div>
-      </div>
+      {/* ── Header — greeting + AI context line ─────────────────────────── */}
+      <TodayHeader
+        userName={userName}
+        currentDay={currentDay}
+        streak={streak}
+        unreadCount={0}
+        onNotificationTap={() => {}}
+        goalSubtitle={goalSubtitle}
+        tasks={tasks}
+      />
 
       {/* ── Skip Toast ───────────────────────────────────────────────────── */}
       {showSkipMessage && (
@@ -1057,8 +695,8 @@ export default function TodayView({
         </div>
       )}
 
-      {/* ── Smart Banner Slot — max 1 banner, priority: re-engage > milestone > recap ── */}
-      {showReEngagement ? (
+      {/* ── Re-engagement banner (kept inline since it uses local easeBackMode state) ── */}
+      {showReEngagement && (
         <div style={{
           marginBottom: tokens.spacing['2xl'],
           padding: tokens.spacing.xl,
@@ -1098,212 +736,31 @@ export default function TodayView({
             )}
           </div>
         </div>
-      ) : showMilestoneBanner ? (
-        <div style={{
-          background: 'linear-gradient(135deg, #fff7ed 0%, #fef3c7 100%)',
-          border: '1px solid rgba(249,115,22,0.3)',
-          borderLeft: '4px solid #f97316',
-          borderRadius: tokens.borderRadius.lg,
-          padding: `${tokens.spacing.md} ${tokens.spacing.lg}`,
-          marginBottom: tokens.spacing['2xl'],
-          display: 'flex',
-          alignItems: 'center',
-          gap: tokens.spacing.md,
-          boxShadow: '0 4px 20px rgba(249,115,22,0.15)',
-          animation: 'milestoneIn 0.5s cubic-bezier(0.4,0,0.2,1)',
-        }}>
-          <span style={{ fontSize: '28px', flexShrink: 0 }}>🔥</span>
-          <div style={{ flex: 1 }}>
-            <p style={{ fontSize: tokens.typography.sizes.sm, fontWeight: tokens.typography.weights.semibold, color: '#92400e', margin: '0 0 2px', letterSpacing: '-0.01em' }}>
-              {streak}-day streak!
-            </p>
-            <p style={{ fontSize: tokens.typography.sizes.xs, color: '#b45309', margin: 0 }}>
-              {STREAK_MESSAGES[streak]}
-            </p>
-          </div>
-          <button onClick={dismissMilestone} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#b45309', padding: '4px', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-            <X size={16} />
-          </button>
-        </div>
-      ) : showWeekRecap ? (
-        <div style={{
-          marginBottom: tokens.spacing['2xl'],
-          padding: tokens.spacing.xl,
-          backgroundColor: tokens.colors.surface,
-          border: `1px solid ${tokens.colors.borderLight}`,
-          borderRadius: tokens.borderRadius.lg,
-          boxShadow: tokens.shadows.xs,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: tokens.spacing.lg,
-          animation: 'milestoneIn 0.4s cubic-bezier(0.4,0,0.2,1)',
-        }}>
-          <div style={{ flex: 1 }}>
-            <p style={{ fontSize: '11px', color: tokens.colors.text.tertiary, fontWeight: tokens.typography.weights.regular, letterSpacing: '0.06em', textTransform: 'uppercase' as const, margin: '0 0 6px 0' }}>
-              Week {Math.ceil((currentDay - 1) / 7)} recap
-            </p>
-            <p style={{ fontSize: tokens.typography.sizes.base, fontWeight: tokens.typography.weights.light, color: tokens.colors.text.primary, margin: 0, lineHeight: 1.4 }}>
-              You completed <strong style={{ fontWeight: tokens.typography.weights.medium, color: lastWeekRate >= 70 ? '#7c3aed' : tokens.colors.text.primary }}>{lastWeekCompleted} of {lastWeekTasks.length} tasks</strong> last week — {lastWeekRate}% completion rate.
-              {lastWeekRate >= 80 && ' Outstanding consistency.'}
-              {lastWeekRate >= 50 && lastWeekRate < 80 && ' Keep building on this.'}
-              {lastWeekRate < 50 && ' This week, aim for one more.'}
-            </p>
-          </div>
-          <div style={{ position: 'relative', flexShrink: 0, width: 48, height: 48 }}>
-            <svg width="48" height="48" viewBox="0 0 48 48" style={{ transform: 'rotate(-90deg)' }}>
-              <circle cx="24" cy="24" r="18" fill="none" stroke={tokens.colors.gray[100]} strokeWidth="4" />
-              <circle cx="24" cy="24" r="18" fill="none" stroke={lastWeekRate >= 70 ? '#7c3aed' : tokens.colors.primary} strokeWidth="4"
-                strokeDasharray={`${2 * Math.PI * 18 * lastWeekRate / 100} ${2 * Math.PI * 18}`} strokeLinecap="round" />
-            </svg>
-            <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: tokens.typography.weights.medium, color: tokens.colors.text.secondary }}>
-              {lastWeekRate}%
-            </span>
-          </div>
-          <button onClick={dismissWeekRecap} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: tokens.colors.text.tertiary, flexShrink: 0 }}>
-            <X size={14} strokeWidth={1.5} />
-          </button>
-        </div>
-      ) : null}
-
-      {/* ── Onboarding Checklist (first 7 days) ─────────────────────────── */}
-      {showChecklist && (
-        <div style={{
-          marginBottom: tokens.spacing['2xl'],
-          padding: tokens.spacing.xl,
-          backgroundColor: tokens.colors.surface,
-          border: `1px solid ${tokens.colors.borderLight}`,
-          borderRadius: tokens.borderRadius.lg,
-          boxShadow: tokens.shadows.xs,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: tokens.spacing.md }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm }}>
-              <Rocket size={15} color={tokens.colors.primary} strokeWidth={2} />
-              <span style={{ fontSize: tokens.typography.sizes.sm, fontWeight: tokens.typography.weights.semibold, color: tokens.colors.text.primary }}>
-                Getting started
-              </span>
-              <span style={{ fontSize: tokens.typography.sizes.xs, color: tokens.colors.text.tertiary }}>
-                {checklistItems.filter(i => i.done).length}/{checklistItems.length}
-              </span>
-            </div>
-            <button
-              onClick={() => { try { localStorage.setItem(CHECKLIST_DISMISS_KEY, '1'); } catch { /* ignore */ } setChecklistDismissed(true); }}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: tokens.colors.text.tertiary, padding: '2px', display: 'flex' }}
-            >
-              <X size={14} strokeWidth={1.5} />
-            </button>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacing.sm }}>
-            {checklistItems.map(item => (
-              <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm }}>
-                <div style={{
-                  width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
-                  backgroundColor: item.done ? tokens.colors.primary : 'transparent',
-                  border: `2px solid ${item.done ? tokens.colors.primary : tokens.colors.border}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'all 200ms ease',
-                }}>
-                  {item.done && <CheckCircle2 size={10} color="#fff" strokeWidth={3} />}
-                </div>
-                <span style={{
-                  fontSize: tokens.typography.sizes.sm,
-                  color: item.done ? tokens.colors.text.tertiary : tokens.colors.text.secondary,
-                  textDecoration: item.done ? 'line-through' : 'none',
-                  transition: 'all 200ms ease',
-                }}>
-                  {item.label}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
       )}
 
-      {/* ── Hero Focus Card ──────────────────────────────────────────────── */}
-      {heroTask && (
-        <div style={{
-          background: 'linear-gradient(135deg, #1e0a3c 0%, #2d1060 50%, #1a0a2e 100%)',
-          borderRadius: tokens.borderRadius.xl,
-          padding: tokens.spacing['2xl'],
-          marginBottom: tokens.spacing['3xl'],
-          boxShadow: '0 8px 40px rgba(124,58,237,0.3), 0 0 0 1px rgba(167,139,250,0.15)',
-          position: 'relative' as const,
-          overflow: 'hidden' as const,
-        }}>
-          {/* Background glow */}
-          <div style={{
-            position: 'absolute', top: '-30%', right: '-10%',
-            width: '240px', height: '240px',
-            background: 'radial-gradient(circle, rgba(167,139,250,0.12) 0%, transparent 70%)',
-            pointerEvents: 'none',
-          }} />
-
-          {/* Badge row */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, position: 'relative' as const }}>
-            {(() => {
-              const tg: Record<string, { bg: string; label: string }> = {
-                practice:   { bg: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', label: 'Practice' },
-                learning:   { bg: 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)', label: 'Learning' },
-                reflection: { bg: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', label: 'Reflect' },
-              };
-              const g = tg[heroTask.type] ?? { bg: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)', label: heroTask.type };
-              return (
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: g.bg, padding: '3px 10px', borderRadius: 99, textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>
-                  {g.label}
-                </span>
-              );
-            })()}
-            {hasResumePosition(heroTask) && (
-              <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', padding: '3px 10px', borderRadius: 99, letterSpacing: '0.07em', textTransform: 'uppercase' as const }}>
-                ↩ Resume
-              </span>
-            )}
-            <span style={{ fontSize: 11, color: 'rgba(196,181,253,0.5)', display: 'flex', alignItems: 'center', gap: 3, marginLeft: 'auto' }}>
-              <Clock size={11} strokeWidth={1.5} />
-              {formatDuration(heroTask.duration)}
-            </span>
-          </div>
-
-          {/* Title */}
-          <h2 style={{
-            fontSize: 'clamp(17px, 5vw, 22px)',
-            fontWeight: tokens.typography.weights.semibold,
-            color: '#f3e8ff',
-            letterSpacing: '-0.025em',
-            lineHeight: 1.25,
-            margin: '0 0 8px',
-            position: 'relative' as const,
-          }}>
-            {heroTask.title}
-          </h2>
-
-          {/* Description */}
-          {heroTask.description && (
-            <p style={{
-              fontSize: tokens.typography.sizes.sm,
-              color: 'rgba(196,181,253,0.6)',
-              lineHeight: 1.6,
-              margin: '0 0 20px',
-              position: 'relative' as const,
-              maxHeight: '3.2em',
-              overflow: 'hidden',
-            }}>
-              {heroTask.description}
-            </p>
-          )}
-
-          {/* Adjusted badge */}
-          {heroTask.adjustedDifficulty === 'easier' && heroTask.rescheduledFrom && (
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 16, padding: '3px 10px', backgroundColor: 'rgba(167,139,250,0.15)', borderRadius: 99, fontSize: 11, color: '#c4b5fd', position: 'relative' as const }}>
-              ✨ Adjusted for today
-            </div>
-          )}
-
-          {/* Actions */}
+      {/* ── Primary task area: RestDay / AllDone / FocusCard ────────────── */}
+      {isRestDay ? (
+        <RestDayCard onNavigateJourney={() => onNavigate?.('roadmap')} />
+      ) : allDone ? (
+        <AllDoneCard
+          tasksCompleted={completedTasks.length}
+          streak={streak}
+          minutesToday={minutesToday}
+          taskTypeSummary={taskTypeSummary}
+        />
+      ) : heroTask ? (
+        <>
+          {/* Skip reason sheet — shown when skipReasonTaskId === heroTask.id */}
           {skipReasonTaskId === heroTask.id ? (
-            <div style={{ position: 'relative' as const }}>
-              <p style={{ fontSize: 12, color: 'rgba(196,181,253,0.55)', marginBottom: 10 }}>What's getting in the way?</p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+            <div style={{
+              marginBottom: 20,
+              padding: '16px',
+              backgroundColor: '#f9fafb',
+              border: '1px solid #f3f4f6',
+              borderRadius: 16,
+            }}>
+              <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 10, textAlign: 'center' }}>What's getting in the way?</p>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 8, marginBottom: 8 }}>
                 {([
                   { storeReason: 'time'       as const, emoji: '⏱️', label: 'No time' },
                   { storeReason: 'health'     as const, emoji: '😓', label: 'Not feeling well' },
@@ -1314,73 +771,53 @@ export default function TodayView({
                   <button
                     key={label}
                     onClick={() => confirmSkip(heroTask.id, storeReason, setCinemaTaskId)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.6)', transition: 'all 120ms ease' }}
-                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, cursor: 'pointer', fontSize: 12, color: '#374151', transition: 'all 120ms ease' }}
+                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#f3f4f6'; }}
+                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#fff'; }}
                   >
                     <span>{emoji}</span><span>{label}</span>
                   </button>
                 ))}
               </div>
-              <button onClick={() => setSkipReasonTaskId(null)} style={{ width: '100%', background: 'none', border: 'none', fontSize: 12, color: 'rgba(255,255,255,0.2)', cursor: 'pointer', padding: '6px 0' }}>
+              <button onClick={() => setSkipReasonTaskId(null)} style={{ width: '100%', background: 'none', border: 'none', fontSize: 12, color: '#9ca3af', cursor: 'pointer', padding: '6px 0' }}>
                 Cancel
               </button>
             </div>
+          ) : (heroTask.type === 'challenge' || heroTask.type === 'retrieval' || heroTask.type === 'assessment') && heroTask.assessmentQuestions && heroTask.assessmentQuestions.length > 0 ? (
+            <AssessmentCard
+              title={heroTask.title}
+              description={heroTask.description}
+              questions={heroTask.assessmentQuestions}
+              taskType={heroTask.type as 'challenge' | 'retrieval' | 'assessment'}
+              onComplete={(results) => {
+                completeAssessment(heroTask.id, results);
+              }}
+            />
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' as const, position: 'relative' as const }}>
-              {hasCinemaMode(heroTask) && (
-                <button
-                  onClick={() => openCinema(heroTask.id)}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 7,
-                    padding: '11px 22px',
-                    background: 'linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)',
-                    color: '#fff', border: 'none', borderRadius: tokens.borderRadius.md,
-                    fontSize: tokens.typography.sizes.sm, fontWeight: tokens.typography.weights.semibold,
-                    cursor: 'pointer', boxShadow: '0 4px 18px rgba(124,58,237,0.45)',
-                    transition: 'all 0.2s ease', letterSpacing: '-0.01em',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(124,58,237,0.55)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 18px rgba(124,58,237,0.45)'; }}
-                >
-                  <Zap size={14} strokeWidth={2} /> Focus
-                </button>
-              )}
-              <button
-                onClick={e => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  handleCompleteTask(heroTask.id, rect.left + rect.width / 2, rect.top + rect.height / 2);
-                }}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 7,
-                  padding: '11px 22px',
-                  background: hasCinemaMode(heroTask) ? 'rgba(255,255,255,0.08)' : 'linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)',
-                  color: hasCinemaMode(heroTask) ? 'rgba(255,255,255,0.75)' : '#fff',
-                  border: hasCinemaMode(heroTask) ? '1px solid rgba(255,255,255,0.12)' : 'none',
-                  borderRadius: tokens.borderRadius.md,
-                  fontSize: tokens.typography.sizes.sm, fontWeight: tokens.typography.weights.medium,
-                  cursor: 'pointer', transition: 'all 0.2s ease', letterSpacing: '-0.01em',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.14)'; e.currentTarget.style.color = '#fff'; }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.background = hasCinemaMode(heroTask) ? 'rgba(255,255,255,0.08)' : 'linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)';
-                  e.currentTarget.style.color = hasCinemaMode(heroTask) ? 'rgba(255,255,255,0.75)' : '#fff';
-                }}
-              >
-                <CheckCircle2 size={14} strokeWidth={2} /> Done
-              </button>
-              <button
-                onClick={e => handleSkipTask(heroTask.id, e)}
-                style={{ background: 'none', border: 'none', fontSize: 12, color: 'rgba(196,181,253,0.35)', cursor: 'pointer', padding: '4px 6px', marginLeft: 'auto', transition: 'color 150ms ease' }}
-                onMouseEnter={e => { e.currentTarget.style.color = 'rgba(196,181,253,0.65)'; }}
-                onMouseLeave={e => { e.currentTarget.style.color = 'rgba(196,181,253,0.35)'; }}
-              >
-                Not today
-              </button>
-            </div>
+            <FocusCard
+              task={heroTask}
+              tasksRemainingCount={incompleteTasks.length - 1}
+              isCompleting={completingTaskId === heroTask.id}
+              isSkipping={skippingTaskId === heroTask.id}
+              streak={streak}
+              completedCount={completedTasks.length}
+              totalCount={todaysTasks.length}
+              currentDay={currentDay}
+              onStartFocus={(t) => openCinema(t.id)}
+              onMarkDone={(t) => {
+                handleCompleteTask(t.id, window.innerWidth / 2, window.innerHeight / 3);
+              }}
+              onSkip={(t) => {
+                setSkipReasonTaskId(t.id);
+              }}
+              onShowMore={() => { setShowAllTasks(true); }}
+            />
           )}
-        </div>
-      )}
+        </>
+      ) : null}
+
+      {/* ── Smart Banner Slot — milestone / week recap / plan adjustment ── */}
+      {!showReEngagement && <SmartBannerSlot />}
 
       {/* ── Daily Insight ────────────────────────────────────────────────── */}
       {!allDone && (() => {
@@ -1414,14 +851,15 @@ export default function TodayView({
 
       {/* ── Tasks Section ────────────────────────────────────────────────── */}
       <div>
-        {(!heroTask || listTasks.length > 0) && <div style={{
+        {/* Section header — always show when there are list tasks */}
+        {listTasks.length > 0 && <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           marginBottom: tokens.spacing.lg,
           gap: tokens.spacing.md,
         }}>
-          <h2 style={text.h2}>{heroTask ? 'Also today' : "Today's Tasks"}</h2>
+          <h2 style={text.h2}>{heroTask ? "Also Today" : "Today's Tasks"}</h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm }}>
             {/* Quick Mode toggle */}
             {incompleteTasks.length > 1 && (
@@ -1482,6 +920,7 @@ export default function TodayView({
           </div>
         )}
 
+        {/* List tasks — always shown */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacing.xl }}>
           {listTasks.map((task) => {
             const isCompleting = completingTaskId === task.id;
@@ -1614,25 +1053,6 @@ export default function TodayView({
                           </span>
                         );
                       })()}
-                      {/* Resume badge — shows when task has saved position */}
-                      {hasResumePosition(task) && (
-                        <span style={{
-                          fontSize: '9px',
-                          fontWeight: tokens.typography.weights.semibold,
-                          color: '#fff',
-                          background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                          boxShadow: '0 2px 8px rgba(245,158,11,0.3)',
-                          padding: '3px 10px',
-                          borderRadius: '99px',
-                          textTransform: 'uppercase' as const,
-                          letterSpacing: '0.06em',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                        }}>
-                          <span>↩</span> Resume
-                        </span>
-                      )}
                       <span style={{ fontSize: '11px', color: tokens.colors.text.tertiary, display: 'flex', alignItems: 'center', gap: '3px' }}>
                         <Clock size={11} strokeWidth={1.5} />
                         {formatDuration(task.duration)}
@@ -1722,7 +1142,7 @@ export default function TodayView({
                             }}>
                               What's getting in the way?
                             </p>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: tokens.spacing.sm }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: tokens.spacing.sm }}>
                               {([
                                 { storeReason: 'time'       as const, emoji: '⏱️', label: 'No time today' },
                                 { storeReason: 'health'     as const, emoji: '😓', label: 'Not feeling well' },
@@ -1986,7 +1406,7 @@ export default function TodayView({
             {/* CTA buttons */}
             <div style={{ display: 'flex', gap: tokens.spacing.sm, justifyContent: 'center', flexWrap: 'wrap' }}>
               <button
-                onClick={() => onNavigate?.('goals')}
+                onClick={() => onNavigate?.('roadmap')}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -2006,7 +1426,7 @@ export default function TodayView({
                 Review Goals <ArrowRight size={14} strokeWidth={2} />
               </button>
               <button
-                onClick={() => onNavigate?.('library')}
+                onClick={() => onNavigate?.('insights')}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -2029,6 +1449,87 @@ export default function TodayView({
         )}
       </div>
 
+      {/* ── Coming Up — next 3 days preview ─────────────────────────────── */}
+      {(() => {
+        const upcomingDays = [1, 2, 3].map(offset => {
+          const dayNum = currentDay + offset;
+          const dayTasks = tasks.filter(t => t.day === dayNum && !t.skipped);
+          return { dayNum, tasks: dayTasks };
+        }).filter(d => d.tasks.length > 0);
+
+        if (upcomingDays.length === 0) return null;
+
+        const TYPE_COLORS: Record<string, { color: string; bg: string }> = {
+          practice:   { color: '#a78bfa', bg: 'rgba(124,58,237,0.08)' },
+          learning:   { color: '#38bdf8', bg: 'rgba(56,189,248,0.08)' },
+          reflection: { color: '#c4b5fd', bg: 'rgba(124,58,237,0.06)' },
+          review:     { color: '#fbbf24', bg: 'rgba(251,191,36,0.08)' },
+          challenge:  { color: '#f97316', bg: 'rgba(249,115,22,0.08)' },
+          retrieval:  { color: '#38bdf8', bg: 'rgba(56,189,248,0.08)' },
+          assessment: { color: '#f59e0b', bg: 'rgba(245,158,11,0.08)' },
+        };
+
+        const dayLabel = (offset: number) => offset === 1 ? 'Tomorrow' : offset === 2 ? 'In 2 days' : 'In 3 days';
+
+        return (
+          <div style={{ marginTop: 28, marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 14 }}>
+              <ArrowRight size={14} color="#9ca3af" />
+              <h2 style={{ fontSize: 14, fontWeight: 700, color: '#374151', margin: 0, letterSpacing: '-0.02em' }}>Coming Up</h2>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {upcomingDays.map(({ dayNum, tasks: dayTasks }) => {
+                const offset = dayNum - currentDay;
+                return (
+                  <div key={dayNum} style={{
+                    background: '#fff',
+                    border: '1px solid #f0f0f5',
+                    borderRadius: 14,
+                    padding: '12px 16px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>{dayLabel(offset)}</span>
+                      <span style={{ fontSize: 11, color: '#9ca3af' }}>Day {dayNum} · {dayTasks.length} task{dayTasks.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {dayTasks.slice(0, 3).map(t => {
+                        const tc = TYPE_COLORS[t.type] ?? { color: '#9ca3af', bg: 'rgba(156,163,175,0.08)' };
+                        return (
+                          <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <span style={{
+                              fontSize: 9, fontWeight: 700, color: tc.color,
+                              background: tc.bg, borderRadius: 99, padding: '2px 7px',
+                              textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0,
+                            }}>
+                              {t.type}
+                            </span>
+                            <span style={{
+                              fontSize: 13, color: '#374151', fontWeight: 500,
+                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+                            }}>
+                              {t.title}
+                            </span>
+                            <span style={{ fontSize: 11, color: '#9ca3af', flexShrink: 0 }}>
+                              {t.duration}m
+                            </span>
+                          </div>
+                        );
+                      })}
+                      {dayTasks.length > 3 && (
+                        <span style={{ fontSize: 11, color: '#9ca3af', paddingLeft: 4 }}>
+                          +{dayTasks.length - 3} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Post-task feedback modal */}
       {pendingFeedbackTaskId && (() => {
         const feedbackTask = tasks.find(t => t.id === pendingFeedbackTaskId);
@@ -2043,6 +1544,27 @@ export default function TodayView({
           />
         );
       })()}
+
+      {/* FocusComplete overlay — shown when user taps Mark Done inside cinema */}
+      {showFocusComplete && cinemaTask && (
+        <FocusComplete
+          taskId={cinemaTask.id}
+          taskTitle={cinemaTask.title}
+          timeSpentSeconds={focusSeconds}
+          newStreak={streak}
+          onComplete={(mood, reflection) => {
+            handleCompleteTask(cinemaTask.id, window.innerWidth / 2, window.innerHeight / 2);
+            endSession();
+            if (setTaskFeedback) {
+              setTaskFeedback(cinemaTask.id, mood, undefined, reflection || undefined, undefined);
+            }
+            setShowFocusComplete(false);
+            setCinemaTaskId(null);
+          }}
+          onClose={() => setShowFocusComplete(false)}
+        />
+      )}
+
     </div>
   );
 }

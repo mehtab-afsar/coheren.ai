@@ -18,12 +18,17 @@ import type {
   Agent3Output,
   DailyTask,
   Phase,
+  ReviewMoment,
+  Stone,
   StoneType,
   TaskStep,
+  AssessmentQuestion,
 } from '@types-app/agents';
 import { callEconomy, callReasoning } from '@lib/ai-router';
 import { matchTaskToResources } from '@lib/resourceMatcher';
+import { getResourcesForGoal, parseDuration } from '@lib/resourceLibrary';
 import { retrieveKnowledgeSemantic } from '@core/rag/semantic-retriever';
+import { planSession, serializeBlueprint } from './session-planner';
 
 // ─── Stone Delivery Rules ─────────────────────────────────────────────────────
 // Each stone type changes HOW the task is delivered, not what it teaches.
@@ -172,12 +177,23 @@ export function resolvePhaseForDay(
 
 function buildSystemPrompt(
   domain: string,
-  stones: StoneType[],
+  stones: Stone[],
   dailyTimeAvailable: number,
 ): string {
   const domainCtx  = DOMAIN_DELIVERY_CONTEXT[domain] ?? '';
+  // Severity-weighted: Critical/High stones get full rules, Moderate get condensed, Low are mentioned only
   const stoneRules = stones
-    .map(s => STONE_DELIVERY_RULES[s] ?? '')
+    .sort((a, b) => {
+      const order: Record<string, number> = { Critical: 0, High: 1, Moderate: 2, Low: 3 };
+      return (order[a.severity] ?? 2) - (order[b.severity] ?? 2);
+    })
+    .map(s => {
+      const rule = STONE_DELIVERY_RULES[s.type] ?? '';
+      if (!rule) return '';
+      if (s.severity === 'Low') return `DELIVERY NOTE — ${s.type} (low severity): Be aware of this tendency but don't restructure the task for it.`;
+      if (s.severity === 'Moderate') return rule + `\n(Moderate severity — apply these rules but allow flexibility)`;
+      return rule; // Critical/High — full rules
+    })
     .filter(Boolean)
     .join('\n');
 
@@ -292,11 +308,26 @@ function buildUserPrompt(
   previousTasksContext?: string,
 ): string {
   const sp = stoneProfile.stoneProfile;
+  const phasePct = Math.round((dayInPhase / (phase.durationDays ?? 14)) * 100);
+
+  let progressionNote: string;
+  if (phasePct < 20) {
+    progressionNote = 'EARLY PHASE (0-20%): Build confidence. Keep tasks simple and achievable. Prioritize showing up over difficulty.';
+  } else if (phasePct < 50) {
+    progressionNote = 'MID-EARLY PHASE (20-50%): Introduce moderate complexity. User has baseline — start building real skill reps.';
+  } else if (phasePct < 80) {
+    progressionNote = 'MID-LATE PHASE (50-80%): Challenge the user. Tasks should approach milestone difficulty. Push toward the phase goal.';
+  } else {
+    progressionNote = `PHASE TRANSITION (80-100%): Consolidate and prepare. This task should review key learnings and bridge to the next phase. Hint at what comes next.`;
+  }
+
   return `
 ORIGINAL GOAL: "${goalLine}"
 TIMELINE: ${timeline} days | DAILY TIME: ${dailyTimeAvailable} min
 
-TODAY: Day ${dayNumber} | Phase ${phase.phaseNumber} ("${phase.phaseName}") | Week ${week} | Day ${dayInPhase} of Phase
+TODAY: Day ${dayNumber} | Phase ${phase.phaseNumber} ("${phase.phaseName}") | Week ${week} | Day ${dayInPhase} of ${phase.durationDays ?? '?'} in phase (${phasePct}% through phase)
+
+PHASE PROGRESSION DIRECTIVE: ${progressionNote}
 
 PHASE CONTEXT:
 - Primary Goals: ${phase.primaryGoals.join('; ')}
@@ -305,6 +336,13 @@ PHASE CONTEXT:
 - Focus Areas: ${JSON.stringify(phase.focusAreas)}
 ${phase.adaptationRules ? `- If completing easily: ${phase.adaptationRules.if_completing_easily}` : ''}
 ${phase.adaptationRules ? `- If struggling: ${phase.adaptationRules.if_struggling}` : ''}
+${phase.daySkeleton?.[dayInPhase - 1] ? `
+TODAY'S SKELETON (from curriculum plan — follow this closely):
+- Theme: ${phase.daySkeleton[dayInPhase - 1].theme}
+- Task Type: ${phase.daySkeleton[dayInPhase - 1].taskType}
+- Intensity: ${phase.daySkeleton[dayInPhase - 1].intensity}
+- Focus Area: ${phase.daySkeleton[dayInPhase - 1].focusArea}
+Generate a task that matches this skeleton exactly. The theme tells you WHAT to teach, the type tells you HOW.` : ''}
 
 USER BEHAVIORAL PROFILE:
 - Archetype: ${sp.userArchetype}
@@ -315,7 +353,7 @@ USER BEHAVIORAL PROFILE:
 ${ragContext ? `EXPERT SCIENCE CONTEXT (use for coaching cues and whyThisMatters):
 ${ragContext}
 
-` : ''}${previousTasksContext ? `RECENT TASK HISTORY (for progression continuity):
+` : ''}${previousTasksContext ? `RECENT TASK HISTORY — DO NOT repeat these topics. Build on them:
 ${previousTasksContext}
 
 ` : ''}Generate Day ${dayNumber}'s task. Apply ALL delivery rules for the detected stones listed above.
@@ -367,9 +405,135 @@ function sanitizeResourceObject(res: unknown, taskTitle: string): unknown {
   if (typeof res !== 'object' || res === null) return res;
   const r = res as Record<string, unknown>;
   if (typeof r.url === 'string') {
-    return { ...r, url: sanitizeResourceUrl(r.url, taskTitle) ?? r.url };
+    const sanitized = sanitizeResourceUrl(r.url, taskTitle);
+    if (!sanitized) {
+      // URL was a placeholder/search URL — drop it entirely so resource library can fill in
+      return { ...r, url: null };
+    }
+    return { ...r, url: sanitized };
   }
   return res;
+}
+
+// ─── JSON Repair ──────────────────────────────────────────────────────────────
+// LLMs often wrap JSON in markdown code fences or produce minor syntax errors.
+
+export function repairJSON(raw: string): string {
+  // Strip markdown code fences (```json ... ``` or ``` ... ```)
+  const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) raw = fenceMatch[1];
+
+  // Find the outermost JSON object boundaries
+  const start = raw.indexOf('{');
+  const end   = raw.lastIndexOf('}');
+  if (start !== -1 && end !== -1 && end > start) {
+    raw = raw.substring(start, end + 1);
+  }
+
+  // Fix common LLM JSON errors
+  raw = raw
+    .replace(/,\s*}/g, '}')       // trailing commas before }
+    .replace(/,\s*]/g, ']')       // trailing commas before ]
+    .replace(/[\u2018\u2019]/g, "'") // smart single quotes
+    .replace(/[\u201C\u201D]/g, '"'); // smart double quotes
+
+  return raw;
+}
+
+// ─── Task Validator ───────────────────────────────────────────────────────────
+// Catches low-quality outputs before they reach the user.
+// Returns a list of issues; empty array = valid.
+
+const VAGUE_STEP_PATTERNS = [
+  /^practice\b/i,
+  /^study\b/i,
+  /^work on\b/i,
+  /^learn\b/i,
+  /^review\b/i,
+  /\[insert\]/i,
+  /\[your\]/i,
+  /\bTBD\b/,
+  /etc\.?\s*$/i,
+  /and so on/i,
+  /find a tutorial/i,
+  /search for/i,
+  /look up.*tutorial/i,
+];
+
+const VAGUE_CRITERIA_PATTERNS = [
+  /\bunderstand\b/i,
+  /\blearn\b/i,
+  /\bknow\b/i,
+  /\bfeel\b/i,
+  /\bget comfortable\b/i,
+  /\bgrasp\b/i,
+  /\bfamiliar\b/i,
+];
+
+interface TaskValidationResult {
+  valid: boolean;
+  issues: string[];
+}
+
+function validateTaskQuality(task: DailyTask['task'], dailyTimeAvailable?: number): TaskValidationResult {
+  const issues: string[] = [];
+
+  // Must have at least 3 steps
+  if (!task.steps || task.steps.length < 3) {
+    issues.push(`Only ${task.steps?.length ?? 0} steps — minimum 3 required`);
+  }
+
+  // Title must be specific (not generic like "Day 5 Task")
+  const genericTitlePatterns = [/^day\s+\d+/i, /^task\s+\d+/i, /^today'?s?\s+task/i, /^practice\s+session$/i];
+  for (const pattern of genericTitlePatterns) {
+    if (pattern.test(task.title)) {
+      issues.push(`Generic title: "${task.title}" — must name the specific activity`);
+      break;
+    }
+  }
+
+  // Duration must not exceed daily time budget
+  if (dailyTimeAvailable && task.estimatedMinutes > dailyTimeAvailable * 1.1) {
+    issues.push(`Duration ${task.estimatedMinutes}min exceeds budget ${dailyTimeAvailable}min`);
+  }
+
+  // Steps must be specific (at least 6 words)
+  for (const step of task.steps ?? []) {
+    const wordCount = step.instruction.split(/\s+/).length;
+    if (wordCount < 6) {
+      issues.push(`Step ${step.stepNumber} too short (${wordCount} words): "${step.instruction}"`);
+    }
+    for (const pattern of VAGUE_STEP_PATTERNS) {
+      if (pattern.test(step.instruction)) {
+        issues.push(`Step ${step.stepNumber} is vague: "${step.instruction.slice(0, 60)}"`);
+        break;
+      }
+    }
+    // Each step should have a duration
+    if (!step.duration || step.duration.trim().length === 0) {
+      issues.push(`Step ${step.stepNumber} missing duration`);
+    }
+  }
+
+  // Must have at least 2 tips
+  if (!task.tips || task.tips.length < 2) {
+    issues.push(`Only ${task.tips?.length ?? 0} tips — minimum 2 required`);
+  }
+
+  // Success criteria must be concrete
+  const primary = task.successCriteria?.primary ?? '';
+  if (!primary) {
+    issues.push('Missing success criteria');
+  } else {
+    for (const pattern of VAGUE_CRITERIA_PATTERNS) {
+      if (pattern.test(primary)) {
+        issues.push(`Vague success criteria: "${primary.slice(0, 80)}"`);
+        break;
+      }
+    }
+  }
+
+  return { valid: issues.length === 0, issues };
 }
 
 // ─── Validate & Normalize ─────────────────────────────────────────────────────
@@ -467,6 +631,177 @@ function validateAndNormalize(
   };
 }
 
+// ─── Assessment Task Generation ──────────────────────────────────────────────
+// When the current day is a ReviewMoment, generate assessment questions instead
+// of a regular practice task.
+
+const DOMAIN_ASSESSMENT_FORMAT: Record<string, string> = {
+  Kinesthetic: `ASSESSMENT FORMAT: Self-Assessment Rubric
+This is a PHYSICAL domain — you cannot auto-grade motor skills.
+Generate questions using "self_rate" type with rubric criteria.
+Each question should ask the user to perform a skill and rate themselves.
+Example: "Perform 10 jabs. Rate yourself on: guard position (1-5), hip rotation (1-5), return to stance (1-5)."
+Include specific body cues they should look for.`,
+
+  Cognitive: `ASSESSMENT FORMAT: Knowledge Check (Auto-Gradeable)
+This is a KNOWLEDGE domain — use auto-gradeable question types.
+Generate questions using "multiple_choice" and "true_false" types.
+Include the correct answer in the "correctAnswer" field.
+Questions should test recall, application, and analysis.`,
+
+  Creative: `ASSESSMENT FORMAT: Portfolio Self-Assessment
+This is a CREATIVE domain — quality is subjective.
+Generate questions using "self_rate" and "open_ended" types.
+Ask users to recreate/perform something from earlier days and rate themselves.
+Include specific criteria in the rubric (timing, tone, technique).
+Example: "Play the chord progression from Day 3. Rate: smooth transitions (1-5), consistent rhythm (1-5)."`,
+
+  Career: `ASSESSMENT FORMAT: Artifact Review
+This is a CAREER domain — assess tangible outputs.
+Generate questions using "self_rate" and "open_ended" types.
+Ask users to review their artifacts and rate completeness.
+Example: "Review your portfolio draft. Does it include: project description (1-5), measurable outcomes (1-5), clear role statement (1-5)?"`,
+
+  Financial: `ASSESSMENT FORMAT: Simulation Check
+This is a FINANCIAL domain — test understanding through scenarios.
+Generate questions using "multiple_choice" and "true_false" types for concept knowledge.
+Add "self_rate" questions for decision-making confidence.
+All questions must be labeled "(Simulation)" — never reference real money.`,
+
+  Health: `ASSESSMENT FORMAT: Self-Assessment + Tracking
+This is a HEALTH domain — combine objective metrics with subjective ratings.
+Generate "self_rate" questions for form/technique and "multiple_choice" for knowledge.`,
+
+  Lifestyle: `ASSESSMENT FORMAT: Habit Tracking Review
+This is a LIFESTYLE domain — assess habit consistency and identity shift.
+Generate "self_rate" questions about habit execution and "open_ended" for reflection.`,
+};
+
+function buildAssessmentSystemPrompt(domain: string, reviewType: ReviewMoment['type']): string {
+  const formatGuide = DOMAIN_ASSESSMENT_FORMAT[domain] ?? DOMAIN_ASSESSMENT_FORMAT['Cognitive'];
+
+  const questionCount = reviewType === 'reflection' ? '2-3'
+    : reviewType === 'checkpoint' ? '3-4'
+    : reviewType === 'mid_assessment' ? '4-6'
+    : '5-8'; // final_assessment
+
+  return `You are Agent 4: Assessment Generator for Coheren AI.
+
+Your job: Generate assessment questions that test what the user has learned.
+This is a ${reviewType.replace('_', ' ')} — generate ${questionCount} questions.
+
+${formatGuide}
+
+── QUESTION DIFFICULTY LEVELS ──
+- "recall": Can the user remember key facts/techniques? (easiest)
+- "apply": Can the user use what they learned in a new context? (medium)
+- "analyze": Can the user break down and evaluate their own performance? (hardest)
+
+Mix difficulty levels. Start with recall, end with analyze.
+
+── RULES ──
+1. Every question must reference a specific skill or concept from the related days.
+2. For self_rate questions, always provide a clear rubric explaining what each score means.
+3. For multiple_choice, provide 3-4 options with exactly one correct answer.
+4. For true_false, the correct answer must be "true" or "false".
+5. Each question needs a unique id (snake_case).
+
+Return ONLY valid JSON:
+{
+  "assessmentQuestions": [
+    {
+      "id": "unique_snake_case_id",
+      "type": "multiple_choice|open_ended|true_false|self_rate|ordering",
+      "question": "The question text",
+      "options": [{"value": "a", "label": "Option A", "correct": true}],
+      "correctAnswer": "a",
+      "rubric": "For self_rate: what 1 means, what 5 means",
+      "relatedDay": 1,
+      "relatedSkill": "specific skill being tested",
+      "difficulty": "recall|apply|analyze"
+    }
+  ],
+  "assessmentTitle": "Short title for this assessment",
+  "assessmentDescription": "One sentence explaining what this tests"
+}`;
+}
+
+function buildAssessmentUserPrompt(
+  reviewMoment: ReviewMoment,
+  phase: Phase,
+  goalLine: string,
+  previousTasksContext?: string,
+): string {
+  return `Generate assessment questions for this review moment.
+
+GOAL: "${goalLine}"
+REVIEW TYPE: ${reviewMoment.type}
+REVIEW DAY: Day ${reviewMoment.day}
+PHASE: ${phase.phaseName} (Phase ${phase.phaseNumber})
+PHASE GOALS: ${phase.primaryGoals.join('; ')}
+
+${reviewMoment.relatedSkills && reviewMoment.relatedSkills.length > 0
+  ? `SKILLS TO TEST:\n${reviewMoment.relatedSkills.map((s, i) => `${i + 1}. ${s}`).join('\n')}`
+  : 'Test the core skills from this phase.'}
+
+${reviewMoment.relatedDays && reviewMoment.relatedDays.length > 0
+  ? `CONTENT FROM DAYS: ${reviewMoment.relatedDays.join(', ')}`
+  : ''}
+
+${previousTasksContext ? `RECENT TASKS (reference these for question content):\n${previousTasksContext}` : ''}
+
+${reviewMoment.prompt ? `REVIEW PROMPT: ${reviewMoment.prompt}` : ''}
+
+Generate questions that genuinely test retention and application — not just recognition.`.trim();
+}
+
+interface AssessmentLLMOutput {
+  assessmentQuestions: AssessmentQuestion[];
+  assessmentTitle: string;
+  assessmentDescription: string;
+}
+
+async function generateAssessmentQuestions(
+  reviewMoment: ReviewMoment,
+  phase: Phase,
+  domain: string,
+  goalLine: string,
+  previousTasksContext?: string,
+): Promise<AssessmentLLMOutput> {
+  const systemPrompt = buildAssessmentSystemPrompt(domain, reviewMoment.type);
+  const userPrompt = buildAssessmentUserPrompt(reviewMoment, phase, goalLine, previousTasksContext);
+
+  const { content } = await callReasoning({
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    temperature: 0.3,
+    max_tokens: 2500,
+    response_format: { type: 'json_object' },
+  });
+
+  if (!content) throw new Error('Agent 4 Assessment: No response from model');
+
+  const raw = JSON.parse(repairJSON(content)) as AssessmentLLMOutput;
+
+  // Validate
+  if (!Array.isArray(raw.assessmentQuestions) || raw.assessmentQuestions.length === 0) {
+    throw new Error('Agent 4 Assessment: No questions generated');
+  }
+
+  // Normalize questions
+  raw.assessmentQuestions = raw.assessmentQuestions.map((q, i) => ({
+    ...q,
+    id: q.id || `q_${i + 1}`,
+    relatedDay: q.relatedDay || reviewMoment.day,
+    relatedSkill: q.relatedSkill || 'general',
+    difficulty: q.difficulty || 'recall',
+  }));
+
+  return raw;
+}
+
 // ─── Main Export ──────────────────────────────────────────────────────────────
 
 export async function generateTask(
@@ -478,10 +813,11 @@ export async function generateTask(
   category?: string,
   skillLevel?: 'beginner' | 'intermediate' | 'advanced',
   ragContext?: string,
+  goalText?: string,
 ): Promise<DailyTask> {
   const phases                       = roadmap.roadmap.phases;
   const { phase, week, dayInPhase }  = resolvePhaseForDay(phases, dayNumber);
-  const detectedStones               = stoneProfile.stoneProfile.stones.map(s => s.type as StoneType);
+  const detectedStones               = stoneProfile.stoneProfile.stones;
 
   // Infer domain — category from Agent 1 is the primary signal (exact, reliable).
   // domainPedagogy from Agent 3 is the fallback (keyword-based, can vary in phrasing).
@@ -498,20 +834,132 @@ export async function generateTask(
   else                                                                                                              domain = 'Lifestyle';
 
   // Goal line from phase context
-  const goalLine = phase.primaryGoals?.[0] ?? 'achieve the goal';
+  const goalLine = goalText ?? phase.primaryGoals?.[0] ?? 'achieve the goal';
 
-  // Auto-fetch RAG if not provided
-  // Financial domain benefits from money-psychology / behavioural-finance framing.
-  let science = ragContext ?? '';
-  if (!science) {
-    const primaryStone = stoneProfile.stoneProfile.primaryStone;
-    const query = domain === 'Financial'
-      ? `financial habit building ${primaryStone} behavioral change money psychology action bias`
-      : `${phase.phaseName} ${primaryStone} daily practice habit coaching`;
-    science = await retrieveKnowledgeSemantic({ query, matchCount: 2 });
+  // ── Assessment Day Check ──
+  // If today is a ReviewMoment (assessment/retrieval/challenge), generate assessment questions
+  const reviewMoment = roadmap.roadmap.reviewMoments?.find(
+    rm => rm.day === dayNumber && (rm.type === 'mid_assessment' || rm.type === 'final_assessment' || rm.type === 'checkpoint')
+  );
+
+  if (reviewMoment) {
+    try {
+      const assessment = await generateAssessmentQuestions(
+        reviewMoment, phase, domain, goalLine, previousTasksContext,
+      );
+
+      // Map review type to task type
+      const taskType: 'challenge' | 'retrieval' | 'assessment' =
+        reviewMoment.type === 'checkpoint' ? 'retrieval'
+        : reviewMoment.type === 'final_assessment' ? 'assessment'
+        : 'challenge';
+
+      // Build a DailyTask that wraps the assessment
+      const assessmentTask: DailyTask = {
+        day: dayNumber,
+        phase: phase.phaseNumber,
+        week,
+        task: {
+          title: assessment.assessmentTitle || `${reviewMoment.type.replace('_', ' ')} — Day ${dayNumber}`,
+          description: assessment.assessmentDescription || reviewMoment.prompt || 'Show what you know.',
+          estimatedMinutes: Math.min(dailyTimeAvailable, reviewMoment.type === 'final_assessment' ? 30 : 15),
+          steps: [{
+            stepNumber: 1,
+            instruction: 'Complete the assessment questions below. Take your time and be honest with your answers.',
+            duration: `${Math.min(dailyTimeAvailable, 15)} minutes`,
+          }],
+          tips: [
+            'Be honest with your self-assessments — accuracy helps the curriculum adapt to you.',
+            'If you are unsure about an answer, mark your confidence level accordingly.',
+          ],
+          successCriteria: {
+            primary: 'Complete all assessment questions with honest responses.',
+          },
+          whyThisMatters: 'Regular assessment helps identify what you have mastered and what needs more practice. This directly improves your curriculum.',
+          resources: { primary: null, supplementary: [] },
+        },
+      };
+
+      // Attach assessment questions as extra metadata (consumed by the store)
+      (assessmentTask as DailyTask & { assessmentQuestions: AssessmentQuestion[]; taskType: string }).assessmentQuestions = assessment.assessmentQuestions;
+      (assessmentTask as DailyTask & { taskType: string }).taskType = taskType;
+
+      return assessmentTask;
+    } catch (err) {
+      console.warn(`⚠️ Agent 4: Assessment generation failed for Day ${dayNumber}, falling back to regular task:`, err);
+      // Fall through to regular task generation
+    }
   }
 
-  const systemPrompt = buildSystemPrompt(domain, detectedStones, dailyTimeAvailable);
+  // ── Parallel: RAG fetch + Session Blueprint + Resource Lookup ──
+  // RAG is async network I/O; blueprint and resource lookup are sync CPU.
+  // Run RAG in parallel with the sync work to save ~300-800ms.
+
+  const ragPromise = (async () => {
+    if (ragContext) return ragContext;
+    const primaryStone = stoneProfile.stoneProfile.primaryStone;
+    const stoneTypes = detectedStones.map(s => s.type);
+    const goalHint = goalText
+      ? goalText.replace(/^(i want to|learn|become|get|start|build|improve|master)\s+/i, '').slice(0, 40)
+      : '';
+    const subDomainPrefix = goalHint ? `${goalHint} ` : '';
+    const domainQuery = domain === 'Financial'
+      ? `${subDomainPrefix}financial daily practice ${phase.phaseName} simulation exercises specific steps`
+      : `${subDomainPrefix}${domain} ${phase.phaseName} daily practice exercises activities specific steps`;
+    return retrieveKnowledgeSemantic({
+      query: domainQuery,
+      additionalQueries: [
+        `${primaryStone} ${domain} coaching intervention habit delivery`,
+      ],
+      boostCategories: [domain.toLowerCase(), ...stoneTypes.map(s => s.toLowerCase())],
+      boostKeywords: [domain.toLowerCase(), phase.phaseName.toLowerCase()],
+      matchCount: 4,
+    });
+  })();
+
+  // Session Blueprint (sync — runs while RAG is in-flight)
+  const isAssessmentDay = !!roadmap.roadmap.reviewMoments?.some(
+    rm => rm.day === dayNumber && (rm.type === 'mid_assessment' || rm.type === 'final_assessment')
+  );
+  const phaseProgress = phase.durationDays
+    ? dayInPhase / phase.durationDays
+    : 0.5;
+  const blueprint = planSession(dailyTimeAvailable, phaseProgress, domain, isAssessmentDay);
+  const blueprintBlock = `\n${serializeBlueprint(blueprint)}\n`;
+
+  // Find the learn block's max resource minutes for duration-aware resource filtering
+  const learnBlock = blueprint.blocks.find(b => b.type === 'learn' && b.resourceSlot);
+  const maxResourceMinutes = learnBlock?.maxResourceMinutes ?? dailyTimeAvailable;
+
+  // Resource lookup (sync — runs while RAG is in-flight)
+  let curatedResourceBlock = '';
+  if (goalText) {
+    const curatedResources = getResourcesForGoal(goalText);
+    if (curatedResources.length > 0) {
+      const withDuration = curatedResources.map(r => ({
+        ...r,
+        parsedMinutes: parseDuration(r.duration),
+      }));
+      const fittingResources = withDuration
+        .filter(r => r.parsedMinutes <= maxResourceMinutes)
+        .sort((a, b) => Math.abs(b.parsedMinutes - maxResourceMinutes) - Math.abs(a.parsedMinutes - maxResourceMinutes));
+      const selectedResources = fittingResources.length > 0 ? fittingResources : withDuration;
+      const resourceLines = selectedResources.slice(0, 10).map(r =>
+        `- "${r.title}" by ${r.channel ?? 'Unknown'}: ${r.url} (${r.duration ?? '?'}, ~${r.parsedMinutes}min) — ${r.description}`
+      ).join('\n');
+      curatedResourceBlock = `\n── CURATED RESOURCE LIBRARY (USE THESE URLs) ──
+You MUST use URLs from this list for the task's resources.primary and step resources.
+Do NOT invent YouTube video IDs. Pick the most relevant video for today's task topic.
+The learn block allows max ${maxResourceMinutes} minutes of video. Pick a video that fits.
+
+${resourceLines}\n`;
+    }
+  }
+
+  // Await RAG result (should already be resolved if sync work took >0ms)
+  const science = await ragPromise;
+
+  const systemPrompt = buildSystemPrompt(domain, detectedStones, dailyTimeAvailable) + blueprintBlock + curatedResourceBlock;
   const userPrompt   = buildUserPrompt(
     dayNumber, goalLine, roadmap.roadmap.totalDays, dailyTimeAvailable,
     phase, week, dayInPhase, stoneProfile, science, previousTasksContext,
@@ -529,37 +977,49 @@ export async function generateTask(
 
   if (!content) throw new Error('Agent 4: No response from model');
 
-  const raw    = JSON.parse(content) as unknown;
+  const raw    = JSON.parse(repairJSON(content)) as unknown;
   let result   = validateAndNormalize(raw, dayNumber, phase.phaseNumber, week, dailyTimeAvailable);
 
-  // If the 8b model collapsed to 1 real step (the min-step guard injected a generic starter),
-  // retry with the reasoning (70b) model for better stone-aware generation.
+  // Validate quality — retry with 70b if issues found OR if 8b collapsed to 1 real step
+  const validation = validateTaskQuality(result.task, dailyTimeAvailable);
   const isGenericStarter = result.task.steps[0]?.instruction.includes('Set up your space');
-  if (result.task.steps.length <= 2 && isGenericStarter) {
+  const needsRetry = !validation.valid || (result.task.steps.length <= 2 && isGenericStarter);
+
+  if (needsRetry) {
+    const reason = !validation.valid
+      ? `Quality issues: ${validation.issues.join('; ')}`
+      : 'Collapsed to 1 real step';
+    console.warn(`⚠️  Agent 4: Retrying with 70b — ${reason}`);
     try {
+      const retryUserPrompt = userPrompt + (validation.issues.length
+        ? `\n\nPREVIOUS ATTEMPT HAD QUALITY ISSUES — FIX ALL OF THESE:\n${validation.issues.map(i => `- ${i}`).join('\n')}`
+        : '');
       const { content: retryContent } = await callReasoning({
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user',   content: userPrompt   },
+          { role: 'user',   content: retryUserPrompt },
         ],
         temperature:     0.5,
         max_tokens:      2500,
         response_format: { type: 'json_object' },
       });
       if (retryContent) {
-        const retryRaw    = JSON.parse(retryContent) as unknown;
+        const retryRaw    = JSON.parse(repairJSON(retryContent)) as unknown;
         const retryResult = validateAndNormalize(retryRaw, dayNumber, phase.phaseNumber, week, dailyTimeAvailable);
-        if (retryResult.task.steps.length >= 2 && !retryResult.task.steps[0]?.instruction.includes('Set up your space')) {
+        const retryValidation = validateTaskQuality(retryResult.task, dailyTimeAvailable);
+        if (retryValidation.valid || retryResult.task.steps.length > result.task.steps.length) {
           result = retryResult;
         }
       }
     } catch {
-      // Non-blocking — 8b result is still valid
+      // Non-blocking — 8b result is still used
     }
   }
 
-  // Augment with static resource library if category provided and LLM left resources empty
-  if (category && !result.task.resources?.primary) {
+  // Augment with static resource library if category provided and LLM left resources empty/null-url
+  const primaryRes = result.task.resources?.primary as Record<string, unknown> | null | undefined;
+  const hasPrimaryUrl = primaryRes && typeof primaryRes.url === 'string' && primaryRes.url;
+  if (category && !hasPrimaryUrl) {
     try {
       const matched = await matchTaskToResources(
         result.task.title,
@@ -576,5 +1036,68 @@ export async function generateTask(
     }
   }
 
+  // ── Step Duration Validation (F2.4) ──
+  // Ensure step durations sum close to dailyTimeAvailable
+  validateStepDurations(result, dailyTimeAvailable);
+
   return result;
+}
+
+/**
+ * Parse a step's duration string to minutes.
+ * Handles: "10 minutes", "2 sets of 8 reps", "5 min", "15–20 min", etc.
+ */
+function parseStepDuration(duration: string): number {
+  // Try direct number extraction: "10 minutes" → 10
+  const minMatch = duration.match(/(\d+)\s*(?:min|minutes?)/i);
+  if (minMatch) return parseInt(minMatch[1]);
+
+  // Range: "15–20 min" → take average
+  const rangeMatch = duration.match(/(\d+)\s*[-–]\s*(\d+)\s*(?:min|minutes?)/i);
+  if (rangeMatch) return Math.round((parseInt(rangeMatch[1]) + parseInt(rangeMatch[2])) / 2);
+
+  // Just a number: "10" → 10
+  const numMatch = duration.match(/^(\d+)$/);
+  if (numMatch) return parseInt(numMatch[1]);
+
+  // Reps-based: estimate 5 minutes for any rep-based step
+  if (/\breps?\b/i.test(duration) || /\bsets?\b/i.test(duration)) return 5;
+
+  return 5; // fallback
+}
+
+/**
+ * Validate and redistribute step durations to match dailyTimeAvailable.
+ * Mutates the result in-place. Logs a warning if correction was needed.
+ */
+function validateStepDurations(result: DailyTask, dailyTimeAvailable: number): void {
+  const steps = result.task.steps;
+  if (steps.length === 0) return;
+
+  const parsedDurations = steps.map(s => parseStepDuration(s.duration));
+  const totalParsed = parsedDurations.reduce((a, b) => a + b, 0);
+
+  // Allow 15% deviation
+  const deviation = Math.abs(totalParsed - dailyTimeAvailable) / dailyTimeAvailable;
+  if (deviation <= 0.15) return; // within tolerance
+
+  console.warn(`⚠️ Agent 4: Step durations sum to ${totalParsed}min (target: ${dailyTimeAvailable}min, ${Math.round(deviation * 100)}% off). Redistributing.`);
+
+  // Redistribute proportionally
+  const scale = dailyTimeAvailable / totalParsed;
+  steps.forEach((step, i) => {
+    const newMin = Math.max(1, Math.round(parsedDurations[i] * scale));
+    step.duration = `${newMin} minutes`;
+  });
+
+  // Fix rounding errors on the last step
+  const newTotal = steps.reduce((sum, s) => sum + parseStepDuration(s.duration), 0);
+  const diff = dailyTimeAvailable - newTotal;
+  if (diff !== 0 && steps.length > 0) {
+    const lastStep = steps[steps.length - 1];
+    const lastMin = parseStepDuration(lastStep.duration);
+    lastStep.duration = `${Math.max(1, lastMin + diff)} minutes`;
+  }
+
+  result.task.estimatedMinutes = dailyTimeAvailable;
 }

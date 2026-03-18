@@ -29,11 +29,13 @@ import { fileURLToPath } from 'url';
 
 const JINA_KEY     = process.env.VITE_JINA_API_KEY;
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
-const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY;
+// Ingest script writes to knowledge_chunks — must use service_role key to bypass RLS.
+// SUPABASE_SERVICE_ROLE_KEY is a server-only secret — never expose it in frontend code.
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.VITE_SUPABASE_ANON_KEY;
 
 if (!JINA_KEY)     { console.error('❌ VITE_JINA_API_KEY is not set'); process.exit(1); }
 if (!SUPABASE_URL) { console.error('❌ VITE_SUPABASE_URL is not set');  process.exit(1); }
-if (!SUPABASE_KEY) { console.error('❌ VITE_SUPABASE_ANON_KEY is not set'); process.exit(1); }
+if (!SUPABASE_KEY) { console.error('❌ SUPABASE_SERVICE_ROLE_KEY (or VITE_SUPABASE_ANON_KEY) is not set'); process.exit(1); }
 
 // ─── Supabase client ─────────────────────────────────────────────────────────
 
@@ -47,6 +49,7 @@ const __filename   = fileURLToPath(import.meta.url);
 const __dirname_ts = dirname(__filename);
 const ROOT         = join(__dirname_ts, '..');
 const FRAMEWORKS   = join(ROOT, 'src/knowledge/frameworks');
+const DOMAINS      = join(ROOT, 'src/knowledge/domains');
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -263,6 +266,7 @@ Match task difficulty to energy level for better success.`,
 // ─── Markdown chunk extractor ─────────────────────────────────────────────────
 
 const SOURCE_MAP: Record<string, string> = {
+  // Frameworks
   'atomic-habits':             'Atomic Habits (James Clear)',
   'tiny-habits':               'Tiny Habits (BJ Fogg)',
   'habit-loop':                'The Power of Habit (Charles Duhigg)',
@@ -271,9 +275,37 @@ const SOURCE_MAP: Record<string, string> = {
   'neuroscience-habits':       'Neuroscience of Habit Formation',
   'four-laws-behavior-change': 'Atomic Habits — Four Laws',
   'mindset-and-grit':          'Mindset (Dweck) & Grit (Duckworth)',
+  // Domains
+  'programming':               'Coheren Domain KB — Programming',
+  'language-learning':         'Coheren Domain KB — Language Learning',
+  'exam-prep':                 'Coheren Domain KB — Exam Preparation',
+  'running':                   'Coheren Domain KB — Running',
+  'strength-training':         'Coheren Domain KB — Strength Training',
+  'martial-arts':              'Coheren Domain KB — Martial Arts',
+  'job-search':                'Coheren Domain KB — Job Search',
+  'skill-development':         'Coheren Domain KB — Skill Development',
+  'freelancing':               'Coheren Domain KB — Freelancing',
+  'investing-beginner':        'Coheren Domain KB — Investing',
+  'budgeting':                 'Coheren Domain KB — Budgeting',
+  'side-income':               'Coheren Domain KB — Side Income',
+  'writing':                   'Coheren Domain KB — Writing',
+  'music':                     'Coheren Domain KB — Music',
+  'video-content':             'Coheren Domain KB — Video Content',
+  'weight-loss':               'Coheren Domain KB — Weight Loss',
+  'sleep':                     'Coheren Domain KB — Sleep Optimization',
+  'mental-health':             'Coheren Domain KB — Mental Health',
+  'morning-routine':           'Coheren Domain KB — Morning Routine',
+  'social-skills':             'Coheren Domain KB — Social Skills',
+  'digital-detox':             'Coheren Domain KB — Digital Wellness',
+  'procrastination-interventions': 'Coheren Coaching KB — Procrastination',
+  'fear-of-failure-protocols': 'Coheren Coaching KB — Fear of Failure',
+  'consistency-building':      'Coheren Coaching KB — Consistency',
+  'perfectionism-breaking':    'Coheren Coaching KB — Perfectionism',
+  'confidence-building':       'Coheren Coaching KB — Confidence',
 };
 
 const CATEGORY_MAP: Record<string, string[]> = {
+  // Frameworks
   'atomic-habits':             ['habit-formation', 'behavior-change'],
   'tiny-habits':               ['habit-formation', 'beginner', 'behavior-change'],
   'habit-loop':                ['habit-formation', 'behavior-change'],
@@ -282,6 +314,40 @@ const CATEGORY_MAP: Record<string, string[]> = {
   'neuroscience-habits':       ['neuroscience', 'habit-formation'],
   'four-laws-behavior-change': ['habit-formation', 'behavior-change'],
   'mindset-and-grit':          ['mindset', 'motivation'],
+  // Domains — Cognitive
+  'programming':               ['skill-progression', 'cognitive'],
+  'language-learning':         ['skill-progression', 'cognitive'],
+  'exam-prep':                 ['skill-progression', 'cognitive'],
+  // Domains — Kinesthetic
+  'running':                   ['skill-progression', 'kinesthetic'],
+  'strength-training':         ['skill-progression', 'kinesthetic'],
+  'martial-arts':              ['skill-progression', 'kinesthetic'],
+  // Domains — Career
+  'job-search':                ['skill-progression', 'career'],
+  'skill-development':         ['skill-progression', 'career'],
+  'freelancing':               ['skill-progression', 'career'],
+  // Domains — Financial
+  'investing-beginner':        ['skill-progression', 'financial'],
+  'budgeting':                 ['skill-progression', 'financial'],
+  'side-income':               ['skill-progression', 'financial'],
+  // Domains — Creative
+  'writing':                   ['skill-progression', 'creative'],
+  'music':                     ['skill-progression', 'creative'],
+  'video-content':             ['skill-progression', 'creative'],
+  // Domains — Health
+  'weight-loss':               ['skill-progression', 'health'],
+  'sleep':                     ['skill-progression', 'health'],
+  'mental-health':             ['skill-progression', 'health'],
+  // Domains — Lifestyle
+  'morning-routine':           ['skill-progression', 'lifestyle'],
+  'social-skills':             ['skill-progression', 'lifestyle'],
+  'digital-detox':             ['skill-progression', 'lifestyle'],
+  // Coaching
+  'procrastination-interventions': ['coaching', 'behavior-change'],
+  'fear-of-failure-protocols': ['coaching', 'behavior-change'],
+  'consistency-building':      ['coaching', 'habit-formation'],
+  'perfectionism-breaking':    ['coaching', 'behavior-change'],
+  'confidence-building':       ['coaching', 'motivation'],
 };
 
 const STOP_WORDS = new Set([
@@ -402,11 +468,30 @@ async function main() {
     const mdFiles = readdirSync(FRAMEWORKS).filter(f => f.endsWith('.md'));
     for (const file of mdFiles) {
       const chunks = extractMarkdownChunks(join(FRAMEWORKS, file));
-      console.log(`  📄  ${file}: ${chunks.length} sections`);
+      console.log(`  📄  frameworks/${file}: ${chunks.length} sections`);
       all.push(...chunks);
     }
   } else {
     console.warn('  ⚠   src/knowledge/frameworks/ not found — using static chunks only\n');
+  }
+
+  // 3. Parse domain-specific knowledge files (subdirectories: cognitive, kinesthetic, etc.)
+  if (existsSync(DOMAINS)) {
+    const subDirs = readdirSync(DOMAINS, { withFileTypes: true })
+      .filter(d => d.isDirectory())
+      .map(d => d.name);
+
+    for (const subDir of subDirs) {
+      const subPath = join(DOMAINS, subDir);
+      const mdFiles = readdirSync(subPath).filter(f => f.endsWith('.md'));
+      for (const file of mdFiles) {
+        const chunks = extractMarkdownChunks(join(subPath, file));
+        console.log(`  📄  domains/${subDir}/${file}: ${chunks.length} sections`);
+        all.push(...chunks);
+      }
+    }
+  } else {
+    console.warn('  ⚠   src/knowledge/domains/ not found — skipping domain KB\n');
   }
 
   // 3. Deduplicate by chunk_id (static chunks take priority)
@@ -455,7 +540,7 @@ async function main() {
   }
 
   console.log(`\n✅  Done. ${embedded.length} chunks now in knowledge_chunks.\n`);
-  console.log('   Semantic retrieval is live — threshold 0.35, top-4 results.');
+  console.log('   Semantic retrieval is live — threshold 0.25, top-6 results.');
   console.log('   Re-run any time to update embeddings after content edits.\n');
 }
 

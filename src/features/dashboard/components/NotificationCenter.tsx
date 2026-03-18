@@ -1,36 +1,11 @@
-import { useState, useEffect } from 'react';
-import { Bell, X } from 'lucide-react';
+import { useEffect, useMemo } from 'react';
+import { X } from 'lucide-react';
 import { tokens } from '@core/design-system';
-
-export interface AppNotification {
-  id: string;
-  type: 'plan_adjustment' | 'milestone' | 'weekly_summary' | 'coach_insight' | 'system';
-  title: string;
-  body: string;
-  createdAt: string;
-  read: boolean;
-}
+import { getNotifications } from './notification-utils';
+import type { AppNotification } from './notification-utils';
+import { useBreakpoint } from '@hooks/useBreakpoint';
 
 const STORAGE_KEY = 'app_notifications';
-
-export function getNotifications(): AppNotification[] {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-  } catch {
-    return [];
-  }
-}
-
-export function addNotification(n: Omit<AppNotification, 'id' | 'read' | 'createdAt'>) {
-  const existing = getNotifications();
-  const newN: AppNotification = {
-    ...n,
-    id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    read: false,
-    createdAt: new Date().toISOString(),
-  };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([newN, ...existing].slice(0, 50)));
-}
 
 function formatTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -47,15 +22,14 @@ interface Props {
 }
 
 export default function NotificationCenter({ onClose }: Props) {
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const { isMobile } = useBreakpoint();
+  const notifications = useMemo(() => getNotifications(), []);
 
   useEffect(() => {
-    const notifs = getNotifications();
-    setNotifications(notifs);
     // Mark all as read
-    const marked = notifs.map(n => ({ ...n, read: true }));
+    const marked = notifications.map(n => ({ ...n, read: true }));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(marked));
-  }, []);
+  }, [notifications]);
 
   const TYPE_ICONS: Record<AppNotification['type'], string> = {
     plan_adjustment: '🔧',
@@ -72,11 +46,11 @@ export default function NotificationCenter({ onClose }: Props) {
         inset: 0,
         backgroundColor: 'rgba(0,0,0,0.5)',
         display: 'flex',
-        alignItems: 'flex-start',
-        justifyContent: 'flex-end',
+        alignItems: isMobile ? 'flex-end' : 'flex-start',
+        justifyContent: isMobile ? 'center' : 'flex-end',
         zIndex: 9998,
-        padding: '16px',
-        paddingTop: '60px',
+        padding: isMobile ? 0 : '16px',
+        paddingTop: isMobile ? 0 : '60px',
         backdropFilter: 'blur(2px)',
       }}
       onClick={onClose}
@@ -86,9 +60,9 @@ export default function NotificationCenter({ onClose }: Props) {
         style={{
           backgroundColor: tokens.colors.surface,
           border: `1px solid ${tokens.colors.borderLight}`,
-          borderRadius: tokens.borderRadius.xl,
+          borderRadius: isMobile ? '20px 20px 0 0' : tokens.borderRadius.xl,
           width: '100%',
-          maxWidth: '360px',
+          maxWidth: isMobile ? '100%' : '360px',
           maxHeight: '70vh',
           overflow: 'hidden',
           display: 'flex',

@@ -41,7 +41,6 @@ function App() {
 
     // Listen for auth state changes
     const { data: { subscription } } = onAuthStateChange(async (event, session) => {
-      console.log('Auth event:', event);
 
       // Clear timeout when auth state changes - we know auth is working
       if (timeoutId) {
@@ -94,7 +93,6 @@ function App() {
 
           if (goals && roadmapEntry) {
             // User has an active goal in database - load all data into store, then go to dashboard
-            console.log('✅ User has goal in database, loading data and going to dashboard');
 
             const roadmapRow = roadmapEntry;
             const phases = Array.isArray(roadmapRow.phases) ? roadmapRow.phases : [];
@@ -171,6 +169,11 @@ function App() {
               specificGoal: goals.description ?? '',
             };
 
+            // Restore agent data from DB config (for cross-device / localStorage-cleared scenarios)
+            const dbConfig = roadmapRow.config as Record<string, unknown> ?? {};
+            const restoredAgentRoadmap = dbConfig.agent_roadmap_json as import('@types-app/agents').Agent3Output | undefined;
+            const restoredStoneProfile = dbConfig.stone_profile_json as import('@types-app/agents').Agent2ProfileOutput | undefined;
+
             useStore.setState({
               step: 2,
               roadmap: roadmapForStore,
@@ -178,15 +181,15 @@ function App() {
               currentDay,
               streak,
               currentGoal,
+              ...(restoredAgentRoadmap ? { agentRoadmap: restoredAgentRoadmap } : {}),
+              ...(restoredStoneProfile ? { stoneProfile: restoredStoneProfile } : {}),
             });
           } else {
             // User has no goal in database - go to onboarding
-            console.log('📝 No goal found in database, showing onboarding');
             useStore.setState({ step: 1 });
           }
         } catch (err) {
           console.error('Error checking user goals:', err);
-          console.log('⚠️ Database check failed, showing onboarding');
           useStore.setState({ step: 1 });
         }
       } else {

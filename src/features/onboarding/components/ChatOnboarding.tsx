@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Icons } from '@shared/components/ui/icons';
 import { CoherenLoader } from '@shared/components/ui/coheren-loader';
 import { DitheringShader } from '@shared/components/ui/dithering-shader';
@@ -13,9 +14,12 @@ import type { GoalCategory } from '@types-app/index';
 
 
 // Import agent system
-import { runOnboardingAgents, generateCompleteRoadmap, generateTaskBatch } from '@core/agents';
-import type { BuildingStone, StoneAnswer, Agent1Output, DailyTask } from '@core/agents';
+import { runOnboardingAgents, generateCompleteRoadmap, generateTaskBatch, getGoalClarifications, runStoneRound2, runStoneCrossValidation, getCurriculumPreview, getPaceCalibration } from '@core/agents';
+import type { BuildingStone, StoneAnswer, Agent1Output, DailyTask, GoalClarificationOutput, StoneRound2Output, CurriculumPreview, PaceCalibration, PaceChoice } from '@core/agents';
 import StoneQuestions from '@features/onboarding/components/StoneQuestions';
+import GoalClarificationStep from '@features/onboarding/components/GoalClarificationStep';
+import StoneProfileConfirmation from '@features/onboarding/components/StoneProfileConfirmation';
+import CurriculumPreviewComponent from '@features/onboarding/components/CurriculumPreview';
 import { syncCompleteRoadmap } from '@lib/database';
 import { useAuthGate } from '../hooks/useAuthGate';
 import { track } from '@lib/analytics';
@@ -89,11 +93,54 @@ interface Message {
   timestamp: Date;
 }
 
+/** Animated text that cycles through analysis phases */
+function AnalyzingText() {
+  const [phase, setPhase] = useState(0);
+  const texts = [
+    'Analyzing your responses...',
+    'Building your profile...',
+    'Personalizing your journey...',
+  ];
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setPhase(p => (p + 1) % texts.length);
+    }, 2000);
+    return () => clearInterval(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div style={{ textAlign: 'center' }}>
+      <AnimatePresence mode="wait">
+        <motion.p
+          key={phase}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.3 }}
+          style={{
+            fontSize: 16,
+            fontWeight: 500,
+            color: '#7c3aed',
+            margin: '0 0 6px',
+            letterSpacing: '-0.01em',
+          }}
+        >
+          {texts[phase]}
+        </motion.p>
+      </AnimatePresence>
+      <p style={{ fontSize: 13, color: '#9ca3af', margin: 0 }}>
+        This takes a few seconds
+      </p>
+    </div>
+  );
+}
+
 interface ChatOnboardingProps {
   onLoginSuccess?: () => void;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: ChatOnboardingProps) {
   // Read initial goal from store (set by landing page)
   const initialGoal = useStore((state) => state.initialGoal);
@@ -161,10 +208,21 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
   });
 
   // Agent system state
-  const [onboardingPhase, setOnboardingPhase] = useState<'conversation' | 'stones' | 'generating'>('conversation');
+  const [onboardingPhase, setOnboardingPhase] = useState<
+    'conversation' | 'analyzing' | 'goal_clarification' | 'stones' | 'stone_round2' | 'stone_confirmation' | 'generating' | 'curriculum_preview'
+  >('conversation');
   const [goalAnalysis, setGoalAnalysis] = useState<Agent1Output | null>(null);
   const [stones, setStones] = useState<BuildingStone[]>([]);
   const [agentError, setAgentError] = useState<{ message: string; retryFn: () => void } | null>(null);
+
+  // Multi-stage validation state
+  const [goalClarifications, setGoalClarifications] = useState<GoalClarificationOutput | null>(null);
+  const [round1Answers, setRound1Answers] = useState<StoneAnswer[]>([]);
+  const [stoneRound2, setStoneRound2] = useState<StoneRound2Output | null>(null);
+  const [stoneProfile, setStoneProfile] = useState<import('@core/agents').Agent2ProfileOutput | null>(null);
+  const [curriculumPreviewData, setCurriculumPreviewData] = useState<CurriculumPreview | null>(null);
+  const [_agentRoadmapData, setAgentRoadmapData] = useState<import('@core/agents').Agent3Output | null>(null);
+  const [_paceCalibration, setPaceCalibration] = useState<PaceCalibration | null>(null);
 
   // Auth gate (shown after roadmap generation for unauthenticated users)
   const {
@@ -175,7 +233,7 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
     authName, setAuthName,
     authLoading,
     authError, setAuthError,
-    setPendingSyncData,
+    setPendingSyncData: _setPendingSyncData,
     handleAuthGateSubmit
   } = useAuthGate({ collectedData, setInitialGoal, setStep });
 
@@ -327,7 +385,6 @@ Current Data Already Collected: ${JSON.stringify(collectedData)}`
         }
 
         // Beautiful debug table showing exactly what we have
-        console.log('🔍 Shadow Extractor found:', newData);
         console.table({
           'Collected So Far': {
             Goal: merged.goal || '❌ missing',
@@ -458,9 +515,6 @@ The system will automatically detect when the data is complete and transition to
 
   // New function: Run Agent 1 & 2 to get stone questions
   const runAnalysisAndGetStones = async () => {
-    console.log('🎯 runAnalysisAndGetStones called');
-    console.log('   Goal:', collectedData.goal);
-    console.log('   Category:', collectedData.category);
 
     if (!collectedData.goal || !collectedData.category) {
       console.error('❌ Missing required data - cannot run agents');
@@ -472,22 +526,12 @@ The system will automatically detect when the data is complete and transition to
     setIsTyping(true);
 
     try {
-      // Debug: Log what we received from Shadow Extractor
-      console.log('🔍 Collected data before parsing:', {
-        dailyTime: collectedData.dailyTime,
-        dailyTimeType: typeof collectedData.dailyTime,
-        timeline: collectedData.timeline
-      });
-
       const dailyMinutes = parseDailyTimeToMinutes(collectedData.dailyTime);
       const durationInMonths = collectedData.timeline?.target
         ? calculateDurationInMonths(collectedData.timeline.target)
         : 3;
       const timelineDays = durationInMonths * 30;
 
-      console.log('📊 Running agents with parameters:');
-      console.log('   Timeline:', timelineDays, 'days');
-      console.log('   Daily time:', dailyMinutes, 'minutes');
 
       // Run Agent 1 & 2 — pass everything from chat so Agent 2 won't re-ask it
       const { goalAnalysis: analysis, stones: identifiedStones } = await runOnboardingAgents(
@@ -503,24 +547,20 @@ The system will automatically detect when the data is complete and transition to
         }
       );
 
-      console.log('✅ Agents completed successfully');
       setGoalAnalysis(analysis);
       setStones(identifiedStones.requiredStones);
 
-      // Debug: Log stones to see their structure
-      console.log('🧱 Generated Building Stones:', identifiedStones.requiredStones.length);
-      identifiedStones.requiredStones.forEach((stone, i) => {
-        console.log(`   Stone ${i+1}:`, {
-          id: stone.stoneId,
-          question: stone.question.text,
-          type: stone.question.type,
-          hasOptions: !!stone.question.options,
-          optionsCount: stone.question.options?.length || 0
-        });
-      });
+      // Brief delay for the analyzing transition to be visible
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-      console.log('🔄 Switching to stone questions phase');
-      setOnboardingPhase('stones');
+      // Check if Agent 1 flagged ambiguity or unrealistic goals → show clarification step
+      const clarifications = getGoalClarifications(analysis);
+      if (clarifications.needsClarification || clarifications.realityCheck?.triggered) {
+        setGoalClarifications(clarifications);
+        setOnboardingPhase('goal_clarification');
+      } else {
+        setOnboardingPhase('stones');
+      }
       setIsTyping(false);
 
     } catch (error) {
@@ -553,21 +593,208 @@ The system will automatically detect when the data is complete and transition to
     );
 
     if (isReady && onboardingPhase === 'conversation' && !isGeneratingPlan) {
-      console.log("🚀 Data complete. Moving to Stone Questions...");
-      setOnboardingPhase('stones');
+      setOnboardingPhase('analyzing');
       runAnalysisAndGetStones();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collectedData, onboardingPhase, isGeneratingPlan]);
 
-  // Handler for stone questions completion
-  const handleStoneQuestionsComplete = (answers: StoneAnswer[]) => {
+  // Handler for Round 1 stone questions completion → trigger Round 2
+  const handleStoneQuestionsComplete = async (answers: StoneAnswer[]) => {
+    setRound1Answers(answers);
+
+    if (!goalAnalysis) {
+      setOnboardingPhase('generating');
+      generateStrategicPlanWithAgents(answers);
+      return;
+    }
+
+    try {
+      const dailyMinutes = parseDailyTimeToMinutes(collectedData.dailyTime);
+      const timelineDays = (collectedData.timeline?.target ? calculateDurationInMonths(collectedData.timeline.target) : 3) * 30;
+
+      // Run preliminary extraction to generate Round 2 follow-ups
+      const round2 = await runStoneRound2(collectedData.goal, timelineDays, dailyMinutes, goalAnalysis, answers);
+      setStoneRound2(round2);
+
+      if (round2.followUpQuestions.length > 0) {
+        setOnboardingPhase('stone_round2');
+      } else {
+        // No follow-ups needed — go straight to full extraction
+        setOnboardingPhase('generating');
+        generateStrategicPlanWithAgents(answers);
+      }
+    } catch {
+      // If Round 2 fails, proceed normally
+      setOnboardingPhase('generating');
+      generateStrategicPlanWithAgents(answers);
+    }
+  };
+
+  // Handler for Round 2 stone follow-up completion → cross-validate → show confirmation
+  const handleStoneRound2Complete = async (round2Answers: StoneAnswer[]) => {
+    if (!stoneRound2 || !goalAnalysis) {
+      setOnboardingPhase('generating');
+      generateStrategicPlanWithAgents(round1Answers);
+      return;
+    }
+
+    // Cross-validate to detect misattributions
+    const crossVal = runStoneCrossValidation(stoneRound2, round2Answers);
+
+    // Run full stone extraction with all answers combined
+    const allAnswers = [...round1Answers, ...round2Answers];
+
+    try {
+      const dailyMinutes = parseDailyTimeToMinutes(collectedData.dailyTime);
+      const timelineDays = (collectedData.timeline?.target ? calculateDurationInMonths(collectedData.timeline.target) : 3) * 30;
+      const { extractStones } = await import('@core/agents');
+      const profile = await extractStones(
+        { userId: 'temp', goal: collectedData.goal, timeline: timelineDays, dailyTimeAvailable: dailyMinutes },
+        goalAnalysis,
+        allAnswers
+      );
+
+      // Inject cross-validation correction if it improved confidence
+      if (crossVal.confidenceImprovement > 0.05) {
+        profile.stoneProfile.primaryStone = crossVal.correctedPrimary;
+      }
+
+      setStoneProfile(profile);
+      setOnboardingPhase('stone_confirmation');
+    } catch {
+      setOnboardingPhase('generating');
+      generateStrategicPlanWithAgents(allAnswers);
+    }
+  };
+
+  // User confirmed stone profile → proceed to curriculum generation + preview
+  const handleStoneProfileConfirmed = () => {
+    const allAnswers = round1Answers; // profile already extracted
     setOnboardingPhase('generating');
-    generateStrategicPlanWithAgents(answers);
+    generateStrategicPlanWithAgents(allAnswers, stoneProfile ?? undefined);
+  };
+
+  // User said stone profile doesn't fit → skip confirmation, proceed with raw answers
+  const handleStoneProfileDoesntFit = () => {
+    setOnboardingPhase('generating');
+    generateStrategicPlanWithAgents(round1Answers);
+  };
+
+  // User selected pace on preview screen → apply calibration and finalize onboarding
+  const handlePaceSelect = async (choice: PaceChoice) => {
+    const calibration = getPaceCalibration(choice);
+    setPaceCalibration(calibration);
+
+    const pending = (window as Record<string, unknown>).__pendingOnboarding as {
+      agentRoadmap: import('@core/agents').Agent3Output;
+      firstTask: DailyTask;
+      stoneProfile: import('@core/agents').Agent2ProfileOutput;
+      dailyMinutes: number;
+      durationInMonths: number;
+      answers: StoneAnswer[];
+    } | undefined;
+
+    if (!pending) {
+      setStep(2);
+      return;
+    }
+
+    const { agentRoadmap, firstTask, stoneProfile: sp, dailyMinutes, durationInMonths } = pending;
+
+    // Convert agent roadmap to our existing format
+    const roadmap = {
+      title: collectedData.goal,
+      category: collectedData.category!,
+      duration: durationInMonths,
+      dailyTime: collectedData.dailyTime || '30 minutes',
+      recommendedTime: collectedData.energyPattern === 'morning' ? '7:00 AM' :
+                      collectedData.energyPattern === 'evening' ? '7:00 PM' : '2:00 PM',
+      phases: agentRoadmap.roadmap.phases.map(phase => ({
+        title: phase.phaseName,
+        weeks: `${phase.weeks[0]}-${phase.weeks[phase.weeks.length - 1]}`,
+        description: phase.primaryGoals.join('. ')
+      })),
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: new Date(new Date().getTime() + durationInMonths * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      // Embed calibration note for Agent 4 to read
+      paceCalibrationNote: calibration.note,
+      difficultyMultiplier: calibration.difficultyMultiplier,
+    };
+
+    updateUniversalProfile({
+      name: collectedData.name,
+      energyPattern: collectedData.energyPattern as 'morning' | 'afternoon' | 'evening' | 'night',
+      skillLevel: collectedData.skillLevel || undefined,
+      weekendAvailability: '',
+      dailyRoutine: {
+        wakeTime: collectedData.wakeTime || '7:00 AM',
+        sleepTime: '',
+        workHours: { start: '', end: '' },
+        freeTimeSlots: []
+      }
+    });
+
+    updateCurrentGoal({
+      category: collectedData.category!,
+      specificGoal: collectedData.goal,
+    });
+
+    setRoadmap(roadmap);
+    setAgentData(agentRoadmap, sp);
+
+    const inferTaskType = (title: string): 'practice' | 'learning' | 'reflection' => {
+      const t = title.toLowerCase();
+      if (/reflect|journal|review|assess|evaluat|check.?in|look back|lesson/.test(t)) return 'reflection';
+      if (/learn|watch|read|study|understand|explor|research|discover/.test(t)) return 'learning';
+      return 'practice';
+    };
+
+    const toStoreTask = (agentTask: DailyTask, dayNum: number) => ({
+      id: String(dayNum),
+      title: agentTask.task.title,
+      description: agentTask.task.description,
+      type: inferTaskType(agentTask.task.title),
+      duration: agentTask.task.estimatedMinutes,
+      completed: false,
+      skipped: false,
+      checkInTime: checkInTime || '07:00',
+      scheduledFor: new Date(Date.now() + (dayNum - 1) * 86400000).toISOString().split('T')[0],
+      day: dayNum,
+      dayNumber: dayNum,
+      steps: agentTask.task.steps.map(step => step.instruction),
+      tips: agentTask.task.tips,
+      successCriteria: agentTask.task.successCriteria.primary,
+      resources: agentTask.task.resources,
+    });
+
+    const initialTasks = [toStoreTask(firstTask, 1)];
+    setTasks(initialTasks);
+
+    // Generate days 2-7 in background with calibration applied
+    generateTaskBatch(2, 7, agentRoadmap, sp, dailyMinutes, collectedData.category || undefined, collectedData.skillLevel || 'beginner')
+      .then((batchTasks: DailyTask[]) => {
+        const extraTasks = batchTasks.map((t: DailyTask, i: number) => toStoreTask(t, i + 2));
+        const allTasks = [...initialTasks, ...extraTasks];
+        setTasks(allTasks);
+        const u = useStore.getState().user;
+        if (u) {
+          syncCompleteRoadmap(u.id, collectedData.goal, `Generated via AI for ${collectedData.category}`, goalAnalysis!, pending.answers, agentRoadmap, allTasks, sp)
+            .catch(() => { /* non-critical */ });
+        }
+      })
+      .catch(() => { /* non-critical */ });
+
+    track('onboarding_completed', { category: collectedData.category, paceChoice: choice });
+    delete (window as Record<string, unknown>).__pendingOnboarding;
+    setStep(2);
   };
 
   // New function: Generate plan using Agent 3 & 4
-  const generateStrategicPlanWithAgents = async (answers: StoneAnswer[]) => {
+  const generateStrategicPlanWithAgents = async (
+    answers: StoneAnswer[],
+    preComputedStoneProfile?: import('@core/agents').Agent2ProfileOutput
+  ) => {
     if (!collectedData.goal || !goalAnalysis) {
       return;
     }
@@ -593,9 +820,6 @@ The system will automatically detect when the data is complete and transition to
     }, 300);
 
     try {
-      console.log('🚀 Starting complete roadmap generation...');
-      console.log('   Timeline:', timelineDays, 'days');
-      console.log('   Daily time:', dailyMinutes, 'minutes');
 
       // Run Agent 3 & 4 to generate roadmap and first task
       const { roadmap: agentRoadmap, firstTask, stoneProfile } = await generateCompleteRoadmap(
@@ -605,146 +829,26 @@ The system will automatically detect when the data is complete and transition to
         answers,
         collectedData.category || undefined,
         collectedData.skillLevel || 'beginner',
-        collectedData.behavioralFlags
+        collectedData.behavioralFlags,
+        preComputedStoneProfile
       );
 
-      console.log('✅ Roadmap and first task generated');
+      // Store agent roadmap for later use (preview + task generation)
+      setAgentRoadmapData(agentRoadmap);
 
-      // Convert agent roadmap to our existing format
-      const roadmap = {
-        title: collectedData.goal,
-        category: collectedData.category!,
-        duration: durationInMonths,
-        dailyTime: collectedData.dailyTime || '30 minutes',
-        recommendedTime: collectedData.energyPattern === 'morning' ? '7:00 AM' :
-                        collectedData.energyPattern === 'evening' ? '7:00 PM' : '2:00 PM',
-        phases: agentRoadmap.roadmap.phases.map(phase => ({
-          title: phase.phaseName,
-          weeks: `${phase.weeks[0]}-${phase.weeks[phase.weeks.length - 1]}`,
-          description: phase.primaryGoals.join('. ')
-        })),
-        startDate: new Date().toISOString().split('T')[0],
-        endDate: new Date(new Date().getTime() + durationInMonths * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      };
-
-      // Update profile and goal
-      updateUniversalProfile({
-        name: collectedData.name,
-        energyPattern: collectedData.energyPattern as 'morning' | 'afternoon' | 'evening' | 'night',
-        skillLevel: collectedData.skillLevel || undefined,
-        weekendAvailability: '',
-        dailyRoutine: {
-          wakeTime: collectedData.wakeTime || '7:00 AM',
-          sleepTime: '',
-          workHours: { start: '', end: '' },
-          freeTimeSlots: []
-        }
-      });
-
-      updateCurrentGoal({
-        category: collectedData.category!,
-        specificGoal: collectedData.goal,
-      });
-
-      setRoadmap(roadmap);
-      // Persist agent data so generateNextDayTasks can use Agent 4 for future days
-      setAgentData(agentRoadmap, stoneProfile);
-
-      // Infer task type from title keywords (DailyTask has no type field)
-      const inferTaskType = (title: string): 'practice' | 'learning' | 'reflection' => {
-        const t = title.toLowerCase();
-        if (/reflect|journal|review|assess|evaluat|check.?in|look back|lesson/.test(t)) return 'reflection';
-        if (/learn|watch|read|study|understand|explor|research|discover/.test(t)) return 'learning';
-        return 'practice';
-      };
-
-      // Helper: convert a DailyTask agent output to the store/DB format
-      const toStoreTask = (agentTask: typeof firstTask, dayNum: number) => ({
-        id: String(dayNum),
-        title: agentTask.task.title,
-        description: agentTask.task.description,
-        type: inferTaskType(agentTask.task.title),
-        duration: agentTask.task.estimatedMinutes,
-        completed: false,
-        skipped: false,
-        checkInTime: checkInTime || '07:00',
-        scheduledFor: new Date(Date.now() + (dayNum - 1) * 86400000).toISOString().split('T')[0],
-        day: dayNum,
-        dayNumber: dayNum,
-        steps: agentTask.task.steps.map(step => step.instruction),
-        tips: agentTask.task.tips,
-        successCriteria: agentTask.task.successCriteria.primary,
-        resources: agentTask.task.resources,
-      });
-
-      // Day 1 is already generated; pre-generate days 2–7 in background
-      const initialTasks = [toStoreTask(firstTask, 1)];
-
-      console.log('📦 Day 1 task resources:', {
-        title: firstTask.task.title,
-        primary: firstTask.task.resources?.primary?.url ?? 'none',
-      });
-
-      setTasks(initialTasks);
+      // Build 7-day curriculum preview and show it before committing to Day 1
+      const preview = getCurriculumPreview(agentRoadmap, collectedData.category || collectedData.goal, dailyMinutes);
+      setCurriculumPreviewData(preview);
       setGenerationProgress(100);
       clearInterval(progressInterval);
+      setIsGeneratingPlan(false);
 
-      // Generate days 2-7 in background (non-blocking) then append to store + DB
-      generateTaskBatch(2, 7, agentRoadmap, stoneProfile, dailyMinutes, collectedData.category || undefined, collectedData.skillLevel || 'beginner')
-        .then((batchTasks: DailyTask[]) => {
-          const extraTasks = batchTasks.map((t: DailyTask, i: number) => toStoreTask(t, i + 2));
-          const allTasks = [...initialTasks, ...extraTasks];
-          setTasks(allTasks);
-          console.log(`✅ Week 1 fully generated (${allTasks.length} tasks)`);
-          const u = useStore.getState().user;
-          if (u) {
-            syncCompleteRoadmap(u.id, collectedData.goal, `Generated via AI for ${collectedData.category}`, goalAnalysis, answers, agentRoadmap, allTasks)
-              .catch((err: unknown) => console.warn('⚠️ Re-sync with week tasks failed:', err));
-          }
-        })
-        .catch((err: unknown) => console.warn('⚠️ Background week generation failed:', err));
-
-      setGenerationProgress(100);
-      clearInterval(progressInterval);
-
-      // Check if user is authenticated
-      const user = useStore.getState().user;
-      if (user) {
-        // User is logged in — sync in background and go to dashboard
-        console.log('📤 Syncing roadmap to Supabase...');
-        syncCompleteRoadmap(
-          user.id,
-          collectedData.goal,
-          `Generated via AI multi-agent system for ${collectedData.category}`,
-          goalAnalysis,
-          answers,
-          agentRoadmap,
-          initialTasks
-        ).then(result => {
-          if (result.success && 'isLocalOnly' in result && result.isLocalOnly) {
-            const toast = document.createElement('div');
-            toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#F59E0B;color:white;padding:12px 20px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:10000;font-size:14px;';
-            toast.textContent = '💡 Running in offline mode - progress saved locally';
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 4000);
-          } else if (result.success) {
-            console.log('✅ Roadmap synced to Supabase successfully!');
-          }
-        }).catch(error => {
-          console.warn('⚠️ Background sync issue:', error);
-        });
-
-        track({ event: 'onboarding_completed', properties: { goal_category: agentRoadmap?.category ?? undefined } });
-        setTimeout(() => setStep(2), 1000);
-      } else {
-        // Not authenticated — show auth gate overlay (blurred roadmap + signup)
-        console.log('🔒 Roadmap ready. Showing auth gate...');
-        setPendingSyncData({ goalAnalysisData: goalAnalysis, answers, agentRoadmap, initialTasksData: initialTasks });
-        setTimeout(() => {
-          setIsGeneratingPlan(false);
-          setShowAuthGate(true);
-        }, 800);
-      }
+      // Transition to preview screen — user picks pace before we finalize tasks
+      // Store everything we need for finalization
+      (window as Record<string, unknown>).__pendingOnboarding = {
+        agentRoadmap, firstTask, stoneProfile, dailyMinutes, durationInMonths, answers
+      };
+      setOnboardingPhase('curriculum_preview');
 
     } catch (error) {
       console.error('Error generating plan with agents:', error);
@@ -964,12 +1068,35 @@ The system will automatically detect when the data is complete and transition to
         </button>
       </div>
 
-      {/* Transition loader — shown while stones are being fetched */}
-      {onboardingPhase === 'stones' && stones.length === 0 && (
-        <div className="flex flex-1 items-center justify-center">
-          <CoherenLoader size={64} color="#7c3aed" />
-        </div>
-      )}
+      {/* ── Analyzing Transition Screen ── */}
+      <AnimatePresence>
+        {(onboardingPhase === 'analyzing' || (onboardingPhase === 'stones' && stones.length === 0)) && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.4 }}
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 20,
+              position: 'relative',
+              zIndex: 1,
+            }}
+          >
+            <motion.div
+              animate={{ scale: [1, 1.08, 1] }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <CoherenLoader size={56} color="#7c3aed" />
+            </motion.div>
+            <AnalyzingText />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Stone Questions Phase */}
       {onboardingPhase === 'stones' && stones.length > 0 && (
@@ -1008,6 +1135,107 @@ The system will automatically detect when the data is complete and transition to
               onComplete={handleStoneQuestionsComplete}
             />
           </div>
+        </div>
+      )}
+
+      {/* Goal Clarification Phase */}
+      {onboardingPhase === 'goal_clarification' && goalClarifications && (
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: tokens.spacing.xl,
+          position: 'relative',
+          zIndex: 1,
+        }}>
+          <GoalClarificationStep
+            clarificationOutput={goalClarifications}
+            onComplete={() => {
+              setOnboardingPhase('stones');
+            }}
+          />
+        </div>
+      )}
+
+      {/* Stone Round 2 Phase */}
+      {onboardingPhase === 'stone_round2' && stoneRound2 && stoneRound2.followUpQuestions.length > 0 && (
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: tokens.spacing.xl,
+          position: 'relative',
+          zIndex: 1,
+        }}>
+          <div style={{ maxWidth: '700px', width: '100%' }}>
+            <div style={{ marginBottom: tokens.spacing['2xl'], textAlign: 'center' }}>
+              <h2 style={{
+                fontSize: tokens.typography.sizes['3xl'],
+                fontWeight: tokens.typography.weights.light,
+                color: tokens.colors.text.primary,
+                marginBottom: tokens.spacing.md,
+              }}>
+                A few more questions
+              </h2>
+              <p style={{ fontSize: tokens.typography.sizes.base, color: tokens.colors.text.secondary, lineHeight: 1.6 }}>
+                Help us understand your situation better
+              </p>
+            </div>
+            <StoneQuestions
+              stones={stoneRound2.followUpQuestions.map(q => ({
+                stoneId: q.id,
+                stoneName: q.resolves,
+                importance: 'medium' as const,
+                reasoning: q.resolves,
+                question: {
+                  text: q.question,
+                  type: q.type,
+                  options: q.options.map(o => ({ value: o.value, label: o.label, impact: { pointsTo: o.pointsTo } })),
+                },
+              }))}
+              onComplete={handleStoneRound2Complete}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Stone Profile Confirmation Phase */}
+      {onboardingPhase === 'stone_confirmation' && stoneProfile && (
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: tokens.spacing.xl,
+          position: 'relative',
+          zIndex: 1,
+        }}>
+          <StoneProfileConfirmation
+            stoneProfile={stoneProfile}
+            onConfirm={handleStoneProfileConfirmed}
+            onDoesntFit={handleStoneProfileDoesntFit}
+          />
+        </div>
+      )}
+
+      {/* Curriculum Preview Phase */}
+      {onboardingPhase === 'curriculum_preview' && curriculumPreviewData && (
+        <div style={{
+          flex: 1,
+          overflowY: 'auto',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'flex-start',
+          padding: `${tokens.spacing['2xl']} ${tokens.spacing.xl}`,
+          position: 'relative',
+          zIndex: 1,
+        }}>
+          <CurriculumPreviewComponent
+            preview={curriculumPreviewData}
+            onPaceSelect={handlePaceSelect}
+          />
         </div>
       )}
 

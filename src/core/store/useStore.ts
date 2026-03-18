@@ -4,15 +4,17 @@ import type { OnboardingState, GoalCategory } from '@types-app/index.js';
 import { generateTasksForDay, generateTasksFromAIPlan } from '@shared/utils/taskGenerator.js';
 import type { User } from '@supabase/supabase-js';
 import { getCurrentUser } from '@lib/supabase';
-import { updateTaskCompletion, updateTaskSkip, updateProfile, saveTaskFeedback } from '@lib/database';
-import type { TaskResource, Agent3Output, Agent2ProfileOutput, DailyTask, TaskStep } from '@types-app/agents.js';
+import { updateTaskCompletion, updateTaskSkip, updateProfile, saveTaskFeedback, syncDailyTasksToDB } from '@lib/database';
+import type { TaskResource, Agent3Output, Agent2ProfileOutput, DailyTask, TaskStep, AssessmentQuestion, AssessmentResult } from '@types-app/agents.js';
 import { runTaskGenerator } from '@core/agents';
+import { generateFallbackTask } from '@core/agents/fallback-task-generator';
+import { flags } from '@config/feature-flags';
 
 export interface Task {
   id: string;
   title: string;
   description: string;
-  type: 'practice' | 'learning' | 'reflection';
+  type: 'practice' | 'learning' | 'reflection' | 'challenge' | 'retrieval' | 'assessment';
   duration: number; // minutes (planned)
   completed: boolean;
   completedAt?: string;
@@ -38,6 +40,10 @@ export interface Task {
   actualDuration?: number; // actual minutes taken
   userComment?: string; // struggle notes or feedback
   feedbackTags?: string[]; // quick feedback tags (e.g., 'perfect_pace', 'physical_pain', 'confusing')
+  // Assessment fields (for challenge/retrieval/assessment task types)
+  assessmentQuestions?: AssessmentQuestion[];
+  assessmentResults?: AssessmentResult[];
+  retrievalInterval?: number; // days since content was first learned (spaced repetition)
 }
 
 interface WeekPerformance {
@@ -107,6 +113,7 @@ interface AppStore extends OnboardingState {
   setCheckInTime: (time: string) => void;
   setRoadmap: (roadmap: Roadmap) => void;
   setAgentData: (agentRoadmap: Agent3Output, stoneProfile: Agent2ProfileOutput) => void;
+  updateAgentRoadmap: (updater: (roadmap: Agent3Output) => Agent3Output) => void;
   setTasks: (tasks: Task[]) => void;
   completeTask: (taskId: string) => Promise<void>;
   setTaskFeedback: (taskId: string, difficultyRating: number, feedbackTags?: string[], userComment?: string, actualDuration?: number) => Promise<void>;
@@ -114,6 +121,7 @@ interface AppStore extends OnboardingState {
   canAdvanceDay: () => boolean;
   advanceDay: () => boolean;
   generateNextDayTasks: () => void;
+  completeAssessment: (taskId: string, results: AssessmentResult[]) => void;
   trackWeekPerformance: () => void;
   resetOnboarding: () => void;
 }
@@ -180,6 +188,11 @@ export const useStore = create<AppStore>()(
 
       setAgentData: (agentRoadmap, stoneProfile) => set({ agentRoadmap, stoneProfile }),
 
+      updateAgentRoadmap: (updater) => set((state) => {
+        if (!state.agentRoadmap) return state;
+        return { agentRoadmap: updater(state.agentRoadmap) };
+      }),
+
       setTasks: (tasks) => set({ tasks }),
 
       completeTask: async (taskId) => {
@@ -199,7 +212,6 @@ export const useStore = create<AppStore>()(
               task.userComment,
               task.feedbackTags
             );
-            console.log('✅ Task synced to Supabase');
           } catch (error) {
             console.error('Failed to sync task to Supabase:', error);
           }
@@ -280,7 +292,6 @@ export const useStore = create<AppStore>()(
         if (state.user && reason && isUUID) {
           try {
             await updateTaskSkip(taskId, reason);
-            console.log('✅ Task skip synced to Supabase');
           } catch (error) {
             console.error('Failed to sync skip to Supabase:', error);
           }
@@ -380,6 +391,16 @@ export const useStore = create<AppStore>()(
         return true;
       },
 
+      completeAssessment: (taskId, results) => {
+        set((state) => ({
+          tasks: state.tasks.map((t) =>
+            t.id === taskId
+              ? { ...t, assessmentResults: results, completed: true, completedAt: new Date().toISOString() }
+              : t
+          ),
+        }));
+      },
+
       trackWeekPerformance: () => {
         const state = get();
         const currentWeek = Math.ceil(state.currentDay / 7);
@@ -429,18 +450,40 @@ export const useStore = create<AppStore>()(
 
         const nextDay = state.currentDay;
 
-        // If we have full agent data, use Agent 4 for rich task with steps/resources
-        if (state.agentRoadmap && state.stoneProfile) {
+        // If we have full agent data AND AI agents are enabled, use Agent 4
+        if (flags.USE_AI_AGENTS && state.agentRoadmap && state.stoneProfile) {
           const dailyMinutes = parseInt(state.roadmap.dailyTime) || 30;
 
+          // Build previous task context for Agent 4 (PREVIOUSLY COVERED + difficulty signals)
+          const recentCompleted = state.tasks
+            .filter(t => (t.completed || t.skipped) && t.dayNumber && t.dayNumber < nextDay)
+            .sort((a, b) => (b.dayNumber ?? 0) - (a.dayNumber ?? 0))
+            .slice(0, 5);
+
+          const previousTasksContext = recentCompleted.length > 0
+            ? recentCompleted.map(t =>
+                `- Day ${t.dayNumber}: "${t.title}"` +
+                (t.completed ? ` ✓ completed` : ` ✗ skipped${t.skipReason ? ` (${t.skipReason})` : ''}`) +
+                (t.difficultyRating ? ` | difficulty: ${t.difficultyRating}/5` : '') +
+                (t.actualDuration ? ` | took ${t.actualDuration} min` : '')
+              ).join('\n')
+            : undefined;
+
           // Kick off Agent 4 async, optimistically add a placeholder task
-          runTaskGenerator(nextDay, state.agentRoadmap, state.stoneProfile, dailyMinutes)
+          const goalText = (state.currentGoal as { specificGoal?: string }).specificGoal ?? undefined;
+          const goalCategory = (state.currentGoal as { category?: string }).category ?? undefined;
+          const skillLevel = (state.currentGoal as { skillLevel?: 'beginner' | 'intermediate' | 'advanced' }).skillLevel ?? 'beginner';
+          runTaskGenerator(nextDay, state.agentRoadmap, state.stoneProfile, dailyMinutes, previousTasksContext, goalText, goalCategory, skillLevel)
             .then((agentTask: DailyTask) => {
+              // Check if this is an assessment task (has assessment questions attached)
+              const assessmentData = agentTask as DailyTask & { assessmentQuestions?: AssessmentQuestion[]; taskType?: string };
+              const taskType = (assessmentData.taskType as Task['type']) || 'practice';
+
               const newTask: Task = {
                 id: `agent-day-${nextDay}`,
                 title: agentTask.task.title,
                 description: agentTask.task.description,
-                type: 'practice',
+                type: taskType,
                 duration: agentTask.task.estimatedMinutes,
                 completed: false,
                 skipped: false,
@@ -451,6 +494,8 @@ export const useStore = create<AppStore>()(
                 tips: agentTask.task.tips,
                 successCriteria: agentTask.task.successCriteria.primary,
                 resources: agentTask.task.resources,
+                // Assessment data
+                assessmentQuestions: assessmentData.assessmentQuestions,
               };
               // Replace placeholder with real task
               set((s) => ({
@@ -458,16 +503,71 @@ export const useStore = create<AppStore>()(
                   .filter(t => t.id !== `placeholder-day-${nextDay}`)
                   .concat([newTask])
               }));
-              console.log(`✅ Agent 4: Day ${nextDay} task generated with resources`);
+
+              // Sync to Supabase in background (non-blocking)
+              const syncState = get();
+              const roadmapId = (syncState.roadmap as Record<string, unknown> & { id?: string })?.id
+                ?? (syncState.agentRoadmap as Record<string, unknown> & { dbRoadmapId?: string })?.dbRoadmapId;
+              if (roadmapId && typeof roadmapId === 'string') {
+                syncDailyTasksToDB(roadmapId, [newTask]).then(synced => {
+                  if (synced.length > 0) {
+                    // Update local task ID to the Supabase UUID
+                    set(s => ({
+                      tasks: s.tasks.map(t =>
+                        t.id === newTask.id ? { ...t, id: synced[0].id } : t
+                      )
+                    }));
+                  }
+                }).catch(() => { /* non-critical */ });
+              }
             })
-            .catch(() => {
-              // Agent 4 failed — replace placeholder with static fallback
-              const fallback = generateTasksFromAIPlan(state.roadmap!, nextDay, state.checkInTime);
+            .catch((err: unknown) => {
+              console.warn(`Agent 4 failed for Day ${nextDay}, using deterministic fallback:`, err);
+              // Use phase-aware deterministic fallback (no LLM, always succeeds)
+              const agentState = get();
+              const fallbackTask = generateFallbackTask(
+                nextDay,
+                agentState.agentRoadmap!,
+                agentState.stoneProfile!,
+                dailyMinutes
+              );
+              const fallbackStoreTask: Task = {
+                id: `fallback-day-${nextDay}`,
+                title: fallbackTask.task.title,
+                description: fallbackTask.task.description,
+                type: 'practice',
+                duration: fallbackTask.task.estimatedMinutes,
+                completed: false,
+                skipped: false,
+                scheduledFor: new Date().toISOString().split('T')[0],
+                day: nextDay,
+                dayNumber: nextDay,
+                steps: fallbackTask.task.steps.map((s: TaskStep) => s.instruction),
+                tips: fallbackTask.task.tips,
+                successCriteria: fallbackTask.task.successCriteria.primary,
+                resources: fallbackTask.task.resources,
+              };
               set((s) => ({
                 tasks: s.tasks
                   .filter(t => t.id !== `placeholder-day-${nextDay}`)
-                  .concat(fallback)
+                  .concat([fallbackStoreTask])
               }));
+
+              // Sync fallback task to Supabase in background
+              const fbSyncState = get();
+              const fbRoadmapId = (fbSyncState.roadmap as Record<string, unknown> & { id?: string })?.id
+                ?? (fbSyncState.agentRoadmap as Record<string, unknown> & { dbRoadmapId?: string })?.dbRoadmapId;
+              if (fbRoadmapId && typeof fbRoadmapId === 'string') {
+                syncDailyTasksToDB(fbRoadmapId, [fallbackStoreTask]).then(synced => {
+                  if (synced.length > 0) {
+                    set(s => ({
+                      tasks: s.tasks.map(t =>
+                        t.id === fallbackStoreTask.id ? { ...t, id: synced[0].id } : t
+                      )
+                    }));
+                  }
+                }).catch(() => { /* non-critical */ });
+              }
             });
 
           // Add a lightweight placeholder so the UI isn't empty while Agent 4 runs

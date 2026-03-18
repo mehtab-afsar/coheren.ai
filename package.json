@@ -25,7 +25,11 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:smoke": "playwright test e2e/smoke.test.ts",
     "rag:ingest": "node --env-file=.env node_modules/.bin/tsx scripts/ingest-knowledge.ts",
-    "rag:verify": "node --env-file=.env node_modules/.bin/tsx scripts/verify-rag.ts"
+    "rag:verify": "node --env-file=.env node_modules/.bin/tsx scripts/verify-rag.ts",
+    "test:pipeline": "node --env-file=.env node_modules/.bin/tsx scripts/test-full-pipeline.ts",
+    "resources:validate": "node_modules/.bin/tsx scripts/validate-resources.ts",
+    "test:matrix": "node --env-file=.env node_modules/.bin/tsx scripts/test-matrix.ts",
+    "test:matrix:quick": "node --env-file=.env node_modules/.bin/tsx scripts/test-matrix.ts --quick"
   },
   "dependencies": {
     "@number-flow/react": "^0.5.11",

@@ -93,7 +93,6 @@ export async function callGroqWithFallback(
     const model = MODEL_TIERS[tier];
 
     try {
-      console.log(`🤖 Attempting API call with ${tier} model (${model})`);
 
       const result = await callWithRetry(
         { ...params, model },
@@ -105,7 +104,6 @@ export async function callGroqWithFallback(
       _stats.modelUsage[model] = (_stats.modelUsage[model] ?? 0) + 1;
       if (tier !== preferredTier) {
         _stats.fallbackCount += 1;
-        console.log(`✅ Success with fallback model: ${tier} (session fallbacks: ${_stats.fallbackCount})`);
       }
 
       return result;

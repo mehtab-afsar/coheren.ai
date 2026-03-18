@@ -1,17 +1,8 @@
-/**
- * Checkpoint Screen
- *
- * Shown every 14 days to:
- * 1. Collect user feedback on the last sprint
- * 2. Display performance analysis
- * 3. Trigger Agent 5 recalibration
- * 4. Show the new roadmap for next 14 days
- */
-
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, TrendingDown, Award, AlertCircle, Sparkles, ArrowRight } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Sparkles, ArrowRight } from 'lucide-react';
 import { tokens } from '@core/design-system';
+import { useBreakpoint } from '@hooks/useBreakpoint';
 
 interface CheckpointScreenProps {
   checkpointDay: number;
@@ -23,7 +14,6 @@ interface CheckpointScreenProps {
   masteringAreas?: string[];
   onComplete: (feedback: CheckpointFeedback) => void;
   isRecalibrating?: boolean;
-  /** Agent 5 output — surfaced after recalibration completes */
   recalibrationResult?: {
     coachMessage: string;
     nextSprintFocus: string;
@@ -39,7 +29,15 @@ export interface CheckpointFeedback {
   specificStruggles?: string;
 }
 
+const TIME_OPTIONS: { value: CheckpointFeedback['timeManagement']; label: string }[] = [
+  { value: 'no_time',     label: 'Not enough' },
+  { value: 'rushed',      label: 'Tight' },
+  { value: 'comfortable', label: 'Fine' },
+  { value: 'extra_time',  label: 'Plenty' },
+];
+
 export default function CheckpointScreen({
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   checkpointDay,
   sprintNumber,
   completedTasks,
@@ -51,623 +49,236 @@ export default function CheckpointScreen({
   isRecalibrating = false,
   recalibrationResult = null,
 }: CheckpointScreenProps) {
+  const { isMobile } = useBreakpoint();
   const [confidence, setConfidence] = useState(5);
-  const [energy, setEnergy] = useState<CheckpointFeedback['energyLevel']>('good');
   const [timeManagement, setTimeManagement] = useState<CheckpointFeedback['timeManagement']>('comfortable');
   const [feedback, setFeedback] = useState('');
-  const [struggles, setStruggles] = useState('');
-  const [showAnalysis, setShowAnalysis] = useState(true);
+  const [submitted, setSubmitted] = useState(false);
 
-  const completionRate = (completedTasks / totalTasks) * 100;
+  const completionRate = Math.round((completedTasks / totalTasks) * 100);
+  const weekStart = (sprintNumber - 1) * 14 + 1;
+  const weekEnd = weekStart + 13;
+
+  const performanceLabel = avgDifficulty > 3.5 ? 'Challenging' : avgDifficulty < 2.5 ? 'Too easy' : 'Well balanced';
+
+  const statBullets = [
+    `${completedTasks} of ${totalTasks} tasks completed (${completionRate}%)`,
+    masteringAreas.length > 0
+      ? `Strongest area: ${masteringAreas[0]}`
+      : `Difficulty average: ${avgDifficulty.toFixed(1)}/5 — ${performanceLabel.toLowerCase()}`,
+    strugglingAreas.length > 0
+      ? `Needs more practice: ${strugglingAreas[0]}`
+      : 'No major struggle areas identified',
+    `Sprint ${sprintNumber} difficulty: ${performanceLabel}`,
+  ];
 
   const handleSubmit = () => {
+    setSubmitted(true);
     onComplete({
       overallConfidence: confidence,
-      energyLevel: energy,
+      energyLevel: 'good',
       timeManagement,
       qualitativeFeedback: feedback,
-      specificStruggles: struggles
     });
   };
 
-  // Performance indicator
-  const performanceLevel = avgDifficulty > 3.5 ? 'challenging' :
-                          avgDifficulty < 2.5 ? 'easy' : 'balanced';
-
-  const performanceColor = performanceLevel === 'challenging' ? tokens.colors.warning :
-                           performanceLevel === 'easy' ? tokens.colors.success : tokens.colors.primary;
-
   return (
-    <div style={{
-      minHeight: '100vh',
-      backgroundColor: tokens.colors.background,
-      padding: tokens.spacing.xl,
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center'
-    }}>
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        style={{
-          maxWidth: '800px',
-          width: '100%'
-        }}
-      >
-        {/* Header */}
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      style={{ maxWidth: 640, margin: '0 auto', paddingBottom: 40 }}
+    >
+      {/* Header */}
+      <div style={{ marginBottom: 28 }}>
         <div style={{
-          textAlign: 'center',
-          marginBottom: tokens.spacing['2xl']
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '4px 12px',
+          background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+          borderRadius: 99, marginBottom: 12,
         }}>
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '80px',
-            height: '80px',
-            borderRadius: tokens.borderRadius.full,
-            backgroundColor: `${tokens.colors.primary}15`,
-            marginBottom: tokens.spacing.lg
-          }}>
-            <Sparkles size={40} color={tokens.colors.primary} />
+          <Sparkles size={12} color="#fff" strokeWidth={2} />
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>
+            Sprint {sprintNumber} Complete
+          </span>
+        </div>
+        <h1 style={{
+          fontSize: 'clamp(22px, 5vw, 28px)', fontWeight: 700,
+          color: tokens.colors.text.primary, letterSpacing: '-0.03em',
+          margin: '0 0 6px', lineHeight: 1.15,
+        }}>
+          Days {weekStart}–{weekEnd} done.
+        </h1>
+        <p style={{ fontSize: 14, color: tokens.colors.text.secondary, margin: 0, lineHeight: 1.5 }}>
+          Here's what happened, and what's next.
+        </p>
+      </div>
+
+      {/* Stats: Here's what happened */}
+      <div style={{
+        background: tokens.colors.surface,
+        border: `1px solid ${tokens.colors.border}`,
+        borderRadius: 16, padding: '18px 20px', marginBottom: 20,
+      }}>
+        <p style={{ fontSize: 11, fontWeight: 700, color: tokens.colors.text.tertiary, letterSpacing: '0.07em', textTransform: 'uppercase', margin: '0 0 12px' }}>
+          Here's what happened
+        </p>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {statBullets.map((bullet, i) => (
+            <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <span style={{ color: '#7c3aed', fontSize: 14, lineHeight: 1.5, flexShrink: 0 }}>·</span>
+              <span style={{ fontSize: 14, color: tokens.colors.text.secondary, lineHeight: 1.5 }}>{bullet}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* What I'm changing (AI message) */}
+      {recalibrationResult ? (
+        <div style={{
+          background: '#f5f3ff', border: '1px solid rgba(124,58,237,0.15)',
+          borderRadius: 16, padding: '18px 20px', marginBottom: 20,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
+            <Sparkles size={13} color="#7c3aed" strokeWidth={2} />
+            <p style={{ fontSize: 11, fontWeight: 700, color: '#7c3aed', letterSpacing: '0.07em', textTransform: 'uppercase', margin: 0 }}>
+              What I'm changing
+            </p>
           </div>
-
-          <h1 style={{
-            fontSize: tokens.typography.sizes['3xl'],
-            fontWeight: tokens.typography.weights.regular,
-            color: tokens.colors.text.primary,
-            marginBottom: tokens.spacing.sm
-          }}>
-            Day {checkpointDay} Checkpoint
-          </h1>
-
-          <p style={{
-            fontSize: tokens.typography.sizes.lg,
-            color: tokens.colors.text.secondary,
-            fontWeight: tokens.typography.weights.light
-          }}>
-            Sprint {sprintNumber} Complete • Let's analyze your progress
+          <p style={{ fontSize: 14, color: tokens.colors.text.primary, lineHeight: 1.65, margin: 0 }}>
+            {recalibrationResult.coachMessage}
+          </p>
+          {recalibrationResult.nextSprintFocus && (
+            <p style={{ fontSize: 12, color: tokens.colors.text.tertiary, margin: '10px 0 0' }}>
+              Sprint {sprintNumber + 1} focus: {recalibrationResult.nextSprintFocus}
+            </p>
+          )}
+        </div>
+      ) : !submitted ? (
+        <div style={{
+          background: '#f5f3ff', border: '1px solid rgba(124,58,237,0.12)',
+          borderRadius: 16, padding: '16px 20px', marginBottom: 20,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
+            <Sparkles size={13} color="#7c3aed" strokeWidth={2} />
+            <p style={{ fontSize: 11, fontWeight: 700, color: '#7c3aed', letterSpacing: '0.07em', textTransform: 'uppercase', margin: 0 }}>
+              What I'm changing
+            </p>
+          </div>
+          <p style={{ fontSize: 13, color: '#9ca3af', lineHeight: 1.6, margin: 0 }}>
+            I'll adjust your next sprint based on your check-in below.
           </p>
         </div>
+      ) : null}
 
-        {/* Performance Summary */}
-        <AnimatePresence>
-          {showAnalysis && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
+      {/* Quick check-in */}
+      {!recalibrationResult && (
+        <div style={{
+          background: tokens.colors.surface, border: `1px solid ${tokens.colors.border}`,
+          borderRadius: 16, padding: '18px 20px', marginBottom: 24,
+        }}>
+          <p style={{ fontSize: 11, fontWeight: 700, color: tokens.colors.text.tertiary, letterSpacing: '0.07em', textTransform: 'uppercase', margin: '0 0 18px' }}>
+            Quick check-in
+          </p>
+
+          {/* Confidence slider */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <label style={{ fontSize: 13, color: tokens.colors.text.primary, fontWeight: 500 }}>
+                Confidence with skills learned
+              </label>
+              <span style={{ fontSize: 16, fontWeight: 700, color: '#7c3aed', minWidth: 36, textAlign: 'right' }}>
+                {confidence}/10
+              </span>
+            </div>
+            <input
+              type="range" min="1" max="10" value={confidence}
+              onChange={e => setConfidence(parseInt(e.target.value))}
+              style={{ width: '100%', height: 6, borderRadius: 99, cursor: 'pointer',
+                background: `linear-gradient(to right, #7c3aed ${(confidence - 1) / 9 * 100}%, #e5e7eb ${(confidence - 1) / 9 * 100}%)`,
+                outline: 'none', appearance: 'none' as const }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+              <span style={{ fontSize: 11, color: tokens.colors.text.tertiary }}>Still learning</span>
+              <span style={{ fontSize: 11, color: tokens.colors.text.tertiary }}>Fully mastered</span>
+            </div>
+          </div>
+
+          {/* Time buttons */}
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: 'block', fontSize: 13, color: tokens.colors.text.primary, fontWeight: 500, marginBottom: 10 }}>
+              How was the time commitment?
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 8 }}>
+              {TIME_OPTIONS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => setTimeManagement(value)}
+                  style={{
+                    padding: '9px 4px', borderRadius: 10, fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                    border: timeManagement === value ? '2px solid #7c3aed' : `1px solid ${tokens.colors.border}`,
+                    backgroundColor: timeManagement === value ? 'rgba(124,58,237,0.08)' : 'transparent',
+                    color: timeManagement === value ? '#7c3aed' : tokens.colors.text.secondary,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Optional note */}
+          <div>
+            <label style={{ display: 'block', fontSize: 13, color: tokens.colors.text.primary, fontWeight: 500, marginBottom: 8 }}>
+              Anything for your AI to know? (optional)
+            </label>
+            <textarea
+              value={feedback}
+              onChange={e => setFeedback(e.target.value)}
+              placeholder="e.g., I want more practice tasks, less theory..."
+              rows={2}
               style={{
-                backgroundColor: tokens.colors.surface,
-                borderRadius: tokens.borderRadius['2xl'],
-                padding: tokens.spacing.xl,
-                marginBottom: tokens.spacing.xl,
-                border: `1px solid ${tokens.colors.border}`
+                width: '100%', padding: '10px 12px',
+                border: `1px solid ${tokens.colors.border}`, borderRadius: 10,
+                fontSize: 13, color: tokens.colors.text.primary,
+                fontFamily: 'inherit', resize: 'none', outline: 'none',
+                backgroundColor: tokens.colors.background, boxSizing: 'border-box',
               }}
-            >
-              <h3 style={{
-                fontSize: tokens.typography.sizes.lg,
-                fontWeight: tokens.typography.weights.medium,
-                color: tokens.colors.text.primary,
-                marginBottom: tokens.spacing.lg
-              }}>
-                📊 Your Performance
-              </h3>
+            />
+          </div>
+        </div>
+      )}
 
-              {/* Stats Grid */}
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                gap: tokens.spacing.lg,
-                marginBottom: tokens.spacing.lg
-              }}>
-                {/* Completion Rate */}
-                <div>
-                  <p style={{
-                    fontSize: tokens.typography.sizes.sm,
-                    color: tokens.colors.text.tertiary,
-                    marginBottom: tokens.spacing.xs
-                  }}>
-                    Completion Rate
-                  </p>
-                  <p style={{
-                    fontSize: tokens.typography.sizes['2xl'],
-                    fontWeight: tokens.typography.weights.medium,
-                    color: completionRate > 85 ? tokens.colors.success : completionRate > 70 ? tokens.colors.primary : tokens.colors.warning
-                  }}>
-                    {Math.round(completionRate)}%
-                  </p>
-                  <div style={{
-                    height: '4px',
-                    backgroundColor: tokens.colors.gray[200],
-                    borderRadius: tokens.borderRadius.full,
-                    marginTop: tokens.spacing.xs,
-                    overflow: 'hidden'
-                  }}>
-                    <div style={{
-                      height: '100%',
-                      width: `${completionRate}%`,
-                      backgroundColor: completionRate > 85 ? tokens.colors.success : completionRate > 70 ? tokens.colors.primary : tokens.colors.warning,
-                      transition: 'width 0.5s ease'
-                    }} />
-                  </div>
-                </div>
-
-                {/* Average Difficulty */}
-                <div>
-                  <p style={{
-                    fontSize: tokens.typography.sizes.sm,
-                    color: tokens.colors.text.tertiary,
-                    marginBottom: tokens.spacing.xs
-                  }}>
-                    Average Difficulty
-                  </p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm }}>
-                    <p style={{
-                      fontSize: tokens.typography.sizes['2xl'],
-                      fontWeight: tokens.typography.weights.medium,
-                      color: performanceColor
-                    }}>
-                      {avgDifficulty.toFixed(1)}/5
-                    </p>
-                    {performanceLevel === 'challenging' && <TrendingUp size={20} color={tokens.colors.warning} />}
-                    {performanceLevel === 'easy' && <TrendingDown size={20} color={tokens.colors.success} />}
-                  </div>
-                  <p style={{
-                    fontSize: tokens.typography.sizes.xs,
-                    color: tokens.colors.text.tertiary,
-                    marginTop: tokens.spacing.xs
-                  }}>
-                    {performanceLevel === 'challenging' && 'Tasks were challenging'}
-                    {performanceLevel === 'easy' && 'Tasks were too easy'}
-                    {performanceLevel === 'balanced' && 'Good balance'}
-                  </p>
-                </div>
-
-                {/* Tasks Completed */}
-                <div>
-                  <p style={{
-                    fontSize: tokens.typography.sizes.sm,
-                    color: tokens.colors.text.tertiary,
-                    marginBottom: tokens.spacing.xs
-                  }}>
-                    Tasks Completed
-                  </p>
-                  <p style={{
-                    fontSize: tokens.typography.sizes['2xl'],
-                    fontWeight: tokens.typography.weights.medium,
-                    color: tokens.colors.text.primary
-                  }}>
-                    {completedTasks}/{totalTasks}
-                  </p>
-                </div>
-              </div>
-
-              {/* Mastery & Struggles */}
-              {(masteringAreas.length > 0 || strugglingAreas.length > 0) && (
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: masteringAreas.length > 0 && strugglingAreas.length > 0 ? '1fr 1fr' : '1fr',
-                  gap: tokens.spacing.lg
-                }}>
-                  {/* Mastering */}
-                  {masteringAreas.length > 0 && (
-                    <div style={{
-                      padding: tokens.spacing.md,
-                      backgroundColor: `${tokens.colors.success}10`,
-                      borderRadius: tokens.borderRadius.xl,
-                      border: `1px solid ${tokens.colors.success}30`
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.sm }}>
-                        <Award size={16} color={tokens.colors.success} />
-                        <p style={{
-                          fontSize: tokens.typography.sizes.sm,
-                          fontWeight: tokens.typography.weights.medium,
-                          color: tokens.colors.success
-                        }}>
-                          You're Mastering
-                        </p>
-                      </div>
-                      <ul style={{
-                        listStyle: 'none',
-                        padding: 0,
-                        margin: 0
-                      }}>
-                        {masteringAreas.map((area, i) => (
-                          <li key={i} style={{
-                            fontSize: tokens.typography.sizes.sm,
-                            color: tokens.colors.text.secondary,
-                            marginBottom: tokens.spacing.xs
-                          }}>
-                            ✓ {area}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Struggling */}
-                  {strugglingAreas.length > 0 && (
-                    <div style={{
-                      padding: tokens.spacing.md,
-                      backgroundColor: `${tokens.colors.warning}10`,
-                      borderRadius: tokens.borderRadius.xl,
-                      border: `1px solid ${tokens.colors.warning}30`
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.sm }}>
-                        <AlertCircle size={16} color={tokens.colors.warning} />
-                        <p style={{
-                          fontSize: tokens.typography.sizes.sm,
-                          fontWeight: tokens.typography.weights.medium,
-                          color: tokens.colors.warning
-                        }}>
-                          Needs More Practice
-                        </p>
-                      </div>
-                      <ul style={{
-                        listStyle: 'none',
-                        padding: 0,
-                        margin: 0
-                      }}>
-                        {strugglingAreas.map((area, i) => (
-                          <li key={i} style={{
-                            fontSize: tokens.typography.sizes.sm,
-                            color: tokens.colors.text.secondary,
-                            marginBottom: tokens.spacing.xs
-                          }}>
-                            • {area}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ── Your Next Sprint Focus (Agent 5 output) ─────────────────── */}
-              {recalibrationResult && (
-                <div style={{
-                  marginTop: tokens.spacing.xl,
-                  padding: tokens.spacing.lg,
-                  backgroundColor: `${tokens.colors.primary}08`,
-                  borderLeft: `4px solid ${tokens.colors.primary}`,
-                  borderRadius: `0 ${tokens.borderRadius.xl} ${tokens.borderRadius.xl} 0`,
-                }}>
-                  <p style={{
-                    fontSize: tokens.typography.sizes.xs,
-                    fontWeight: tokens.typography.weights.medium,
-                    color: tokens.colors.primary,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.08em',
-                    marginBottom: tokens.spacing.sm,
-                  }}>
-                    Your Consistency Plan for Sprint {sprintNumber + 1}
-                  </p>
-
-                  {/* Coach's personalised message */}
-                  <p style={{
-                    fontSize: tokens.typography.sizes.sm,
-                    color: tokens.colors.text.primary,
-                    lineHeight: 1.6,
-                    marginBottom: recalibrationResult.stoneDirective ? tokens.spacing.md : 0,
-                    fontStyle: 'italic',
-                  }}>
-                    &ldquo;{recalibrationResult.coachMessage}&rdquo;
-                  </p>
-
-                  {/* Stone-specific directive (the most actionable piece) */}
-                  {recalibrationResult.stoneDirective && (
-                    <div style={{
-                      marginTop: tokens.spacing.sm,
-                      padding: tokens.spacing.md,
-                      backgroundColor: tokens.colors.surface,
-                      borderRadius: tokens.borderRadius.lg,
-                      border: `1px solid ${tokens.colors.border}`,
-                    }}>
-                      <p style={{
-                        fontSize: tokens.typography.sizes.xs,
-                        fontWeight: tokens.typography.weights.medium,
-                        color: tokens.colors.text.secondary,
-                        marginBottom: tokens.spacing.xs,
-                      }}>
-                        Coach's directive for your profile:
-                      </p>
-                      <p style={{
-                        fontSize: tokens.typography.sizes.sm,
-                        color: tokens.colors.text.primary,
-                        lineHeight: 1.6,
-                      }}>
-                        {recalibrationResult.stoneDirective}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Next sprint focus theme */}
-                  {recalibrationResult.nextSprintFocus && (
-                    <p style={{
-                      fontSize: tokens.typography.sizes.xs,
-                      color: tokens.colors.text.tertiary,
-                      marginTop: tokens.spacing.sm,
-                    }}>
-                      Sprint {sprintNumber + 1} focus: {recalibrationResult.nextSprintFocus}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              <button
-                onClick={() => setShowAnalysis(false)}
-                style={{
-                  marginTop: tokens.spacing.lg,
-                  padding: `${tokens.spacing.sm} ${tokens.spacing.md}`,
-                  backgroundColor: 'transparent',
-                  border: `1px solid ${tokens.colors.border}`,
-                  borderRadius: tokens.borderRadius.lg,
-                  color: tokens.colors.text.secondary,
-                  fontSize: tokens.typography.sizes.sm,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: tokens.spacing.sm
-                }}
-              >
-                Continue to Feedback <ArrowRight size={14} />
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Feedback Form */}
-        {!showAnalysis && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            style={{
-              backgroundColor: tokens.colors.surface,
-              borderRadius: tokens.borderRadius['2xl'],
-              padding: tokens.spacing.xl,
-              border: `1px solid ${tokens.colors.border}`
-            }}
-          >
-            <h3 style={{
-              fontSize: tokens.typography.sizes.lg,
-              fontWeight: tokens.typography.weights.medium,
-              color: tokens.colors.text.primary,
-              marginBottom: tokens.spacing.xl
-            }}>
-              Help us personalize your next sprint
-            </h3>
-
-            {/* Confidence Slider */}
-            <div style={{ marginBottom: tokens.spacing.xl }}>
-              <label style={{
-                display: 'block',
-                fontSize: tokens.typography.sizes.base,
-                color: tokens.colors.text.primary,
-                marginBottom: tokens.spacing.md,
-                fontWeight: tokens.typography.weights.medium
-              }}>
-                How confident do you feel with the skills you've learned?
-              </label>
-              <input
-                type="range"
-                min="1"
-                max="10"
-                value={confidence}
-                onChange={(e) => setConfidence(parseInt(e.target.value))}
-                style={{
-                  width: '100%',
-                  height: '6px',
-                  borderRadius: tokens.borderRadius.full,
-                  background: `linear-gradient(to right, ${tokens.colors.warning} 0%, ${tokens.colors.primary} 50%, ${tokens.colors.success} 100%)`,
-                  outline: 'none',
-                  cursor: 'pointer'
-                }}
-              />
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                marginTop: tokens.spacing.sm
-              }}>
-                <span style={{ fontSize: tokens.typography.sizes.xs, color: tokens.colors.text.tertiary }}>
-                  Still struggling
-                </span>
-                <span style={{ fontSize: tokens.typography.sizes.lg, fontWeight: tokens.typography.weights.medium, color: tokens.colors.primary }}>
-                  {confidence}/10
-                </span>
-                <span style={{ fontSize: tokens.typography.sizes.xs, color: tokens.colors.text.tertiary }}>
-                  Fully mastered
-                </span>
-              </div>
-            </div>
-
-            {/* Energy Level */}
-            <div style={{ marginBottom: tokens.spacing.xl }}>
-              <label style={{
-                display: 'block',
-                fontSize: tokens.typography.sizes.base,
-                color: tokens.colors.text.primary,
-                marginBottom: tokens.spacing.md,
-                fontWeight: tokens.typography.weights.medium
-              }}>
-                How's your energy level?
-              </label>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: tokens.spacing.sm
-              }}>
-                {(['exhausted', 'tired', 'good', 'energized'] as const).map((level) => (
-                  <button
-                    key={level}
-                    onClick={() => setEnergy(level)}
-                    style={{
-                      padding: tokens.spacing.md,
-                      borderRadius: tokens.borderRadius.lg,
-                      border: energy === level ? `2px solid ${tokens.colors.primary}` : `1px solid ${tokens.colors.border}`,
-                      backgroundColor: energy === level ? `${tokens.colors.primary}10` : 'transparent',
-                      color: energy === level ? tokens.colors.primary : tokens.colors.text.secondary,
-                      fontSize: tokens.typography.sizes.sm,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      textTransform: 'capitalize'
-                    }}
-                  >
-                    {level}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Time Management */}
-            <div style={{ marginBottom: tokens.spacing.xl }}>
-              <label style={{
-                display: 'block',
-                fontSize: tokens.typography.sizes.base,
-                color: tokens.colors.text.primary,
-                marginBottom: tokens.spacing.md,
-                fontWeight: tokens.typography.weights.medium
-              }}>
-                How was the time commitment?
-              </label>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: tokens.spacing.sm
-              }}>
-                {(['no_time', 'rushed', 'comfortable', 'extra_time'] as const).map((level) => (
-                  <button
-                    key={level}
-                    onClick={() => setTimeManagement(level)}
-                    style={{
-                      padding: tokens.spacing.md,
-                      borderRadius: tokens.borderRadius.lg,
-                      border: timeManagement === level ? `2px solid ${tokens.colors.primary}` : `1px solid ${tokens.colors.border}`,
-                      backgroundColor: timeManagement === level ? `${tokens.colors.primary}10` : 'transparent',
-                      color: timeManagement === level ? tokens.colors.primary : tokens.colors.text.secondary,
-                      fontSize: tokens.typography.sizes.sm,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      textTransform: 'capitalize'
-                    }}
-                  >
-                    {level.replace('_', ' ')}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Qualitative Feedback */}
-            <div style={{ marginBottom: tokens.spacing.xl }}>
-              <label style={{
-                display: 'block',
-                fontSize: tokens.typography.sizes.base,
-                color: tokens.colors.text.primary,
-                marginBottom: tokens.spacing.md,
-                fontWeight: tokens.typography.weights.medium
-              }}>
-                Anything specific you want the AI to know?
-              </label>
-              <textarea
-                value={feedback}
-                onChange={(e) => setFeedback(e.target.value)}
-                placeholder="e.g., I loved the variety, but need more rest days..."
-                style={{
-                  width: '100%',
-                  minHeight: '100px',
-                  padding: tokens.spacing.md,
-                  borderRadius: tokens.borderRadius.lg,
-                  border: `1px solid ${tokens.colors.border}`,
-                  backgroundColor: tokens.colors.background,
-                  color: tokens.colors.text.primary,
-                  fontSize: tokens.typography.sizes.base,
-                  fontFamily: 'inherit',
-                  resize: 'vertical',
-                  outline: 'none'
-                }}
-              />
-            </div>
-
-            {/* Struggles (optional) */}
-            <div style={{ marginBottom: tokens.spacing.xl }}>
-              <label style={{
-                display: 'block',
-                fontSize: tokens.typography.sizes.base,
-                color: tokens.colors.text.primary,
-                marginBottom: tokens.spacing.md,
-                fontWeight: tokens.typography.weights.medium
-              }}>
-                What was the hardest part? (optional)
-              </label>
-              <textarea
-                value={struggles}
-                onChange={(e) => setStruggles(e.target.value)}
-                placeholder="e.g., My fingers hurt, footwork drills were confusing..."
-                style={{
-                  width: '100%',
-                  minHeight: '80px',
-                  padding: tokens.spacing.md,
-                  borderRadius: tokens.borderRadius.lg,
-                  border: `1px solid ${tokens.colors.border}`,
-                  backgroundColor: tokens.colors.background,
-                  color: tokens.colors.text.primary,
-                  fontSize: tokens.typography.sizes.base,
-                  fontFamily: 'inherit',
-                  resize: 'vertical',
-                  outline: 'none'
-                }}
-              />
-            </div>
-
-            {/* Submit Button */}
-            <button
-              onClick={handleSubmit}
-              disabled={isRecalibrating}
-              style={{
-                width: '100%',
-                padding: tokens.spacing.lg,
-                borderRadius: tokens.borderRadius.xl,
-                border: 'none',
-                backgroundColor: isRecalibrating ? tokens.colors.gray[300] : tokens.colors.primary,
-                color: 'white',
-                fontSize: tokens.typography.sizes.lg,
-                fontWeight: tokens.typography.weights.medium,
-                cursor: isRecalibrating ? 'not-allowed' : 'pointer',
-                transition: 'all 0.2s',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: tokens.spacing.sm
-              }}
-            >
-              {isRecalibrating ? (
-                <>
-                  <div style={{
-                    width: '20px',
-                    height: '20px',
-                    border: '2px solid white',
-                    borderTopColor: 'transparent',
-                    borderRadius: '50%',
-                    animation: 'spin 1s linear infinite'
-                  }} />
-                  Recalibrating your roadmap...
-                </>
-              ) : (
-                <>
-                  <Sparkles size={20} />
-                  Recalibrate My Roadmap
-                </>
-              )}
-            </button>
-
-            <style>{`
-              @keyframes spin {
-                to { transform: rotate(360deg); }
-              }
-            `}</style>
-          </motion.div>
+      {/* CTA */}
+      <button
+        onClick={recalibrationResult ? handleSubmit : handleSubmit}
+        disabled={isRecalibrating}
+        style={{
+          width: '100%', padding: '15px',
+          borderRadius: 14, border: 'none',
+          background: isRecalibrating ? '#e5e7eb' : 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+          color: isRecalibrating ? '#9ca3af' : '#fff',
+          fontSize: 15, fontWeight: 600,
+          cursor: isRecalibrating ? 'not-allowed' : 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          letterSpacing: '-0.01em', transition: 'all 0.15s',
+          boxShadow: isRecalibrating ? 'none' : '0 4px 20px rgba(124,58,237,0.3)',
+        }}
+      >
+        {isRecalibrating ? (
+          <>
+            <div style={{ width: 16, height: 16, border: '2px solid #9ca3af', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+            Adjusting your roadmap...
+          </>
+        ) : recalibrationResult ? (
+          <>Continue to Sprint {sprintNumber + 1} <ArrowRight size={16} /></>
+        ) : (
+          <>Continue <ArrowRight size={16} /></>
         )}
-      </motion.div>
-    </div>
+      </button>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </motion.div>
   );
 }

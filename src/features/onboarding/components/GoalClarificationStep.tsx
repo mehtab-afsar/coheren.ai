@@ -24,7 +24,6 @@ export default function GoalClarificationStep({ clarificationOutput, onComplete 
   const [realityAcknowledged, setRealityAcknowledged] = useState(!realityCheck?.triggered);
 
   const currentQ: GoalClarificationQuestion | undefined = questions[currentIndex];
-  const _isAnswered = currentQ ? !!answers[currentQ.id] : false;
   const isLast = currentIndex === questions.length - 1;
 
   const handleSelect = (qId: string, value: string) => {

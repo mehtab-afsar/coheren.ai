@@ -30,7 +30,7 @@ export function useDifficultyMonitor() {
 
     // Difficulty-based prompt (existing logic)
     const hardSkips = recent.filter(t => t.skipped && t.skipReason === 'difficulty').length;
-    const lowMoods = recent.filter(t => (t as Record<string, unknown>).mood != null && Number((t as Record<string, unknown>).mood) <= 2).length;
+    const lowMoods = recent.filter(t => (t as unknown as Record<string, unknown>).mood != null && Number((t as unknown as Record<string, unknown>).mood) <= 2).length;
     const prompt = !inPromptCooldown && (hardSkips >= HARD_SKIP_THRESHOLD || lowMoods >= LOW_MOOD_THRESHOLD);
 
     // Consecutive skip detection — 3+ skips in a row triggers early recalibration

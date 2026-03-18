@@ -160,7 +160,8 @@ export async function generateCompleteRoadmap(
   stoneAnswers: StoneAnswer[],
   category?: string,
   skillLevel?: 'beginner' | 'intermediate' | 'advanced',
-  behavioralFlags: string[] = []
+  behavioralFlags: string[] = [],
+  preComputedStoneProfile?: Agent2ProfileOutput
 ): Promise<{
   goalAnalysis: Agent1Output;
   roadmap: Agent3Output;
@@ -178,7 +179,7 @@ export async function generateCompleteRoadmap(
 
   const goalAnalysis = await analyzeGoal(context);
 
-  const stoneProfile = await extractStones(context, goalAnalysis, stoneAnswers);
+  const stoneProfile = preComputedStoneProfile ?? await extractStones(context, goalAnalysis, stoneAnswers);
 
   const roadmap = await buildCurriculum(context, goalAnalysis, stoneProfile);
 

@@ -66,15 +66,13 @@ export function logAgentRun(entry: AgentLogEntry): void {
     metadata: entry.metadata ?? {},
   };
 
-  supabase
-    .from('agent_logs')
-    .insert(row)
-    .then(({ error }) => {
-      if (error) console.warn('Agent log write failed:', error.message);
-    })
-    .catch(() => {
-      // Silently ignore — logging should never break the app
-    });
+  Promise.resolve(
+    supabase.from('agent_logs').insert(row)
+  ).then(({ error }) => {
+    if (error) console.warn('Agent log write failed:', error.message);
+  }).catch(() => {
+    // Silently ignore — logging should never break the app
+  });
 }
 
 /**

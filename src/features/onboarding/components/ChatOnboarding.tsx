@@ -686,7 +686,7 @@ The system will automatically detect when the data is complete and transition to
     const calibration = getPaceCalibration(choice);
     setPaceCalibration(calibration);
 
-    const pending = (window as Record<string, unknown>).__pendingOnboarding as {
+    const pending = (window as unknown as Record<string, unknown>).__pendingOnboarding as {
       agentRoadmap: import('@core/agents').Agent3Output;
       firstTask: DailyTask;
       stoneProfile: import('@core/agents').Agent2ProfileOutput;
@@ -785,8 +785,8 @@ The system will automatically detect when the data is complete and transition to
       })
       .catch(() => { /* non-critical */ });
 
-    track('onboarding_completed', { category: collectedData.category, paceChoice: choice });
-    delete (window as Record<string, unknown>).__pendingOnboarding;
+    track({ event: 'onboarding_completed', properties: { category: collectedData.category, paceChoice: choice } });
+    delete (window as unknown as Record<string, unknown>).__pendingOnboarding;
     setStep(2);
   };
 
@@ -845,7 +845,7 @@ The system will automatically detect when the data is complete and transition to
 
       // Transition to preview screen — user picks pace before we finalize tasks
       // Store everything we need for finalization
-      (window as Record<string, unknown>).__pendingOnboarding = {
+      (window as unknown as Record<string, unknown>).__pendingOnboarding = {
         agentRoadmap, firstTask, stoneProfile, dailyMinutes, durationInMonths, answers
       };
       setOnboardingPhase('curriculum_preview');

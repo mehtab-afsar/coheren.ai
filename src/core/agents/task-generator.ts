@@ -373,7 +373,6 @@ const PLACEHOLDER_VIDEO_IDS = new Set([
   'XXXXXXXXXX',
 ]);
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function sanitizeResourceUrl(url: unknown, _taskTitle?: string): string | null {
   if (typeof url !== 'string' || !url.trim()) return null;
 

@@ -70,8 +70,8 @@ export function logAgentRun(entry: AgentLogEntry): void {
     supabase.from('agent_logs').insert(row)
   ).then(({ error }) => {
     if (error) console.warn('Agent log write failed:', error.message);
-  }).catch(() => {
-    // Silently ignore — logging should never break the app
+  }).catch((_err) => {
+    // Silently ignore network errors (e.g. agent_logs table missing in dev)
   });
 }
 

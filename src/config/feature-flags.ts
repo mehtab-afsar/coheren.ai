@@ -30,7 +30,7 @@ const DEFAULTS: FeatureFlags = {
   USE_AI_AGENTS:      true,
   USE_RAG:            true,
   USE_RECALIBRATION:  true,
-  LOG_AGENT_RUNS:     true,
+  LOG_AGENT_RUNS:     false, // Off by default — enable via VITE_FF_LOG_AGENT_RUNS=true in prod
   PUSH_NOTIFICATIONS: true,
   DEBUG_PANEL:        true,
   PREGENERATE_TASKS:  true,

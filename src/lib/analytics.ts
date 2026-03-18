@@ -11,7 +11,8 @@ import { env } from '@config/env';
 let initialized = false;
 
 export function initAnalytics() {
-  if (!env.POSTHOG_KEY || initialized) return;
+  // Guard against placeholder values left in .env.production template
+  if (!env.POSTHOG_KEY || env.POSTHOG_KEY.includes('your-posthog-key') || initialized) return;
   posthog.init(env.POSTHOG_KEY, {
     api_host: env.POSTHOG_HOST,
     capture_pageview: false,   // we fire our own view events

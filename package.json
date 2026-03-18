@@ -29,7 +29,9 @@
     "test:pipeline": "node --env-file=.env node_modules/.bin/tsx scripts/test-full-pipeline.ts",
     "resources:validate": "node_modules/.bin/tsx scripts/validate-resources.ts",
     "test:matrix": "node --env-file=.env node_modules/.bin/tsx scripts/test-matrix.ts",
-    "test:matrix:quick": "node --env-file=.env node_modules/.bin/tsx scripts/test-matrix.ts --quick"
+    "test:matrix:quick": "node --env-file=.env node_modules/.bin/tsx scripts/test-matrix.ts --quick",
+    "test:simulation": "node --env-file=.env node_modules/.bin/tsx --tsconfig tsconfig.scripts.json scripts/test-10day-simulation.ts",
+    "test:simulation:dry": "node --env-file=.env node_modules/.bin/tsx --tsconfig tsconfig.scripts.json scripts/test-10day-simulation.ts --dry-run"
   },
   "dependencies": {
     "@number-flow/react": "^0.5.11",

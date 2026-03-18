@@ -14,8 +14,6 @@ interface FocusCardProps {
   onSkip: (task: Task) => void;
   onShowMore: () => void;
   streak?: number;
-  completedCount?: number;
-  totalCount?: number;
   currentDay?: number;
 }
 
@@ -72,16 +70,12 @@ export default function FocusCard({
   onSkip,
   onShowMore,
   streak = 0,
-  completedCount = 0,
-  totalCount = 0,
   currentDay,
 }: FocusCardProps) {
   const [shimmerHover, setShimmerHover] = useState(false);
   const { isMobile } = useBreakpoint();
 
   const typeInfo = TASK_TYPE_MAP[task.type] ?? { color: '#9ca3af', label: task.type, Icon: Zap };
-  void completedCount;
-  void totalCount;
 
   // Rich agent data
   const taskExt = task as unknown as Record<string, unknown>;

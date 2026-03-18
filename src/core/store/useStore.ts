@@ -8,6 +8,7 @@ import { updateTaskCompletion, updateTaskSkip, updateProfile, saveTaskFeedback, 
 import type { TaskResource, Agent3Output, Agent2ProfileOutput, DailyTask, TaskStep, AssessmentQuestion, AssessmentResult } from '@types-app/agents.js';
 import { runTaskGenerator } from '@core/agents';
 import { generateFallbackTask } from '@core/agents/fallback-task-generator';
+import { track } from '@lib/analytics';
 import { flags } from '@config/feature-flags';
 
 export interface Task {
@@ -233,6 +234,11 @@ export const useStore = create<AppStore>()(
           // Update streak if all today's tasks are done
           const allDone = todaysTasks.length > 0 && todaysTasks.every((t) => t.completed);
           const newStreak = allDone ? state.streak + 1 : state.streak;
+
+          // Fire streak milestone analytics
+          if (newStreak > state.streak && ([7, 14, 30, 60] as number[]).includes(newStreak)) {
+            track({ event: 'streak_milestone', properties: { streak: newStreak, milestone: newStreak as 7 | 14 | 30 | 60 } });
+          }
 
           // Update streak in profile if user is authenticated
           if (state.user && newStreak > state.streak) {

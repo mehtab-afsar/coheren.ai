@@ -218,6 +218,7 @@ export function useCheckpoint() {
         event: 'checkpoint_completed',
         properties: { day: currentDay, completed_tasks: checkpointData.completedTasks, avg_difficulty: checkpointData.avgDifficulty },
       });
+      track({ event: 'recalibration_accepted', properties: { day: currentDay, mode: checkpointData.avgDifficulty < 2.5 ? 'simplify' : 'extend' } });
 
       // Surface the Agent 5 result in the UI (replaces the alert)
       setRecalibrationResult({

@@ -1,10 +1,13 @@
 import { motion } from 'framer-motion';
+import { useEffect } from 'react';
 import { Clock, Flame } from 'lucide-react';
 import { useBreakpoint } from '@hooks/useBreakpoint';
+import { track } from '@lib/analytics';
 
 interface AllDoneCardProps {
   tasksCompleted: number;
   streak: number;
+  day: number;
   minutesToday?: number;
   taskTypeSummary?: string;
 }
@@ -34,8 +37,13 @@ function getStreakMessage(streak: number): string {
   return "Keep showing up.";
 }
 
-export default function AllDoneCard({ tasksCompleted, streak, minutesToday = 0 }: AllDoneCardProps) {
+export default function AllDoneCard({ tasksCompleted, streak, day, minutesToday = 0 }: AllDoneCardProps) {
   const { isMobile } = useBreakpoint();
+
+  useEffect(() => {
+    track({ event: 'day_completed', properties: { day, tasks_done: tasksCompleted, streak } });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const quoteData = IDENTITY_QUOTES[streak % IDENTITY_QUOTES.length];
   const MILESTONES = [7, 14, 30, 60, 100];
   const nextMilestone = MILESTONES.find(m => m > streak);

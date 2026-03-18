@@ -1,0 +1,932 @@
+{
+  "runId": "2026-03-18T14-19-09",
+  "runDate": "2026-03-18T14:28:59.654Z",
+  "dryRun": false,
+  "personas": [
+    {
+      "persona": {
+        "id": "boxing-beginner",
+        "name": "Boxing Beginner",
+        "goal": "Learn boxing basics and fundamentals",
+        "timeline": 90,
+        "dailyTime": 30,
+        "behavioralFlags": [
+          "fear of failure",
+          "inconsistency"
+        ],
+        "expectedDomain": "Kinesthetic",
+        "expectedComplexity": "beginner"
+      },
+      "agent1Checks": [
+        {
+          "label": "domain is non-empty string",
+          "status": "PASS",
+          "detail": "got \"Kinesthetic\""
+        },
+        {
+          "label": "domain matches expected",
+          "status": "PASS",
+          "detail": "got \"Kinesthetic\", expected \"Kinesthetic\""
+        },
+        {
+          "label": "domain is valid enum value",
+          "status": "PASS",
+          "detail": "got \"Kinesthetic\""
+        },
+        {
+          "label": "category is non-empty string",
+          "status": "PASS",
+          "detail": "got \"Martial Arts\""
+        },
+        {
+          "label": "complexity matches expected",
+          "status": "PASS",
+          "detail": "got \"beginner\""
+        },
+        {
+          "label": "complexity is valid enum",
+          "status": "PASS",
+          "detail": "got \"beginner\""
+        },
+        {
+          "label": "horizon consistent with timeline",
+          "status": "PASS",
+          "detail": "horizon=\"Short-term\", timeline=90d"
+        },
+        {
+          "label": "clarityScore is 0–1",
+          "status": "PASS",
+          "detail": "got 0.8"
+        },
+        {
+          "label": "keyMilestones is non-empty array",
+          "status": "PASS",
+          "detail": "got 2 items"
+        }
+      ],
+      "agent2Checks": [
+        {
+          "label": "primaryStone is valid stone type",
+          "status": "PASS",
+          "detail": "got \"TimeConstraint\""
+        },
+        {
+          "label": "stones array has ≥1 entry",
+          "status": "PASS",
+          "detail": "got 2"
+        },
+        {
+          "label": "userArchetype is non-empty string",
+          "status": "PASS",
+          "detail": "\"The Constrained Beginner\""
+        },
+        {
+          "label": "agent3Guidance is non-empty array",
+          "status": "PASS",
+          "detail": "got 2"
+        },
+        {
+          "label": "agent5Note is non-empty string",
+          "status": "PASS",
+          "detail": "86 chars"
+        },
+        {
+          "label": "confidence is 0–1",
+          "status": "PASS",
+          "detail": "got 0.8"
+        }
+      ],
+      "agent3Checks": [
+        {
+          "label": "roadmap.phases has ≥2 phases",
+          "status": "PASS",
+          "detail": "got 2"
+        },
+        {
+          "label": "domainPedagogy is non-empty string",
+          "status": "PASS",
+          "detail": "\"Sports Periodization\""
+        },
+        {
+          "label": "phase[0] has ≥1 primaryGoals",
+          "status": "PASS",
+          "detail": "got 3"
+        },
+        {
+          "label": "phase[0] durationDays ≥7",
+          "status": "PASS",
+          "detail": "got 28"
+        },
+        {
+          "label": "total phase days within ±20% of timeline",
+          "status": "PASS",
+          "detail": "total=90, timeline=90"
+        },
+        {
+          "label": "reviewMoments has ≥1 entry",
+          "status": "PASS",
+          "detail": "got 11"
+        },
+        {
+          "label": "daySkeleton present on phase[0]",
+          "status": "PASS",
+          "detail": "3 entries"
+        },
+        {
+          "label": "each phase has focusAreas",
+          "status": "PASS",
+          "detail": "2 phases checked"
+        }
+      ],
+      "dayResults": [
+        {
+          "day": 1,
+          "action": "complete",
+          "taskTitle": "Experiment: Master the Basic Jab",
+          "stepCount": 3,
+          "estimatedMinutes": 30,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 3,
+          "validationErrors": []
+        },
+        {
+          "day": 2,
+          "action": "complete",
+          "taskTitle": "Experiment: Master the Basic Cross",
+          "stepCount": 3,
+          "estimatedMinutes": 30,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 3,
+          "validationErrors": []
+        },
+        {
+          "day": 3,
+          "action": "complete",
+          "taskTitle": "Experiment: Rest and Recovery Day",
+          "stepCount": 3,
+          "estimatedMinutes": 30,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 5,
+          "validationErrors": []
+        },
+        {
+          "day": 4,
+          "action": "skip",
+          "taskTitle": "(skipped)",
+          "stepCount": 0,
+          "estimatedMinutes": 0,
+          "hasResource": false,
+          "resourceUrlOk": false,
+          "status": "SKIP",
+          "skipReason": "difficulty",
+          "validationErrors": []
+        },
+        {
+          "day": 5,
+          "action": "complete",
+          "taskTitle": "Experiment: Master the Basic Hook",
+          "stepCount": 3,
+          "estimatedMinutes": 30,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 4,
+          "validationErrors": []
+        },
+        {
+          "day": 6,
+          "action": "complete",
+          "taskTitle": "Experiment: Master the Basic Jab",
+          "stepCount": 3,
+          "estimatedMinutes": 30,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 3,
+          "validationErrors": []
+        },
+        {
+          "day": 7,
+          "action": "complete",
+          "taskTitle": "Experiment: Master the Basic Cross",
+          "stepCount": 6,
+          "estimatedMinutes": 30,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 3,
+          "validationErrors": []
+        },
+        {
+          "day": 8,
+          "action": "skip",
+          "taskTitle": "(skipped)",
+          "stepCount": 0,
+          "estimatedMinutes": 0,
+          "hasResource": false,
+          "resourceUrlOk": false,
+          "status": "SKIP",
+          "skipReason": "health",
+          "validationErrors": []
+        },
+        {
+          "day": 9,
+          "action": "complete",
+          "taskTitle": "Experiment: Master Basic Defensive Movement",
+          "stepCount": 4,
+          "estimatedMinutes": 30,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 2,
+          "validationErrors": []
+        },
+        {
+          "day": 10,
+          "action": "complete",
+          "taskTitle": "Experiment: Master Basic Hook",
+          "stepCount": 3,
+          "estimatedMinutes": 30,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 2,
+          "validationErrors": []
+        }
+      ],
+      "agent5Checks": [
+        {
+          "label": "overallMastery is valid",
+          "status": "PASS",
+          "detail": "got \"on-track\""
+        },
+        {
+          "label": "overallMastery = 'on-track' (expected for MAINTAIN)",
+          "status": "PASS",
+          "detail": "got \"on-track\""
+        },
+        {
+          "label": "paceAdjustment is valid",
+          "status": "PASS",
+          "detail": "got \"maintain\""
+        },
+        {
+          "label": "paceAdjustment = 'maintain' (expected for MAINTAIN)",
+          "status": "PASS",
+          "detail": "got \"maintain\""
+        },
+        {
+          "label": "nextSprintFocus is non-empty",
+          "status": "PASS",
+          "detail": "\"Refine punching technique and introduce basic comb\""
+        },
+        {
+          "label": "modifiedTasks has ≥1 entry",
+          "status": "PASS",
+          "detail": "got 1"
+        },
+        {
+          "label": "personalizedMessage ≥20 chars",
+          "status": "PASS",
+          "detail": "212 chars"
+        },
+        {
+          "label": "startDay < endDay",
+          "status": "PASS",
+          "detail": "11→24"
+        },
+        {
+          "label": "pedagogicalChanges present",
+          "status": "PASS"
+        }
+      ],
+      "totalPass": 40,
+      "totalFail": 0,
+      "totalWarn": 0
+    },
+    {
+      "persona": {
+        "id": "coding-learner",
+        "name": "Coding Learner",
+        "goal": "Learn JavaScript programming from scratch",
+        "timeline": 60,
+        "dailyTime": 45,
+        "behavioralFlags": [
+          "procrastination"
+        ],
+        "expectedDomain": "Cognitive",
+        "expectedComplexity": "beginner"
+      },
+      "agent1Checks": [
+        {
+          "label": "domain is non-empty string",
+          "status": "PASS",
+          "detail": "got \"Cognitive\""
+        },
+        {
+          "label": "domain matches expected",
+          "status": "PASS",
+          "detail": "got \"Cognitive\", expected \"Cognitive\""
+        },
+        {
+          "label": "domain is valid enum value",
+          "status": "PASS",
+          "detail": "got \"Cognitive\""
+        },
+        {
+          "label": "category is non-empty string",
+          "status": "PASS",
+          "detail": "got \"Programming\""
+        },
+        {
+          "label": "complexity matches expected",
+          "status": "PASS",
+          "detail": "got \"beginner\""
+        },
+        {
+          "label": "complexity is valid enum",
+          "status": "PASS",
+          "detail": "got \"beginner\""
+        },
+        {
+          "label": "horizon consistent with timeline",
+          "status": "PASS",
+          "detail": "horizon=\"Short-term\", timeline=60d"
+        },
+        {
+          "label": "clarityScore is 0–1",
+          "status": "PASS",
+          "detail": "got 0.8"
+        },
+        {
+          "label": "keyMilestones is non-empty array",
+          "status": "PASS",
+          "detail": "got 2 items"
+        }
+      ],
+      "agent2Checks": [
+        {
+          "label": "primaryStone is valid stone type",
+          "status": "PASS",
+          "detail": "got \"TimeConstraint\""
+        },
+        {
+          "label": "stones array has ≥1 entry",
+          "status": "PASS",
+          "detail": "got 2"
+        },
+        {
+          "label": "userArchetype is non-empty string",
+          "status": "PASS",
+          "detail": "\"The Constrained Learner\""
+        },
+        {
+          "label": "agent3Guidance is non-empty array",
+          "status": "PASS",
+          "detail": "got 2"
+        },
+        {
+          "label": "agent5Note is non-empty string",
+          "status": "PASS",
+          "detail": "140 chars"
+        },
+        {
+          "label": "confidence is 0–1",
+          "status": "PASS",
+          "detail": "got 0.7"
+        }
+      ],
+      "agent3Checks": [
+        {
+          "label": "roadmap.phases has ≥2 phases",
+          "status": "PASS",
+          "detail": "got 2"
+        },
+        {
+          "label": "domainPedagogy is non-empty string",
+          "status": "PASS",
+          "detail": "\"Spaced Repetition + Interleaving\""
+        },
+        {
+          "label": "phase[0] has ≥1 primaryGoals",
+          "status": "PASS",
+          "detail": "got 2"
+        },
+        {
+          "label": "phase[0] durationDays ≥7",
+          "status": "PASS",
+          "detail": "got 30"
+        },
+        {
+          "label": "total phase days within ±20% of timeline",
+          "status": "PASS",
+          "detail": "total=60, timeline=60"
+        },
+        {
+          "label": "reviewMoments has ≥1 entry",
+          "status": "PASS",
+          "detail": "got 12"
+        },
+        {
+          "label": "daySkeleton present on phase[0]",
+          "status": "PASS",
+          "detail": "4 entries"
+        },
+        {
+          "label": "each phase has focusAreas",
+          "status": "PASS",
+          "detail": "2 phases checked"
+        }
+      ],
+      "dayResults": [
+        {
+          "day": 1,
+          "action": "complete",
+          "taskTitle": "Experiment: Introduction to JavaScript Variables",
+          "stepCount": 5,
+          "estimatedMinutes": 45,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 3,
+          "validationErrors": []
+        },
+        {
+          "day": 2,
+          "action": "complete",
+          "taskTitle": "Experiment: JavaScript Data Types Practice",
+          "stepCount": 5,
+          "estimatedMinutes": 45,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 3,
+          "validationErrors": []
+        },
+        {
+          "day": 3,
+          "action": "complete",
+          "taskTitle": "Experiment: Control Flow Basics in JavaScript",
+          "stepCount": 5,
+          "estimatedMinutes": 45,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 5,
+          "validationErrors": []
+        },
+        {
+          "day": 4,
+          "action": "skip",
+          "taskTitle": "(skipped)",
+          "stepCount": 0,
+          "estimatedMinutes": 0,
+          "hasResource": false,
+          "resourceUrlOk": false,
+          "status": "SKIP",
+          "skipReason": "difficulty",
+          "validationErrors": []
+        },
+        {
+          "day": 5,
+          "action": "complete",
+          "taskTitle": "Experiment: Practice JavaScript Variables and Data Types",
+          "stepCount": 5,
+          "estimatedMinutes": 45,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 4,
+          "validationErrors": []
+        },
+        {
+          "day": 6,
+          "action": "complete",
+          "taskTitle": "Experiment: JavaScript Functions Practice",
+          "stepCount": 4,
+          "estimatedMinutes": 45,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 3,
+          "validationErrors": []
+        },
+        {
+          "day": 7,
+          "action": "complete",
+          "taskTitle": "Experiment: Mastering Conditional Statements in JavaScript",
+          "stepCount": 4,
+          "estimatedMinutes": 45,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 3,
+          "validationErrors": []
+        },
+        {
+          "day": 8,
+          "action": "skip",
+          "taskTitle": "(skipped)",
+          "stepCount": 0,
+          "estimatedMinutes": 0,
+          "hasResource": false,
+          "resourceUrlOk": false,
+          "status": "SKIP",
+          "skipReason": "health",
+          "validationErrors": []
+        },
+        {
+          "day": 9,
+          "action": "complete",
+          "taskTitle": "Experiment: Practice JavaScript Control Flow with Loops",
+          "stepCount": 3,
+          "estimatedMinutes": 45,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 2,
+          "validationErrors": []
+        },
+        {
+          "day": 10,
+          "action": "complete",
+          "taskTitle": "Experiment: JavaScript Data Types Practice",
+          "stepCount": 3,
+          "estimatedMinutes": 45,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 2,
+          "validationErrors": []
+        }
+      ],
+      "agent5Checks": [
+        {
+          "label": "overallMastery is valid",
+          "status": "PASS",
+          "detail": "got \"on-track\""
+        },
+        {
+          "label": "overallMastery = 'on-track' (expected for MAINTAIN)",
+          "status": "PASS",
+          "detail": "got \"on-track\""
+        },
+        {
+          "label": "paceAdjustment is valid",
+          "status": "PASS",
+          "detail": "got \"maintain\""
+        },
+        {
+          "label": "paceAdjustment = 'maintain' (expected for MAINTAIN)",
+          "status": "PASS",
+          "detail": "got \"maintain\""
+        },
+        {
+          "label": "nextSprintFocus is non-empty",
+          "status": "PASS",
+          "detail": "\"Building on JavaScript fundamentals\""
+        },
+        {
+          "label": "modifiedTasks has ≥1 entry",
+          "status": "PASS",
+          "detail": "got 2"
+        },
+        {
+          "label": "personalizedMessage ≥20 chars",
+          "status": "PASS",
+          "detail": "219 chars"
+        },
+        {
+          "label": "startDay < endDay",
+          "status": "PASS",
+          "detail": "11→24"
+        },
+        {
+          "label": "pedagogicalChanges present",
+          "status": "PASS"
+        }
+      ],
+      "totalPass": 40,
+      "totalFail": 0,
+      "totalWarn": 0
+    },
+    {
+      "persona": {
+        "id": "guitar-starter",
+        "name": "Guitar Starter",
+        "goal": "Learn to play guitar and play my first songs",
+        "timeline": 120,
+        "dailyTime": 20,
+        "behavioralFlags": [
+          "perfectionism",
+          "overcommitment"
+        ],
+        "expectedDomain": "Creative",
+        "expectedComplexity": "beginner"
+      },
+      "agent1Checks": [
+        {
+          "label": "domain is non-empty string",
+          "status": "PASS",
+          "detail": "got \"Creative\""
+        },
+        {
+          "label": "domain matches expected",
+          "status": "PASS",
+          "detail": "got \"Creative\", expected \"Creative\""
+        },
+        {
+          "label": "domain is valid enum value",
+          "status": "PASS",
+          "detail": "got \"Creative\""
+        },
+        {
+          "label": "category is non-empty string",
+          "status": "PASS",
+          "detail": "got \"Music\""
+        },
+        {
+          "label": "complexity matches expected",
+          "status": "PASS",
+          "detail": "got \"beginner\""
+        },
+        {
+          "label": "complexity is valid enum",
+          "status": "PASS",
+          "detail": "got \"beginner\""
+        },
+        {
+          "label": "horizon consistent with timeline",
+          "status": "PASS",
+          "detail": "horizon=\"Short-term\", timeline=120d"
+        },
+        {
+          "label": "clarityScore is 0–1",
+          "status": "PASS",
+          "detail": "got 0.8"
+        },
+        {
+          "label": "keyMilestones is non-empty array",
+          "status": "PASS",
+          "detail": "got 2 items"
+        }
+      ],
+      "agent2Checks": [
+        {
+          "label": "primaryStone is valid stone type",
+          "status": "PASS",
+          "detail": "got \"TimeConstraint\""
+        },
+        {
+          "label": "stones array has ≥1 entry",
+          "status": "PASS",
+          "detail": "got 2"
+        },
+        {
+          "label": "userArchetype is non-empty string",
+          "status": "PASS",
+          "detail": "\"The Constrained Beginner\""
+        },
+        {
+          "label": "agent3Guidance is non-empty array",
+          "status": "PASS",
+          "detail": "got 2"
+        },
+        {
+          "label": "agent5Note is non-empty string",
+          "status": "PASS",
+          "detail": "91 chars"
+        },
+        {
+          "label": "confidence is 0–1",
+          "status": "PASS",
+          "detail": "got 0.8"
+        }
+      ],
+      "agent3Checks": [
+        {
+          "label": "roadmap.phases has ≥2 phases",
+          "status": "PASS",
+          "detail": "got 2"
+        },
+        {
+          "label": "domainPedagogy is non-empty string",
+          "status": "PASS",
+          "detail": "\"Divergent → Convergent Cycles\""
+        },
+        {
+          "label": "phase[0] has ≥1 primaryGoals",
+          "status": "PASS",
+          "detail": "got 2"
+        },
+        {
+          "label": "phase[0] durationDays ≥7",
+          "status": "PASS",
+          "detail": "got 60"
+        },
+        {
+          "label": "total phase days within ±20% of timeline",
+          "status": "PASS",
+          "detail": "total=120, timeline=120"
+        },
+        {
+          "label": "reviewMoments has ≥1 entry",
+          "status": "PASS",
+          "detail": "got 12"
+        },
+        {
+          "label": "daySkeleton present on phase[0]",
+          "status": "PASS",
+          "detail": "4 entries"
+        },
+        {
+          "label": "each phase has focusAreas",
+          "status": "PASS",
+          "detail": "2 phases checked"
+        }
+      ],
+      "dayResults": [
+        {
+          "day": 1,
+          "action": "complete",
+          "taskTitle": "Experiment: Get Familiar with Guitar Parts and Hand Positioning",
+          "stepCount": 3,
+          "estimatedMinutes": 20,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 3,
+          "validationErrors": []
+        },
+        {
+          "day": 2,
+          "action": "complete",
+          "taskTitle": "Experiment: Play a Clean A Chord",
+          "stepCount": 5,
+          "estimatedMinutes": 20,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 3,
+          "validationErrors": []
+        },
+        {
+          "day": 3,
+          "action": "complete",
+          "taskTitle": "Experiment: Review Progress and Adjust Hand Positioning",
+          "stepCount": 3,
+          "estimatedMinutes": 20,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 5,
+          "validationErrors": []
+        },
+        {
+          "day": 4,
+          "action": "skip",
+          "taskTitle": "(skipped)",
+          "stepCount": 0,
+          "estimatedMinutes": 0,
+          "hasResource": false,
+          "resourceUrlOk": false,
+          "status": "SKIP",
+          "skipReason": "difficulty",
+          "validationErrors": []
+        },
+        {
+          "day": 5,
+          "action": "complete",
+          "taskTitle": "Experiment: Switch Between A and C Chords Smoothly",
+          "stepCount": 4,
+          "estimatedMinutes": 20,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 4,
+          "validationErrors": []
+        },
+        {
+          "day": 6,
+          "action": "complete",
+          "taskTitle": "Experiment: Focus on Smooth A to C Chord Transition",
+          "stepCount": 4,
+          "estimatedMinutes": 20,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 3,
+          "validationErrors": []
+        },
+        {
+          "day": 7,
+          "action": "complete",
+          "taskTitle": "Experiment: Master A Chord Finger Placement",
+          "stepCount": 4,
+          "estimatedMinutes": 20,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 3,
+          "validationErrors": []
+        },
+        {
+          "day": 8,
+          "action": "skip",
+          "taskTitle": "(skipped)",
+          "stepCount": 0,
+          "estimatedMinutes": 0,
+          "hasResource": false,
+          "resourceUrlOk": false,
+          "status": "SKIP",
+          "skipReason": "health",
+          "validationErrors": []
+        },
+        {
+          "day": 9,
+          "action": "complete",
+          "taskTitle": "Experiment: Master C Chord Finger Placement",
+          "stepCount": 3,
+          "estimatedMinutes": 20,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 2,
+          "validationErrors": []
+        },
+        {
+          "day": 10,
+          "action": "complete",
+          "taskTitle": "Experiment: Practice Switching Between A and C Chords",
+          "stepCount": 3,
+          "estimatedMinutes": 20,
+          "hasResource": true,
+          "resourceUrlOk": true,
+          "status": "PASS",
+          "difficultyRating": 2,
+          "validationErrors": []
+        }
+      ],
+      "agent5Checks": [
+        {
+          "label": "overallMastery is valid",
+          "status": "PASS",
+          "detail": "got \"on-track\""
+        },
+        {
+          "label": "overallMastery = 'on-track' (expected for MAINTAIN)",
+          "status": "PASS",
+          "detail": "got \"on-track\""
+        },
+        {
+          "label": "paceAdjustment is valid",
+          "status": "PASS",
+          "detail": "got \"maintain\""
+        },
+        {
+          "label": "paceAdjustment = 'maintain' (expected for MAINTAIN)",
+          "status": "PASS",
+          "detail": "got \"maintain\""
+        },
+        {
+          "label": "nextSprintFocus is non-empty",
+          "status": "PASS",
+          "detail": "\"Refining chord transitions and hand positioning\""
+        },
+        {
+          "label": "modifiedTasks has ≥1 entry",
+          "status": "PASS",
+          "detail": "got 1"
+        },
+        {
+          "label": "personalizedMessage ≥20 chars",
+          "status": "PASS",
+          "detail": "192 chars"
+        },
+        {
+          "label": "startDay < endDay",
+          "status": "PASS",
+          "detail": "11→24"
+        },
+        {
+          "label": "pedagogicalChanges present",
+          "status": "PASS"
+        }
+      ],
+      "totalPass": 40,
+      "totalFail": 0,
+      "totalWarn": 0
+    }
+  ],
+  "grandTotalPass": 120,
+  "grandTotalFail": 0,
+  "grandTotalWarn": 0,
+  "criticalFailures": [],
+  "durationMs": 590112
+}

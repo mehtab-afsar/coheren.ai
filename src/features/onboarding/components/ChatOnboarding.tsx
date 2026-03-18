@@ -631,7 +631,6 @@ The system will automatically detect when the data is complete and transition to
     if (collectedData.behavioralFlags.includes('timeline_accepted')) {
       setRealismAcknowledged(true);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collectedData.behavioralFlags]);
 
   // The "Bulletproof" Trigger (No setTimeout) - State-Driven
@@ -843,6 +842,9 @@ The system will automatically detect when the data is complete and transition to
         if (u) {
           syncCompleteRoadmap(u.id, collectedData.goal, `Generated via AI for ${collectedData.category}`, goalAnalysis!, pending.answers, agentRoadmap, allTasks, sp)
             .catch(() => { /* non-critical */ });
+        } else {
+          // Value-first funnel: user hasn't signed up yet — update pending sync with full task list
+          setPendingSyncData(prev => prev ? { ...prev, initialTasksData: allTasks } : prev);
         }
       })
       .catch(() => { /* non-critical */ });
@@ -862,6 +864,7 @@ The system will automatically detect when the data is complete and transition to
         answers: pending.answers,
         agentRoadmap,
         initialTasksData: initialTasks,
+        stoneProfile: sp,
       });
       setShowAuthGate(true);
     }

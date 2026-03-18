@@ -3,7 +3,7 @@ import { useStore } from '@core/store/useStore';
 import { signIn, signUp } from '@lib/supabase';
 import { syncCompleteRoadmap } from '@lib/database';
 import { generateInitialTasks } from '@shared/utils/taskGenerator';
-import type { Agent1Output, StoneAnswer } from '@core/agents';
+import type { Agent1Output, StoneAnswer, Agent2ProfileOutput } from '@core/agents';
 import type { GoalCategory } from '@types-app/index';
 
 interface PendingSyncData {
@@ -11,6 +11,7 @@ interface PendingSyncData {
   answers: StoneAnswer[];
   agentRoadmap: Parameters<typeof syncCompleteRoadmap>[5];
   initialTasksData: ReturnType<typeof generateInitialTasks> | Parameters<typeof syncCompleteRoadmap>[6];
+  stoneProfile?: Agent2ProfileOutput;
 }
 
 interface UseAuthGateParams {
@@ -75,7 +76,8 @@ export function useAuthGate({
           pendingSyncData.goalAnalysisData,
           pendingSyncData.answers,
           pendingSyncData.agentRoadmap,
-          pendingSyncData.initialTasksData as Parameters<typeof syncCompleteRoadmap>[6]
+          pendingSyncData.initialTasksData as Parameters<typeof syncCompleteRoadmap>[6],
+          pendingSyncData.stoneProfile
         ).catch(err => console.warn('⚠️ Sync after signup failed:', err));
       }
 

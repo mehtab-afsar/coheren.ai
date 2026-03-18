@@ -56,7 +56,12 @@ export type AnalyticsEvent =
   // Tab engagement
   | { event: 'tab_time_spent'; properties: { tab: string; seconds: number } }
   // Recalibration
-  | { event: 'early_recalibration_triggered'; properties: { day: number; mode: string; skipped_tasks: number } };
+  | { event: 'early_recalibration_triggered'; properties: { day: number; mode: string; skipped_tasks: number } }
+  // Retention signals
+  | { event: 'day_completed'; properties: { day: number; tasks_done: number; streak: number } }
+  | { event: 'streak_milestone'; properties: { streak: number; milestone: 7 | 14 | 30 | 60 } }
+  | { event: 'recalibration_accepted'; properties: { day: number; mode: 'simplify' | 'extend' } }
+  | { event: 'recalibration_declined'; properties: { day: number } };
 
 export function track({ event, properties }: AnalyticsEvent) {
   if (!initialized) return;

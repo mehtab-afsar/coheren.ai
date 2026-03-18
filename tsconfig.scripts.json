@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "types": ["node"],
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "strict": false,
+    "baseUrl": ".",
+    "paths": {
+      "@config/env":           ["scripts/shims/config-env.ts"],
+      "@config/feature-flags": ["scripts/shims/config-feature-flags.ts"],
+      "@lib/ai-router":        ["scripts/shims/lib-ai-router.ts"],
+      "@core/*":    ["src/core/*"],
+      "@features/*":["src/features/*"],
+      "@shared/*":  ["src/shared/*"],
+      "@lib/*":     ["src/lib/*"],
+      "@utils/*":   ["src/utils/*"],
+      "@types-app/*":["src/types/*"],
+      "@hooks/*":   ["src/hooks/*"],
+      "@config/*":  ["src/config/*"]
+    }
+  },
+  "include": ["src", "scripts"]
+}

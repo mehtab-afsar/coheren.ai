@@ -745,6 +745,7 @@ export default function TodayView({
         <AllDoneCard
           tasksCompleted={completedTasks.length}
           streak={streak}
+          day={currentDay}
           minutesToday={minutesToday}
           taskTypeSummary={taskTypeSummary}
         />
@@ -800,8 +801,6 @@ export default function TodayView({
               isCompleting={completingTaskId === heroTask.id}
               isSkipping={skippingTaskId === heroTask.id}
               streak={streak}
-              completedCount={completedTasks.length}
-              totalCount={todaysTasks.length}
               currentDay={currentDay}
               onStartFocus={(t) => openCinema(t.id)}
               onMarkDone={(t) => {

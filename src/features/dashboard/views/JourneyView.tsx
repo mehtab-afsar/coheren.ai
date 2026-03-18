@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react';
-import { MapPin, Calendar, Target, CheckCircle, Circle, TrendingUp, Lock } from 'lucide-react';
+import { Calendar, Target, CheckCircle, TrendingUp } from 'lucide-react';
 import { useStore } from '@core/store/useStore';
 import { tokens } from '@core/design-system';
 import PhaseMap from './journey/PhaseMap';
@@ -500,7 +500,3 @@ export default function JourneyView() {
   );
 }
 
-// Keep icon imports used in legacy inline sections alive
-void MapPin;
-void Lock;
-void Circle;

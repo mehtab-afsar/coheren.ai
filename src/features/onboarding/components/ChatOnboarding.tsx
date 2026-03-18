@@ -172,6 +172,7 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
   const [generationProgress, setGenerationProgress] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const turnCountRef = useRef(0); // tracks how many user messages have been sent
 
   // Store actions
   const setStep = useStore((state) => state.setStep);
@@ -214,6 +215,9 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
   const [goalAnalysis, setGoalAnalysis] = useState<Agent1Output | null>(null);
   const [stones, setStones] = useState<BuildingStone[]>([]);
   const [agentError, setAgentError] = useState<{ message: string; retryFn: () => void } | null>(null);
+
+  // Realism check state
+  const [realismAcknowledged, setRealismAcknowledged] = useState(false);
 
   // Multi-stage validation state
   const [goalClarifications, setGoalClarifications] = useState<GoalClarificationOutput | null>(null);
@@ -298,6 +302,39 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
   // NOTE: The "Bulletproof" Trigger useEffect is placed AFTER runAnalysisAndGetStones
   // to avoid the react-hooks/immutability "accessed before declared" lint error.
 
+  // In-chat realism validator — catches obviously impossible plans before analysis
+  function validateGoalRealism(data: typeof collectedData): { issue: string | null } {
+    if (!data.timeline || !data.goal) return { issue: null };
+
+    const months = calculateDurationInMonths(data.timeline);
+    const dailyMins = data.dailyTime ? parseDailyTimeToMinutes(data.dailyTime) : 0;
+    const isExamGoal = data.category === 'Exam' ||
+      /upsc|ias|ips|gre|gmat|cat\b|clat|mcat|bar exam|civil service|lsat|sat\b|act\b|jee|neet|board exam/i.test(data.goal);
+    const isLanguageGoal = /fluent|speak.*language|learn.*hindi|learn.*french|learn.*spanish|learn.*japanese|learn.*chinese|learn.*german|language.*fluent/i.test(data.goal);
+
+    if (isExamGoal && months < 3) {
+      return {
+        issue: `Competitive exams like UPSC/IAS typically need 6–18 months of preparation. A ${data.timeline} timeline means most of the syllabus won't get covered — and burnout is very likely. Would you consider 6 months as a target instead?`
+      };
+    }
+    if (isExamGoal && dailyMins > 0 && dailyMins < 90) {
+      return {
+        issue: `Most exam toppers study 4–8 hours a day. With ${data.dailyTime}/day it'll be very difficult to cover the full syllabus in time. Can you commit to more study time, or would you like to extend the timeline?`
+      };
+    }
+    if (isLanguageGoal && months < 2) {
+      return {
+        issue: `Reaching conversational fluency typically takes 3–6 months of consistent practice. What level are you aiming for in ${data.timeline} — basic phrases, everyday conversation, or something else?`
+      };
+    }
+    if (months < 0.5) {
+      return {
+        issue: `${data.timeline} is a very tight window for this kind of goal. What's the specific outcome you need to hit by then?`
+      };
+    }
+    return { issue: null };
+  }
+
   const handleSend = async () => {
     if (!userInput.trim() || isTyping) return;
 
@@ -318,6 +355,7 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
     const currentInput = userInput;
     setUserInput('');
     setIsTyping(true);
+    turnCountRef.current += 1;
 
     try {
       // --- STEP 1: THE SHADOW EXTRACTOR (Replaces Regex) ---
@@ -342,7 +380,7 @@ Extract these fields based on conversation context:
 - timeline: (string) When they want to achieve it — return as a plain string (e.g., "3 months", "by December", "6 weeks"). NEVER return an object.
 - dailyTime: How much time per day (e.g., "30 minutes", "1 hour", "2 hours")
 - energyPattern: Peak energy time - one of: "morning", "afternoon", "evening", "night"
-- behavioralFlags: Array of obstacle signals detected. Include any that apply: "past_failure_mentioned" (user references previous failed attempts), "conditional_availability" (availability depends on external factors like "if work allows"), "external_accountability_needed" (user wants a partner, deadline, or accountability), "low_confidence" (user expresses doubt about ability), "time_scarcity" (user emphasizes they have very little time), "perfectionist_tendency" (user wants everything to be perfect before starting). Return [] if none apply.
+- behavioralFlags: Array of obstacle signals detected. Include any that apply: "past_failure_mentioned" (user references previous failed attempts), "conditional_availability" (availability depends on external factors like "if work allows"), "external_accountability_needed" (user wants a partner, deadline, or accountability), "low_confidence" (user expresses doubt about ability), "time_scarcity" (user emphasizes they have very little time), "perfectionist_tendency" (user wants everything to be perfect before starting), "timeline_accepted" (user explicitly says they understand the timeline is aggressive/unrealistic but want to proceed anyway, or says things like "I know it's short", "proceed anyway", "let's try", "I'm aware"). Return [] if none apply.
 
 CRITICAL RULES:
 1. Use conversation context to understand what each response refers to
@@ -350,6 +388,7 @@ CRITICAL RULES:
 3. If the AI asked "What's your name?" and user says "John", extract name: "John" (NOT goal!)
 4. If a field is already collected (Current Data shows it), keep it null unless user is correcting it
 5. Return ONLY the JSON object, no other text
+6. TURN RULE: This is conversation turn ${turnCountRef.current}. ${turnCountRef.current <= 1 ? 'On turn 1, ONLY extract goal, category, and skillLevel if clearly stated. Do NOT extract timeline, dailyTime, name, or energyPattern — those will be collected via explicit questions.' : 'Extract all fields normally.'}
 
 Current Data Already Collected: ${JSON.stringify(collectedData)}`
           },
@@ -455,9 +494,18 @@ The system will automatically detect when the data is complete and transition to
       else if (!collectedData.energyPattern) nextQuestion = 'their peak energy time (morning / afternoon / evening)';
 
       // Create the "Whisper"
-      const whisper = nextQuestion
-        ? `\n\n(SYSTEM WHISPER: Your ONLY job in this reply is to ask specifically about: ${nextQuestion}. Ask it as a single warm question. Do NOT wrap up or say the plan is ready yet.)`
-        : `\n\n(SYSTEM WHISPER: You have all the data! Wrap up the conversation warmly and let them know the plan is ready.)`;
+      let whisper: string;
+      if (nextQuestion) {
+        whisper = `\n\n(SYSTEM WHISPER: Your ONLY job in this reply is to ask specifically about: ${nextQuestion}. Ask it as a single warm question. Do NOT wrap up or say the plan is ready yet.)`;
+      } else {
+        // All fields collected — run realism check before declaring ready
+        const realism = validateGoalRealism(collectedData);
+        if (realism.issue && !realismAcknowledged) {
+          whisper = `\n\n(SYSTEM WHISPER: Before saying the plan is ready, you MUST gently push back on this concern: "${realism.issue}" Raise it warmly, explain the risk, and ask if they want to adjust OR confirm they want to proceed. Do NOT start generating the plan yet.)`;
+        } else {
+          whisper = `\n\n(SYSTEM WHISPER: You have all the data! Wrap up the conversation warmly and let them know the plan is ready.)`;
+        }
+      }
 
       // Inject the whisper into the system prompt
       const { content: aiResponse = "Tell me more!" } = await callReasoning({
@@ -578,6 +626,14 @@ The system will automatically detect when the data is complete and transition to
     }
   };
 
+  // Sync realismAcknowledged from behavioral flags (user said "proceed anyway")
+  useEffect(() => {
+    if (collectedData.behavioralFlags.includes('timeline_accepted')) {
+      setRealismAcknowledged(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collectedData.behavioralFlags]);
+
   // The "Bulletproof" Trigger (No setTimeout) - State-Driven
   // Placed here (after runAnalysisAndGetStones) to satisfy react-hooks/immutability rule
   useEffect(() => {
@@ -589,12 +645,16 @@ The system will automatically detect when the data is complete and transition to
       collectedData.timeline
     );
 
-    if (isReady && onboardingPhase === 'conversation' && !isGeneratingPlan) {
+    // Block trigger if goal is unrealistic and user hasn't acknowledged yet
+    const realism = validateGoalRealism(collectedData);
+    const needsRealismAck = realism.issue !== null && !realismAcknowledged;
+
+    if (isReady && !needsRealismAck && onboardingPhase === 'conversation' && !isGeneratingPlan) {
       setOnboardingPhase('analyzing');
       runAnalysisAndGetStones();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collectedData, onboardingPhase, isGeneratingPlan]);
+  }, [collectedData, onboardingPhase, isGeneratingPlan, realismAcknowledged]);
 
   // Handler for Round 1 stone questions completion → trigger Round 2
   const handleStoneQuestionsComplete = async (answers: StoneAnswer[]) => {
@@ -693,7 +753,12 @@ The system will automatically detect when the data is complete and transition to
     } | undefined;
 
     if (!pending) {
-      setStep(2);
+      const currentUser = useStore.getState().user;
+      if (currentUser) {
+        setStep(2);
+      } else {
+        setShowAuthGate(true);
+      }
       return;
     }
 

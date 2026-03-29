@@ -15,6 +15,7 @@ import type { CurriculumPreview as CurriculumPreviewType, PaceChoice } from '@ty
 interface Props {
   preview: CurriculumPreviewType;
   onPaceSelect: (choice: PaceChoice, feedback?: string) => void;
+  revisedChoice?: PaceChoice | null;
 }
 
 const TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string; bg: string; label: string }> = {
@@ -52,7 +53,7 @@ const PACE_OPTIONS: { choice: PaceChoice; label: string; sub: string; emoji: str
   },
 ];
 
-export default function CurriculumPreview({ preview, onPaceSelect }: Props) {
+export default function CurriculumPreview({ preview, onPaceSelect, revisedChoice }: Props) {
   const [showPacePicker, setShowPacePicker] = useState(false);
   const [selectedPace, setSelectedPace] = useState<PaceChoice | null>(null);
   const [feedbackText, setFeedbackText] = useState('');
@@ -60,6 +61,11 @@ export default function CurriculumPreview({ preview, onPaceSelect }: Props) {
   const handlePaceSelect = (choice: PaceChoice) => {
     setSelectedPace(choice);
     setTimeout(() => onPaceSelect(choice, feedbackText || undefined), 400);
+  };
+
+  const REVISED_LABEL: Record<string, string> = {
+    too_intense: 'Dialled back',
+    too_easy: 'Stepped up',
   };
 
   return (
@@ -197,26 +203,32 @@ export default function CurriculumPreview({ preview, onPaceSelect }: Props) {
         })}
       </div>
 
-      {/* Pace picker CTA */}
+      {/* Bottom CTA — revised confirm OR initial pace picker */}
       <AnimatePresence mode="wait">
-        {!showPacePicker ? (
+
+        {/* ── Revised plan: show confirm button ── */}
+        {revisedChoice ? (
           <motion.div
-            key="cta"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            key="revised"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
           >
-            <p style={{
-              textAlign: 'center',
-              fontSize: 14,
-              fontWeight: 600,
-              color: '#374151',
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               marginBottom: 14,
             }}>
-              How does this pace feel?
-            </p>
+              <span style={{
+                fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em',
+                color: '#7c3aed', background: 'rgba(124,58,237,0.08)',
+                padding: '3px 10px', borderRadius: 99,
+              }}>
+                {REVISED_LABEL[revisedChoice] ?? 'Revised'} ✓
+              </span>
+              <span style={{ fontSize: 13, color: '#6b7280' }}>Plan updated — does this feel right?</span>
+            </div>
             <button
-              onClick={() => setShowPacePicker(true)}
+              onClick={() => onPaceSelect(revisedChoice, feedbackText || undefined)}
               style={{
                 width: '100%',
                 padding: '15px',
@@ -230,6 +242,40 @@ export default function CurriculumPreview({ preview, onPaceSelect }: Props) {
                 boxShadow: '0 4px 14px rgba(124,58,237,0.3)',
               }}
             >
+              Start with this plan →
+            </button>
+            <button
+              onClick={() => onPaceSelect('just_right')}
+              style={{
+                width: '100%', marginTop: 10, padding: '12px',
+                borderRadius: 14, background: 'transparent',
+                color: '#9ca3af', border: '1.5px solid #f3f4f6',
+                fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              Actually, original pace was fine
+            </button>
+          </motion.div>
+
+        ) : !showPacePicker ? (
+          <motion.div
+            key="cta"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <p style={{ textAlign: 'center', fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 14 }}>
+              How does this pace feel?
+            </p>
+            <button
+              onClick={() => setShowPacePicker(true)}
+              style={{
+                width: '100%', padding: '15px', borderRadius: 14,
+                background: 'linear-gradient(135deg, #7c3aed, #a78bfa)',
+                color: '#fff', border: 'none', fontSize: 15, fontWeight: 700,
+                cursor: 'pointer', boxShadow: '0 4px 14px rgba(124,58,237,0.3)',
+              }}
+            >
               Rate the difficulty →
             </button>
           </motion.div>
@@ -240,13 +286,7 @@ export default function CurriculumPreview({ preview, onPaceSelect }: Props) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
           >
-            <p style={{
-              textAlign: 'center',
-              fontSize: 14,
-              fontWeight: 600,
-              color: '#374151',
-              marginBottom: 14,
-            }}>
+            <p style={{ textAlign: 'center', fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 14 }}>
               How does this pace feel?
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -258,33 +298,19 @@ export default function CurriculumPreview({ preview, onPaceSelect }: Props) {
                     whileTap={{ scale: 0.98 }}
                     onClick={() => handlePaceSelect(opt.choice)}
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 14,
-                      padding: '14px 18px',
-                      minHeight: 72,
-                      borderRadius: 14,
+                      display: 'flex', alignItems: 'center', gap: 14,
+                      padding: '14px 18px', minHeight: 72, borderRadius: 14,
                       border: isSelected ? `2px solid ${opt.border}` : '2px solid #f3f4f6',
                       background: isSelected ? opt.bg : '#fafafa',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s',
-                      outline: 'none',
-                      textAlign: 'left',
+                      cursor: 'pointer', transition: 'all 0.15s', outline: 'none', textAlign: 'left',
                     }}
                   >
                     <span style={{ fontSize: 20, flexShrink: 0, lineHeight: 1 }}>{opt.emoji}</span>
                     <div>
-                      <p style={{
-                        fontSize: 14,
-                        fontWeight: 700,
-                        color: '#1a1a2e',
-                        margin: '0 0 2px',
-                      }}>
+                      <p style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e', margin: '0 0 2px' }}>
                         {opt.label}
                       </p>
-                      <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
-                        {opt.sub}
-                      </p>
+                      <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>{opt.sub}</p>
                     </div>
                   </motion.button>
                 );
@@ -302,18 +328,10 @@ export default function CurriculumPreview({ preview, onPaceSelect }: Props) {
                 placeholder="e.g. I travel for work, recovering from injury..."
                 rows={2}
                 style={{
-                  width: '100%',
-                  borderRadius: 12,
-                  border: '1.5px solid #e5e7eb',
-                  padding: '10px 14px',
-                  fontSize: 13,
-                  resize: 'none',
-                  outline: 'none',
-                  fontFamily: 'inherit',
-                  color: '#1a1a2e',
-                  lineHeight: 1.6,
-                  boxSizing: 'border-box',
-                  transition: 'border-color 0.15s',
+                  width: '100%', borderRadius: 12, border: '1.5px solid #e5e7eb',
+                  padding: '10px 14px', fontSize: 13, resize: 'none', outline: 'none',
+                  fontFamily: 'inherit', color: '#1a1a2e', lineHeight: 1.6,
+                  boxSizing: 'border-box', transition: 'border-color 0.15s',
                 }}
                 onFocus={e => { e.currentTarget.style.borderColor = '#c4b5fd'; }}
                 onBlur={e => { e.currentTarget.style.borderColor = '#e5e7eb'; }}

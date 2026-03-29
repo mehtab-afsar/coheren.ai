@@ -188,6 +188,8 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
   const [curriculumPreviewData, setCurriculumPreviewData] = useState<CurriculumPreview | null>(null);
   const [_agentRoadmapData, setAgentRoadmapData] = useState<AgentRoadmapV2 | null>(null);
   const [_paceCalibration, setPaceCalibration] = useState<PaceCalibration | null>(null);
+  // When user picks too_easy/too_intense, we show a revised preview; this holds the pending choice
+  const [revisedPaceChoice, setRevisedPaceChoice] = useState<PaceChoice | null>(null);
 
   // Auth gate (shown after roadmap generation for unauthenticated users)
   const {
@@ -637,7 +639,7 @@ The system will automatically detect when the data is complete and transition to
     generateStrategicPlanWithAgents(round1Answers);
   };
 
-  // User selected pace on preview screen → apply calibration and finalize onboarding
+  // User selected pace on preview screen
   const handlePaceSelect = async (choice: PaceChoice, _feedback?: string) => {
     const calibration = getPaceCalibration(choice);
     setPaceCalibration(calibration);
@@ -662,6 +664,15 @@ The system will automatically detect when the data is complete and transition to
     }
 
     const { agentRoadmap, firstTask, stoneProfile: sp, dailyMinutes, durationInMonths } = pending;
+
+    // For too_easy / too_intense: show a revised preview before finalising
+    if (choice !== 'just_right' && revisedPaceChoice !== choice) {
+      const revisedMinutes = Math.round(dailyMinutes * calibration.difficultyMultiplier);
+      const newPreview = getCurriculumPreview(agentRoadmap, collectedData.category || collectedData.goal, revisedMinutes);
+      setCurriculumPreviewData(newPreview);
+      setRevisedPaceChoice(choice);
+      return; // stay on preview screen, CurriculumPreview will show confirm button
+    }
 
     // Build legacy Agent3Output for Agent 4 / DB sync (still uses old format)
     const legacyRoadmap = buildLegacyAgent3Output(agentRoadmap);
@@ -1050,6 +1061,7 @@ The system will automatically detect when the data is complete and transition to
           <CurriculumPreviewComponent
             preview={curriculumPreviewData}
             onPaceSelect={handlePaceSelect}
+            revisedChoice={revisedPaceChoice}
           />
         </div>
       )}

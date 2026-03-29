@@ -78,6 +78,18 @@ Cover all 5 of these dimensions — one question per dimension:
 A question is high-signal if different answers would produce meaningfully different plans.
 Low-signal = interesting but doesn't change the roadmap. Skip those.
 
+### 7. Always Include "Never Tried" Option for Past Failure Question
+For dimension 1 (past failure), ALWAYS include this as the FIRST option — before any obstacle options:
+{
+  "value": "never_tried",
+  "label": "I've never attempted this before",
+  "impact": {
+    "curriculum": "Complete beginner with no prior failure data. Build heavy confidence scaffolding: reduce Phase 1 volume by 20%, celebrate micro-wins, no challenge tasks in Week 1.",
+    "modifications": "Assign FirstTimer profile — extra step-by-step guidance, zero assumed knowledge, more encouragement checkpoints"
+  }
+}
+This handles users who are starting fresh and for whom asking 'what made you stop?' is nonsensical.
+
 ### 7. Research-Backed Question Design
 Ground your questions in behavioural science:
 - **Past behaviour is the best predictor** (Sheeran 2002): Ask what happened the last time they tried, not what they plan to do.

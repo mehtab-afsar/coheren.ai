@@ -1,8 +1,10 @@
 import { motion } from 'framer-motion';
 import { useEffect } from 'react';
-import { Clock, Flame } from 'lucide-react';
+import { Clock, Flame, CheckCircle2 } from 'lucide-react';
 import { useBreakpoint } from '@hooks/useBreakpoint';
 import { track } from '@lib/analytics';
+import { ap } from '@core/design-system/appleTokens';
+import type { Task } from '@core/store/useStore';
 
 interface AllDoneCardProps {
   tasksCompleted: number;
@@ -10,14 +12,15 @@ interface AllDoneCardProps {
   day: number;
   minutesToday?: number;
   taskTypeSummary?: string;
+  tomorrowTask?: Task;
 }
 
 const IDENTITY_QUOTES = [
-  { line1: "Small steps, done consistently,", line2: "become great leaps." },
-  { line1: "Every day you showed up,", line2: "you rewired who you are." },
-  { line1: "You showed up.", line2: "That's the hardest part." },
-  { line1: "Consistency is the compound interest", line2: "of personal growth." },
-  { line1: "Discipline is doing it", line2: "before you feel like it." },
+  "Small steps, done consistently, become great leaps.",
+  "Every day you showed up, you rewired who you are.",
+  "You showed up. That's the hardest part.",
+  "Consistency is the compound interest of personal growth.",
+  "Discipline is doing it before you feel like it.",
 ];
 
 const STREAK_MESSAGES: Record<number, string> = {
@@ -37,14 +40,15 @@ function getStreakMessage(streak: number): string {
   return "Keep showing up.";
 }
 
-export default function AllDoneCard({ tasksCompleted, streak, day, minutesToday = 0 }: AllDoneCardProps) {
+export default function AllDoneCard({ tasksCompleted, streak, day, minutesToday = 0, tomorrowTask }: AllDoneCardProps) {
   const { isMobile } = useBreakpoint();
 
   useEffect(() => {
     track({ event: 'day_completed', properties: { day, tasks_done: tasksCompleted, streak } });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const quoteData = IDENTITY_QUOTES[streak % IDENTITY_QUOTES.length];
+
+  const quote = IDENTITY_QUOTES[streak % IDENTITY_QUOTES.length];
   const MILESTONES = [7, 14, 30, 60, 100];
   const nextMilestone = MILESTONES.find(m => m > streak);
   const nearMilestone = nextMilestone && (nextMilestone - streak) <= 3 ? nextMilestone : null;
@@ -52,204 +56,162 @@ export default function AllDoneCard({ tasksCompleted, streak, day, minutesToday 
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], type: 'spring', stiffness: 200, damping: 20 }}
-      style={{
-        position: 'relative',
-        padding: isMobile ? '48px 28px' : '64px 48px',
-        background: 'linear-gradient(145deg, #1e0a3c 0%, #2d1060 50%, #1a0a2e 100%)',
-        border: '1px solid rgba(167,139,250,0.15)',
-        borderRadius: 28,
-        textAlign: 'center',
-        overflow: 'hidden',
-        boxShadow: '0 20px 60px rgba(124,58,237,0.35), 0 0 0 1px rgba(167,139,250,0.1)',
-      }}
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      style={{ display: 'flex', flexDirection: 'column', gap: 12, fontFamily: ap.font }}
     >
-      {/* Glow orb (celebration bg) */}
+      {/* ── Main celebration card ── */}
       <div style={{
-        position: 'absolute',
-        top: '-50%',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        width: 400,
-        height: 400,
-        background: 'radial-gradient(circle, rgba(167,139,250,0.3) 0%, transparent 70%)',
-        pointerEvents: 'none',
-        animation: 'celebration-pulse 3s ease-in-out infinite',
-      }} />
-
-      {/* Subtle bottom glow */}
-      <div style={{
-        position: 'absolute',
-        bottom: '-30%',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        width: 300,
-        height: 300,
-        background: 'radial-gradient(circle, rgba(124,58,237,0.15) 0%, transparent 70%)',
-        pointerEvents: 'none',
-      }} />
-
-      {/* Celebration icon */}
-      <motion.div
-        initial={{ scale: 0, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ delay: 0.2, type: 'spring', stiffness: 400, damping: 15 }}
-        style={{ fontSize: 64, marginBottom: 24, display: 'block', lineHeight: 1, position: 'relative' }}
-      >
-        🎯
-      </motion.div>
-
-      {/* Heading */}
-      <motion.h3
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3, duration: 0.5 }}
-        style={{
-          fontSize: isMobile ? 26 : 32,
-          fontWeight: 700,
-          letterSpacing: '-0.03em',
-          margin: '0 0 8px',
-          background: 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(196,181,253,0.9) 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text',
-          position: 'relative',
-        }}
-      >
-        {streak > 0 ? `Day ${streak > 1 ? streak + ' done' : 'one done'}` : 'All done today'}
-      </motion.h3>
-
-      {/* Streak identity message */}
-      <motion.p
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4, duration: 0.5 }}
-        style={{
-          fontSize: 16,
-          fontStyle: 'italic',
-          color: 'rgba(255,255,255,0.7)',
-          lineHeight: 1.6,
-          maxWidth: 400,
-          margin: '0 auto 28px',
-          position: 'relative',
-        }}
-      >
-        {streakMessage}
-      </motion.p>
-
-      {/* Quote */}
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.55, duration: 0.5 }}
-        style={{
-          fontSize: 14,
-          color: 'rgba(196,181,253,0.5)',
-          fontStyle: 'italic',
-          lineHeight: 1.6,
-          maxWidth: 320,
-          margin: '0 auto 28px',
-          position: 'relative',
-        }}
-      >
-        "{quoteData.line1}<br />{quoteData.line2}"
-      </motion.p>
-
-      {/* Stats row */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.65, duration: 0.4 }}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 20,
-          flexWrap: 'wrap',
-          position: 'relative',
-        }}
-      >
-        {/* Tasks completed */}
-        <div style={{
-          padding: '8px 16px',
-          background: 'rgba(167,139,250,0.08)',
-          border: '1px solid rgba(167,139,250,0.15)',
-          borderRadius: 99,
-          fontSize: 13,
-          color: 'rgba(196,181,253,0.75)',
-          fontWeight: 500,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-        }}>
-          ✓ {tasksCompleted} task{tasksCompleted !== 1 ? 's' : ''} completed
-        </div>
-
-        {minutesToday > 0 && (
+        background: ap.surface,
+        border: `1px solid ${ap.border}`,
+        borderRadius: 20,
+        padding: isMobile ? '32px 24px' : '40px 36px',
+        textAlign: 'center',
+      }}>
+        {/* Checkmark */}
+        <motion.div
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.1, type: 'spring', stiffness: 300, damping: 18 }}
+          style={{ marginBottom: 20 }}
+        >
           <div style={{
-            padding: '8px 16px',
-            background: 'rgba(167,139,250,0.08)',
-            border: '1px solid rgba(167,139,250,0.15)',
-            borderRadius: 99,
-            fontSize: 13,
-            color: 'rgba(196,181,253,0.75)',
-            fontWeight: 500,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
+            width: 56, height: 56,
+            borderRadius: 16,
+            background: ap.accentSoft,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto',
           }}>
-            <Clock size={12} strokeWidth={2} color="rgba(196,181,253,0.6)" />
-            {minutesToday >= 60
-              ? `${Math.floor(minutesToday / 60)}h ${minutesToday % 60 > 0 ? `${minutesToday % 60}m` : ''}`
-              : `${minutesToday}min`} focused
+            <CheckCircle2 size={28} color={ap.accent} strokeWidth={1.8} />
           </div>
-        )}
+        </motion.div>
 
-        {streak > 1 && (
-          <div style={{
-            padding: '8px 16px',
-            background: 'rgba(249,115,22,0.08)',
-            border: '1px solid rgba(249,115,22,0.2)',
-            borderRadius: 99,
-            fontSize: 13,
-            color: '#fbbf24',
-            fontWeight: 600,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-          }}>
-            <Flame size={12} strokeWidth={2} color="#f97316" />
-            {streak}-day streak
+        {/* Day heading */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.4 }}
+        >
+          <div style={{ fontSize: 11, fontWeight: 600, color: ap.textTertiary, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>
+            Day {day}
           </div>
-        )}
-      </motion.div>
+          <div style={{ fontSize: isMobile ? 22 : 26, fontWeight: 700, letterSpacing: '-0.03em', color: ap.textPrimary, marginBottom: 8 }}>
+            {streak > 0 ? (streak === 1 ? 'Day one done' : `${streak} days done`) : 'All done today'}
+          </div>
+          <div style={{ fontSize: 14, color: ap.textSecondary, lineHeight: 1.55, maxWidth: 340, margin: '0 auto 24px' }}>
+            {streakMessage}
+          </div>
+        </motion.div>
 
-      {/* Near-milestone nudge */}
-      {nearMilestone && (
-        <motion.p
+        {/* Stats row */}
+        <motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.75, duration: 0.4 }}
+          transition={{ delay: 0.3, duration: 0.35 }}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}
+        >
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            padding: '6px 14px',
+            background: ap.surfaceAlt, border: `1px solid ${ap.border}`,
+            borderRadius: 99, fontSize: 12, color: ap.textSecondary, fontWeight: 500,
+          }}>
+            <CheckCircle2 size={11} color={ap.success} strokeWidth={2.5} />
+            {tasksCompleted} task{tasksCompleted !== 1 ? 's' : ''} done
+          </div>
+
+          {minutesToday > 0 && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '6px 14px',
+              background: ap.surfaceAlt, border: `1px solid ${ap.border}`,
+              borderRadius: 99, fontSize: 12, color: ap.textSecondary, fontWeight: 500,
+            }}>
+              <Clock size={11} strokeWidth={2} color={ap.textTertiary} />
+              {minutesToday >= 60
+                ? `${Math.floor(minutesToday / 60)}h${minutesToday % 60 > 0 ? ` ${minutesToday % 60}m` : ''}`
+                : `${minutesToday}m`} focused
+            </div>
+          )}
+
+          {streak > 1 && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '6px 14px',
+              background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.18)',
+              borderRadius: 99, fontSize: 12, color: '#ea580c', fontWeight: 600,
+            }}>
+              <Flame size={11} strokeWidth={2} color="#f97316" />
+              {streak}-day streak
+            </div>
+          )}
+        </motion.div>
+
+        {/* Quote */}
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4, duration: 0.4 }}
+          style={{ fontSize: 13, color: ap.textTertiary, fontStyle: 'italic', lineHeight: 1.6, maxWidth: 300, margin: '0 auto' }}
+        >
+          "{quote}"
+        </motion.p>
+      </div>
+
+      {/* ── Near-milestone nudge ── */}
+      {nearMilestone && (
+        <motion.div
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5, duration: 0.3 }}
           style={{
-            marginTop: 16,
-            fontSize: 13,
-            color: '#f97316',
-            fontWeight: 600,
-            position: 'relative',
+            background: 'rgba(249,115,22,0.06)',
+            border: '1px solid rgba(249,115,22,0.18)',
+            borderRadius: 14,
+            padding: '12px 16px',
+            display: 'flex', alignItems: 'center', gap: 10,
           }}
         >
-          🔥 {nearMilestone - streak} day{nearMilestone - streak !== 1 ? 's' : ''} to {nearMilestone}-day streak
-        </motion.p>
+          <Flame size={15} color="#f97316" strokeWidth={2} />
+          <span style={{ fontSize: 13, color: '#ea580c', fontWeight: 600 }}>
+            {nearMilestone - streak} day{nearMilestone - streak !== 1 ? 's' : ''} to {nearMilestone}-day streak
+          </span>
+        </motion.div>
       )}
 
-      <style>{`
-        @keyframes celebration-pulse {
-          0%, 100% { opacity: 0.4; transform: translateX(-50%) scale(1); }
-          50% { opacity: 0.6; transform: translateX(-50%) scale(1.1); }
-        }
-      `}</style>
+      {/* ── Tomorrow's prep ── */}
+      {tomorrowTask?.requiresPrep && (
+        <motion.div
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.55, duration: 0.3 }}
+          style={{
+            background: ap.surface,
+            border: `1px solid ${ap.border}`,
+            borderRadius: 16,
+            padding: '16px 18px',
+          }}
+        >
+          <div style={{ fontSize: 11, fontWeight: 600, color: ap.textTertiary, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+            Tomorrow needs a little prep
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+            {tomorrowTask.requiresPrep.items.map((item, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <div style={{ width: 5, height: 5, borderRadius: '50%', background: ap.accent, marginTop: 7, flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: ap.textSecondary, lineHeight: 1.5 }}>{item}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{
+            fontSize: 12, color: ap.accent, fontWeight: 500, lineHeight: 1.5,
+            padding: '8px 12px', background: ap.accentSoft, borderRadius: 8,
+          }}>
+            {tomorrowTask.requiresPrep.note}
+          </div>
+        </motion.div>
+      )}
     </motion.div>
   );
 }

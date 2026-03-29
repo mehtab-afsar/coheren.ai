@@ -91,7 +91,10 @@ function buildUserPrompt(
   const g = goalAnalysis.goalAnalysis;
 
   const answersText = answers
-    .map(a => `Q (${a.stoneId}): ${typeof a.answer === 'object' ? JSON.stringify(a.answer) : a.answer}`)
+    .map(a => {
+      const base = `Q (${a.stoneId}): ${typeof a.answer === 'object' ? JSON.stringify(a.answer) : a.answer}`;
+      return a.comment ? `${base} [User added: "${a.comment}" — treat as high-signal modifier that can deepen or override the default stone assignment]` : base;
+    })
     .join('\n');
 
   return `Extract the stone profile from these answers.

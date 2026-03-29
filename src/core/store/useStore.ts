@@ -89,6 +89,8 @@ export interface Task {
   scheduledFor: string;
   day: number;
   dayNumber?: number; // legacy support
+  segments?: Array<{ label: string; duration: number; description: string; tip?: string }>;
+  requiresPrep?: { items: string[]; note: string };
   steps?: string[]; // step-by-step instructions
   tips?: string[]; // helpful tips
   successCriteria?: string; // what success looks like
@@ -583,11 +585,13 @@ export const useStore = create<AppStore>()(
                 scheduledFor: new Date().toISOString().split('T')[0],
                 day: nextDay,
                 dayNumber: nextDay,
+                segments: agentTask.task.segments ?? [],
                 steps: agentTask.task.steps.map((s: TaskStep) => s.instruction),
                 tips: agentTask.task.tips,
                 successCriteria: agentTask.task.successCriteria.primary,
                 coachTips: agentTask.task.coachTips ?? [],
                 reflection: agentTask.task.reflection,
+                requiresPrep: agentTask.task.requiresPrep,
                 // Assessment data
                 assessmentQuestions: assessmentData.assessmentQuestions,
               };

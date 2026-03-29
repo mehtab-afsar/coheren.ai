@@ -733,10 +733,12 @@ The system will automatically detect when the data is complete and transition to
       scheduledFor: new Date(Date.now() + (dayNum - 1) * 86400000).toISOString().split('T')[0],
       day: dayNum,
       dayNumber: dayNum,
+      segments: agentTask.task.segments ?? [],
       steps: agentTask.task.steps.map(step => step.instruction),
       tips: agentTask.task.tips,
       successCriteria: agentTask.task.successCriteria.primary,
       coachTips: agentTask.task.coachTips ?? [],
+      requiresPrep: agentTask.task.requiresPrep,
     });
 
     const initialTasks = [toStoreTask(firstTask, 1)];

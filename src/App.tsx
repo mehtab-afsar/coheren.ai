@@ -147,11 +147,13 @@ function App() {
                 scheduledFor: (content.scheduledFor as string) ?? '08:00',
                 day: t.day_number as number,
                 dayNumber: t.day_number as number,
+                segments: (content.segments as Array<{ label: string; duration: number; description: string; tip?: string }>) ?? [],
                 steps: (content.steps as string[]) ?? [],
                 tips: (content.tips as string[]) ?? [],
                 successCriteria: (content.successCriteria as string) ?? '',
                 coachTips: (content.coachTips as string[]) ?? [],
                 reflection: (content.reflection as string) ?? undefined,
+                requiresPrep: (content.requiresPrep as { items: string[]; note: string }) ?? undefined,
                 difficultyRating: t.difficulty_rating as number | undefined,
                 actualDuration: t.actual_duration as number | undefined,
               };

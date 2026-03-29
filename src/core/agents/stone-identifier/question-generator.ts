@@ -67,9 +67,14 @@ Every option must explain exactly how it changes the curriculum:
 - Not: "affects plan"
 - Yes: "adds 'recovery day' structure after every 3 days, reduces Phase 1 volume by 25%"
 
-### 6. Generate Exactly 2 Questions
-You must return exactly 2 questions — no more, no less.
-Pick the 2 patterns that are MOST likely to split the curriculum path for this specific goal and domain.
+### 6. Generate Exactly 5 Questions
+You must return exactly 5 questions — no more, no less.
+Cover all 5 of these dimensions — one question per dimension:
+  1. Past failure pattern (what made them stop before)
+  2. Resilience response (what they do when they miss a day)
+  3. Accountability style (who knows about this goal, how they hold themselves to it)
+  4. Environment / structural friction (where, when, what competes for attention)
+  5. Identity and emotional relationship with the goal (fear of failure, perfectionism, confidence)
 A question is high-signal if different answers would produce meaningfully different plans.
 Low-signal = interesting but doesn't change the roadmap. Skip those.
 
@@ -81,7 +86,7 @@ Ground your questions in behavioural science:
 - **Friction is the real obstacle** (Fogg): The smallest inconvenience will kill a habit. Surface environmental or structural friction.
 - **Social commitment** (Ariely): Public goals and accountability partners double follow-through rates.
 
-The best 2 questions reveal which of these dynamics is most likely to determine success for THIS specific person's goal.
+The 5 questions together must give a complete psychological and behavioural portrait of this person — enough to meaningfully differentiate their curriculum from anyone else with the same goal.
 
 ## Output Format
 Return ONLY valid JSON, no markdown:
@@ -135,7 +140,7 @@ function buildUserPrompt(context: AgentContext, goalAnalysis: Agent1Output): str
       : null,
   ].filter(Boolean).join('\n');
 
-  return `Generate EXACTLY 2 readiness probe questions for this user. You are uncovering the 2 most critical psychological and behavioural patterns — NOT collecting data they already gave you.
+  return `Generate EXACTLY 5 readiness probe questions for this user. You are building a psychological and behavioural portrait — NOT collecting data they already gave you.
 
 ## Everything Already Known (DO NOT RE-ASK ANY OF THIS)
 ${alreadyKnown}
@@ -160,13 +165,13 @@ ${context.behavioralFlags && context.behavioralFlags.length > 0
   : 'No specific flags detected — probe general resilience and accountability patterns.'}
 
 ## Instructions
-- Return EXACTLY 2 questions — the 2 highest-signal ones for this specific goal and domain
+- Return EXACTLY 5 questions — one per dimension: past failure, resilience response, accountability, environment/friction, identity
 - Every question must reference the goal ("${context.goal}") or a concrete aspect of it
 - Each question maps to exactly one stone type
 - Order by split power: question 1 = the single pattern most likely to change the entire curriculum structure
 - Ground questions in past behaviour, not intentions — "What happened last time" beats "What do you plan to do"
 - Never ask what's already known
-- The 2 questions together should give a complete picture of why this person might struggle`;
+- The 5 questions together must give a complete picture of who this person is and why they might struggle`;
 }
 
 // Keyword safety net: reject questions whose core topic overlaps with chat-collected fields.
@@ -202,8 +207,8 @@ function validateOutput(raw: unknown, context?: AgentContext): Agent2Output {
     throw new Error('Agent 2 Mode 1: Missing requiredStones array');
   }
 
-  // Cap at exactly 2 questions
-  parsed.requiredStones = parsed.requiredStones.slice(0, 2);
+  // Cap at exactly 5 questions
+  parsed.requiredStones = parsed.requiredStones.slice(0, 5);
 
   // Ensure each stone has required fields
   parsed.requiredStones = parsed.requiredStones.filter(
@@ -231,7 +236,7 @@ export async function generateQuestions(
       { role: 'user', content: buildUserPrompt(context, goalAnalysis) },
     ],
     temperature: 0.3,
-    max_tokens: 3000,
+    max_tokens: 6000,
     response_format: { type: 'json_object' },
   });
   if (!content) {

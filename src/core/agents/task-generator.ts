@@ -237,6 +237,18 @@ If domain is Financial AND Overcommitment is an active stone:
 7. successCriteria must be completion-based — not "do it perfectly" but "do it the specified number of times."
 8. coachTips come from the RAG science context provided — cite the framework/principle.
 
+── 30-30-40 ACTIVITY SEGMENTS (MANDATORY) ──
+Every task MUST have exactly 3 segments. Segment durations must sum exactly to the task duration.
+- Segment 1 (~30%): Acquisition — reading, watching, theory, concept intake
+- Segment 2 (~30%): Active processing — problems, drills, practice, exercises  
+- Segment 3 (~40%): Consolidation — recall, review, synthesis, note-making, reflection
+
+Each segment needs a concrete 1-2 sentence description of exactly what to do in that block.
+For rest days (type=rest): use a single segment { label: "Rest", duration: <full duration>, description: "Recovery day — no structured activity today." }
+
+── PREP REQUIRED (OPTIONAL) ──
+Only include requiresPrep if this task genuinely needs physical setup, printed materials, or downloads before starting (e.g., "print past papers", "install app X"). Leave it out entirely if no prep is needed — most tasks don't need it.
+
 OUTPUT FORMAT — return ONLY valid JSON:
 {
   "day": <number>,
@@ -247,6 +259,11 @@ OUTPUT FORMAT — return ONLY valid JSON:
     "type": "<learning|practice|reflection|challenge|retrieval|rest>",
     "duration": <number in minutes>,
     "description": "<2-3 paragraphs explaining the concept OR describing the exercise. For learning tasks: teach the concept inline with examples. For practice tasks: describe exactly what the user will do. For reflection tasks: pose a thoughtful question. NO external links. NO 'go watch this video'. All content is self-contained.>",
+    "segments": [
+      { "label": "Learn", "duration": <minutes>, "description": "<1-2 sentences: exactly what to do>", "tip": "<optional>" },
+      { "label": "Practice", "duration": <minutes>, "description": "<1-2 sentences: specific exercise>", "tip": "<optional>" },
+      { "label": "Review", "duration": <minutes>, "description": "<1-2 sentences: how to consolidate>", "tip": "<optional>" }
+    ],
     "steps": [
       {
         "stepNumber": 1,
@@ -258,6 +275,7 @@ OUTPUT FORMAT — return ONLY valid JSON:
     "coachTips": ["<tip 1 from RAG knowledge>", "<tip 2 stone-aware>", "<tip 3>"],
     "successCriteria": "<how the user knows they are done — completion-based, never quality-based>",
     "reflection": "<optional end-of-task question>",
+    "requiresPrep": { "items": ["<item>"], "note": "<one action to do before starting>" },
     "adaptations_applied": {
       "<StoneType>": "<what was changed and why>"
     }

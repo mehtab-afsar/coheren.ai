@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight } from 'lucide-react';
 import type { BuildingStone, StoneAnswer } from '@types-app/agents';
@@ -10,55 +10,66 @@ interface StoneQuestionsProps {
 
 export default function StoneQuestions({ stones, onComplete }: StoneQuestionsProps) {
   const [currentStoneIndex, setCurrentStoneIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, { answer: string | number; impact: Record<string, unknown> }>>({});
-  const [direction, setDirection] = useState(1); // 1 = forward, -1 = back
+  const [answers, setAnswers] = useState<Record<string, { answer: string | number; impact: Record<string, unknown>; comment?: string }>>({});
+  const [comments, setComments] = useState<Record<string, string>>({});
+  const [showCommentFor, setShowCommentFor] = useState<string | null>(null);
+  const [direction, setDirection] = useState(1);
+  const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const commentInputRef = useRef<HTMLInputElement>(null);
 
   const currentStone = stones[currentStoneIndex];
   const isAnswered = !!answers[currentStone?.stoneId];
   const isLast = currentStoneIndex === stones.length - 1;
 
-  const advance = useCallback(() => {
-    if (!isAnswered) return;
+  const doAdvance = useCallback((latestAnswers: typeof answers, latestComments: typeof comments) => {
     setDirection(1);
-
     if (isLast) {
-      const stoneAnswers: StoneAnswer[] = Object.entries(answers).map(([stoneId, data]) => ({
+      const stoneAnswers: StoneAnswer[] = Object.entries(latestAnswers).map(([stoneId, data]) => ({
         stoneId,
         answer: data.answer,
-        impact: data.impact
+        impact: data.impact,
+        comment: latestComments[stoneId] || undefined,
       }));
       onComplete(stoneAnswers);
     } else {
+      setShowCommentFor(null);
       setCurrentStoneIndex(i => i + 1);
     }
-  }, [isAnswered, isLast, answers, onComplete]);
+  }, [isLast, onComplete]);
 
   const handleOptionSelect = (optionValue: string, impact: Record<string, unknown>) => {
-    setAnswers(prev => ({
-      ...prev,
-      [currentStone.stoneId]: { answer: optionValue, impact }
-    }));
+    if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
 
-    // Auto-advance for multiple choice and yes/no after a brief delay
+    const newAnswers = {
+      ...answers,
+      [currentStone.stoneId]: { answer: optionValue, impact }
+    };
+    setAnswers(newAnswers);
+
     if (currentStone.question.type === 'multiple_choice' || currentStone.question.type === 'yes_no') {
-      setDirection(1);
-      setTimeout(() => {
-        if (currentStoneIndex < stones.length - 1) {
-          setCurrentStoneIndex(i => i + 1);
-        } else {
-          const newAnswers = {
-            ...answers,
-            [currentStone.stoneId]: { answer: optionValue, impact }
-          };
-          const stoneAnswers: StoneAnswer[] = Object.entries(newAnswers).map(([stoneId, data]) => ({
-            stoneId,
-            answer: data.answer,
-            impact: data.impact
-          }));
-          onComplete(stoneAnswers);
+      // Show comment field briefly, auto-advance after 2s if no comment typed
+      setShowCommentFor(currentStone.stoneId);
+      setTimeout(() => commentInputRef.current?.focus(), 100);
+
+      autoAdvanceTimerRef.current = setTimeout(() => {
+        const comment = comments[currentStone.stoneId] ?? '';
+        if (!comment.trim()) {
+          doAdvance(newAnswers, comments);
         }
-      }, 350);
+      }, 2000);
     }
+  };
+
+  const handleCommentKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
+      doAdvance(answers, comments);
+    }
+  };
+
+  const handleCommentDone = () => {
+    if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
+    doAdvance(answers, comments);
   };
 
   const updateTextAnswer = (val: string | number, impact: Record<string, unknown>) => {
@@ -67,6 +78,11 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
       [currentStone.stoneId]: { answer: val, impact }
     }));
   };
+
+  const advance = useCallback(() => {
+    if (!isAnswered) return;
+    doAdvance(answers, comments);
+  }, [isAnswered, answers, comments, doAdvance]);
 
   if (!currentStone) return null;
 
@@ -130,10 +146,8 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
         boxShadow: '0 4px 24px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03)',
         padding: '32px 28px',
         minHeight: 360,
-        height: 360,
         display: 'flex',
         flexDirection: 'column',
-        overflow: 'hidden',
       }}>
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div
@@ -171,7 +185,7 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
 
             {/* ── Multiple Choice Options ── */}
             {currentStone.question.type === 'multiple_choice' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto', maxHeight: '50vh' }}>
                 {currentStone.question.options?.map((option, idx) => {
                   const isSelected = answers[currentStone.stoneId]?.answer === option.value;
                   return (
@@ -207,7 +221,6 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
                         }
                       }}
                     >
-                      {/* Radio circle */}
                       <div style={{
                         width: 20,
                         height: 20,
@@ -267,6 +280,61 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
                 })}
               </div>
             )}
+
+            {/* ── Optional comment field (shown after selecting multiple_choice or yes_no) ── */}
+            <AnimatePresence>
+              {showCommentFor === currentStone.stoneId && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                  animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
+                  exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                  transition={{ duration: 0.2 }}
+                  style={{ overflow: 'hidden' }}
+                >
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      ref={commentInputRef}
+                      value={comments[currentStone.stoneId] ?? ''}
+                      onChange={e => setComments(prev => ({ ...prev, [currentStone.stoneId]: e.target.value }))}
+                      onKeyDown={handleCommentKeyDown}
+                      placeholder="Anything to add? (optional)"
+                      style={{
+                        flex: 1,
+                        padding: '10px 14px',
+                        borderRadius: 10,
+                        border: '1.5px solid #e5e7eb',
+                        fontSize: 13,
+                        fontFamily: 'inherit',
+                        color: '#1a1a2e',
+                        background: '#fafafa',
+                        outline: 'none',
+                      }}
+                      onFocus={e => { e.currentTarget.style.borderColor = '#7c3aed'; }}
+                      onBlur={e => { e.currentTarget.style.borderColor = '#e5e7eb'; }}
+                    />
+                    <button
+                      onClick={handleCommentDone}
+                      style={{
+                        padding: '10px 16px',
+                        borderRadius: 10,
+                        border: 'none',
+                        background: '#7c3aed',
+                        color: '#fff',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                      }}
+                    >
+                      Done
+                    </button>
+                  </div>
+                  <p style={{ fontSize: 11, color: '#9ca3af', margin: '6px 0 0', lineHeight: 1.4 }}>
+                    Press Enter or Done to continue — your comment shapes your profile
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* ── Open Ended ── */}
             {currentStone.question.type === 'open_ended' && (

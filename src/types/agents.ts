@@ -165,6 +165,7 @@ export interface StoneAnswer {
   stoneId: string;
   answer: string | string[] | number;
   impact: Record<string, unknown>;
+  comment?: string; // optional free-text added after selecting an option
 }
 
 // ============================================
@@ -325,6 +326,18 @@ export interface TaskResource {
   watchMinutes?: number; // planned watch time in minutes (e.g. 15)
 }
 
+export interface TaskSegment {
+  label: string;      // e.g. "Learn", "Practice", "Review"
+  duration: number;   // minutes
+  description: string;
+  tip?: string;
+}
+
+export interface TaskPrep {
+  items: string[];  // e.g. ["printed past papers", "timer app open"]
+  note: string;     // e.g. "Download the mock test tonight before you sleep"
+}
+
 export interface DailyTask {
   day: number;
   phase: number;
@@ -333,6 +346,7 @@ export interface DailyTask {
     title: string;
     description: string;
     estimatedMinutes: number;
+    segments?: TaskSegment[]; // 3 activity blocks (30-30-40 time split)
     steps: TaskStep[];
     tips: string[];
     successCriteria: {
@@ -346,6 +360,7 @@ export interface DailyTask {
     adaptations_applied?: TaskAdaptations;
     coachTips?: string[];
     reflection?: string;
+    requiresPrep?: TaskPrep; // prep needed for this task (shown in prior day's AllDoneCard)
     resources?: {
       primary: TaskResource | null;
       supplementary: TaskResource[];

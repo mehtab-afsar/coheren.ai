@@ -469,6 +469,7 @@ export default function TodayView({
           day={currentDay}
           minutesToday={minutesToday}
           taskTypeSummary={taskTypeSummary}
+          tomorrowTask={tasks.find(t => t.day === currentDay + 1)}
         />
       ) : heroTask ? (
         <>
@@ -802,6 +803,49 @@ export default function TodayView({
                       }}>
                         {task.description}
                       </p>
+                    )}
+
+                    {/* 30-30-40 Segment blocks */}
+                    {!task.completed && task.segments && task.segments.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: tokens.spacing.md }}>
+                        {task.segments.map((seg, i) => {
+                          const segColors = [
+                            { bg: 'rgba(14,165,233,0.07)', border: 'rgba(14,165,233,0.2)', pill: '#0ea5e9', pillText: '#fff', icon: <BookOpen size={11} strokeWidth={2} color="#0ea5e9" /> },
+                            { bg: 'rgba(124,58,237,0.07)', border: 'rgba(124,58,237,0.2)', pill: '#7c3aed', pillText: '#fff', icon: <Zap size={11} strokeWidth={2} color="#7c3aed" /> },
+                            { bg: 'rgba(16,185,129,0.07)', border: 'rgba(16,185,129,0.2)', pill: '#10b981', pillText: '#fff', icon: <Brain size={11} strokeWidth={2} color="#10b981" /> },
+                          ];
+                          const c = segColors[i % segColors.length];
+                          return (
+                            <div key={i} style={{
+                              display: 'flex', alignItems: 'flex-start', gap: 10,
+                              padding: '10px 12px', borderRadius: 10,
+                              background: c.bg, border: `1px solid ${c.border}`,
+                            }}>
+                              <div style={{ flexShrink: 0, marginTop: 1 }}>{c.icon}</div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                                  <span style={{
+                                    fontSize: 10, fontWeight: 700, color: c.pillText,
+                                    background: c.pill, borderRadius: 99, padding: '2px 8px',
+                                    letterSpacing: '0.04em', textTransform: 'uppercase' as const,
+                                  }}>{seg.label}</span>
+                                  <span style={{ fontSize: 11, color: tokens.colors.text.tertiary, display: 'flex', alignItems: 'center', gap: 2 }}>
+                                    <Clock size={10} strokeWidth={1.5} />{seg.duration} min
+                                  </span>
+                                </div>
+                                <p style={{ fontSize: 12, color: tokens.colors.text.secondary, lineHeight: 1.45, margin: 0 }}>
+                                  {seg.description}
+                                </p>
+                                {seg.tip && (
+                                  <p style={{ fontSize: 11, color: tokens.colors.text.tertiary, fontStyle: 'italic', margin: '4px 0 0', lineHeight: 1.4 }}>
+                                    {seg.tip}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     )}
 
                     {/* Skip button (card level) */}

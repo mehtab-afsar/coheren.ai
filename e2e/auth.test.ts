@@ -5,7 +5,10 @@ import { test, expect } from '@playwright/test';
  * Supabase network calls are intercepted; no running DB needed.
  */
 
-test.beforeEach(async ({ page }) => {
+// The "Get Started" CTA is desktop-only (hidden sm:block on mobile nav)
+test.beforeEach(async ({ page, isMobile }) => {
+  test.skip(isMobile, 'Auth dropdown is desktop-only');
+
   // Return empty session so the app stays at step 0 (landing page)
   await page.route('**/auth/v1/user', (route) =>
     route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ message: 'not authenticated' }) })

@@ -93,49 +93,6 @@ interface Message {
   timestamp: Date;
 }
 
-/** Animated text that cycles through analysis phases */
-function AnalyzingText() {
-  const [phase, setPhase] = useState(0);
-  const texts = [
-    'Analyzing your responses...',
-    'Building your profile...',
-    'Personalizing your journey...',
-  ];
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setPhase(p => (p + 1) % texts.length);
-    }, 2000);
-    return () => clearInterval(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return (
-    <div style={{ textAlign: 'center' }}>
-      <AnimatePresence mode="wait">
-        <motion.p
-          key={phase}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.3 }}
-          style={{
-            fontSize: 16,
-            fontWeight: 500,
-            color: '#7c3aed',
-            margin: '0 0 6px',
-            letterSpacing: '-0.01em',
-          }}
-        >
-          {texts[phase]}
-        </motion.p>
-      </AnimatePresence>
-      <p style={{ fontSize: 13, color: '#9ca3af', margin: 0 }}>
-        This takes a few seconds
-      </p>
-    </div>
-  );
-}
 
 interface ChatOnboardingProps {
   onLoginSuccess?: () => void;
@@ -151,7 +108,7 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
       {
         id: '1',
         role: 'ai',
-        content: "Hey there! 👋 I'm Coheren, your AI goal coach. I'm here to help turn your dreams into reality with a personalized action plan. What would you like to achieve?",
+        content: "What are you trying to get better at?",
         timestamp: new Date(),
       },
     ];
@@ -953,75 +910,12 @@ The system will automatically detect when the data is complete and transition to
       height: '100vh',
       display: 'flex',
       flexDirection: 'column',
-      backgroundColor: tokens.colors.background,
+      backgroundColor: '#ffffff',
       position: 'relative',
       overflow: 'hidden'
     }}>
-      {/* Subtle Background Gradient */}
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: `linear-gradient(180deg, ${tokens.colors.primarySubtle}15 0%, transparent 50%)`,
-        pointerEvents: 'none',
-        zIndex: 0,
-      }} />
 
-      {/* Minimal Animated Background Illustrations - More subtle */}
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        pointerEvents: 'none',
-        opacity: 0.015,
-        zIndex: 0,
-      }}>
-        {/* Left side illustrations */}
-        <svg style={{ position: 'absolute', left: '5%', top: '15%', width: '180px', height: '180px' }} viewBox="0 0 200 200">
-          <path d="M100 20 L180 180 L20 180 Z" stroke="currentColor" strokeWidth="2" fill="none" strokeDasharray="4 4">
-            <animate attributeName="stroke-dashoffset" from="0" to="8" dur="20s" repeatCount="indefinite" />
-          </path>
-        </svg>
-
-        <svg style={{ position: 'absolute', left: '8%', top: '45%', width: '120px', height: '120px' }} viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="40" stroke="currentColor" strokeWidth="2" fill="none" />
-          <text x="50" y="55" textAnchor="middle" fontSize="12" fill="currentColor">E=mc²</text>
-        </svg>
-
-        <svg style={{ position: 'absolute', left: '3%', top: '70%', width: '150px', height: '150px' }} viewBox="0 0 100 100">
-          <path d="M20 80 Q30 40 40 80 T60 80" stroke="currentColor" strokeWidth="2" fill="none" />
-          <circle cx="40" cy="50" r="25" stroke="currentColor" strokeWidth="2" fill="none" strokeDasharray="2 2" />
-        </svg>
-
-        {/* Right side illustrations */}
-        <svg style={{ position: 'absolute', right: '5%', top: '10%', width: '140px', height: '140px' }} viewBox="0 0 100 100">
-          <circle cx="50" cy="30" r="15" stroke="currentColor" strokeWidth="2" fill="none" />
-          <circle cx="30" cy="60" r="12" stroke="currentColor" strokeWidth="2" fill="none" />
-          <circle cx="70" cy="60" r="12" stroke="currentColor" strokeWidth="2" fill="none" />
-          <line x1="50" y1="45" x2="30" y2="48" stroke="currentColor" strokeWidth="2" />
-          <line x1="50" y1="45" x2="70" y2="48" stroke="currentColor" strokeWidth="2" />
-          <line x1="30" y1="72" x2="70" y2="72" stroke="currentColor" strokeWidth="2" />
-        </svg>
-
-        <svg style={{ position: 'absolute', right: '7%', top: '40%', width: '160px', height: '160px' }} viewBox="0 0 100 100">
-          <rect x="20" y="20" width="60" height="60" stroke="currentColor" strokeWidth="2" fill="none" transform="rotate(15 50 50)" />
-          <line x1="30" y1="40" x2="70" y2="40" stroke="currentColor" strokeWidth="1.5" />
-          <line x1="30" y1="50" x2="70" y2="50" stroke="currentColor" strokeWidth="1.5" />
-          <line x1="30" y1="60" x2="70" y2="60" stroke="currentColor" strokeWidth="1.5" />
-        </svg>
-
-        <svg style={{ position: 'absolute', right: '4%', top: '75%', width: '130px', height: '130px' }} viewBox="0 0 100 100">
-          <path d="M30 50 L50 30 L70 50 L50 70 Z" stroke="currentColor" strokeWidth="2" fill="none">
-            <animateTransform attributeName="transform" type="rotate" from="0 50 50" to="360 50 50" dur="40s" repeatCount="indefinite" />
-          </path>
-        </svg>
-      </div>
-
-      {/* Premium Loading Overlay - shown during plan generation */}
+      {/* Loading Overlay - shown during plan generation */}
       {isGeneratingPlan && (
         <div style={{
           position: 'fixed',
@@ -1029,62 +923,45 @@ The system will automatically detect when the data is complete and transition to
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(255, 252, 249, 0.98)',
-          backdropFilter: 'blur(12px)',
+          backgroundColor: '#fff',
           zIndex: 1000,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: tokens.spacing['3xl'],
+          gap: 32,
         }}>
-          {/* Loading Animation */}
-          <CoherenLoader size={72} color="#7c3aed" />
+          <CoherenLoader size={48} color="#18181b" />
 
-          {/* Loading Text */}
-          <div style={{ textAlign: 'center', maxWidth: '500px', marginTop: tokens.spacing.lg }}>
-            <h3 style={{
-              fontSize: tokens.typography.sizes.xl,
-              fontWeight: tokens.typography.weights.regular,
-              color: tokens.colors.text.primary,
-              marginBottom: tokens.spacing.md,
-            }}>
-              Creating your personalized plan
-            </h3>
+          <div style={{ textAlign: 'center' }}>
             <p style={{
-              fontSize: tokens.typography.sizes.base,
-              fontWeight: tokens.typography.weights.light,
-              color: tokens.colors.text.secondary,
-              lineHeight: tokens.typography.lineHeights.relaxed,
+              fontSize: 15,
+              fontWeight: 400,
+              color: '#18181b',
+              margin: '0 0 6px',
+              letterSpacing: '-0.01em',
             }}>
-              Analyzing your goals and crafting a strategic roadmap tailored just for you...
+              Building your roadmap
+            </p>
+            <p style={{ fontSize: 13, color: '#a1a1aa', margin: 0 }}>
+              This takes about 10 seconds
             </p>
           </div>
 
-          {/* Progress Bar */}
           <div style={{
-            width: '300px',
-            height: '4px',
-            backgroundColor: tokens.colors.gray[100],
-            borderRadius: tokens.borderRadius.full,
+            width: '200px',
+            height: '2px',
+            backgroundColor: '#f4f4f5',
+            borderRadius: 99,
             overflow: 'hidden',
           }}>
             <div style={{
               height: '100%',
               width: `${generationProgress}%`,
-              backgroundColor: tokens.colors.primary,
+              backgroundColor: '#18181b',
               transition: 'width 0.5s ease',
             }} />
           </div>
-
-          {/* Percentage */}
-          <span style={{
-            fontSize: tokens.typography.sizes.sm,
-            fontWeight: tokens.typography.weights.regular,
-            color: tokens.colors.text.tertiary,
-          }}>
-            {generationProgress}%
-          </span>
         </div>
       )}
 
@@ -1110,41 +987,15 @@ The system will automatically detect when the data is complete and transition to
             padding: 0,
           }}
         >
-          <Icons.logo style={{ width: '22px', height: '22px', color: '#7c3aed' }} />
+          <Icons.logo style={{ width: '18px', height: '18px', color: '#18181b' }} />
           <span style={{
-            fontSize: tokens.typography.sizes.base,
-            fontWeight: tokens.typography.weights.medium,
-            color: tokens.colors.text.primary,
-            letterSpacing: '-0.01em',
+            fontSize: 14,
+            fontWeight: 500,
+            color: '#18181b',
+            letterSpacing: '-0.02em',
           }}>
-            coheren.ai
+            coheren
           </span>
-        </button>
-
-        {/* Back button — top right */}
-        <button
-          onClick={() => setStep(0)}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: tokens.typography.sizes.sm,
-            color: tokens.colors.text.secondary,
-            transition: 'all 0.2s',
-            padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`,
-            display: 'flex',
-            alignItems: 'center',
-            gap: tokens.spacing.xs,
-            fontWeight: tokens.typography.weights.light,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = tokens.colors.primary;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = tokens.colors.text.secondary;
-          }}
-        >
-          ← Back
         </button>
       </div>
 
@@ -1167,13 +1018,10 @@ The system will automatically detect when the data is complete and transition to
               zIndex: 1,
             }}
           >
-            <motion.div
-              animate={{ scale: [1, 1.08, 1] }}
-              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-            >
-              <CoherenLoader size={56} color="#7c3aed" />
-            </motion.div>
-            <AnalyzingText />
+            <CoherenLoader size={40} color="#18181b" />
+            <p style={{ fontSize: 14, color: '#71717a', margin: 0, letterSpacing: '-0.01em' }}>
+              Analyzing your responses…
+            </p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1200,14 +1048,14 @@ The system will automatically detect when the data is complete and transition to
                 color: tokens.colors.text.primary,
                 marginBottom: tokens.spacing.md
               }}>
-                Let's personalize your journey
+                A few quick questions
               </h2>
               <p style={{
                 fontSize: tokens.typography.sizes.base,
                 color: tokens.colors.text.secondary,
                 lineHeight: 1.6
               }}>
-                A few quick questions to customize your {collectedData.goal} roadmap perfectly for you
+                Your answers shape how the roadmap is built
               </p>
             </div>
             <StoneQuestions
@@ -1257,10 +1105,10 @@ The system will automatically detect when the data is complete and transition to
                 color: tokens.colors.text.primary,
                 marginBottom: tokens.spacing.md,
               }}>
-                A few more questions
+                One more round
               </h2>
               <p style={{ fontSize: tokens.typography.sizes.base, color: tokens.colors.text.secondary, lineHeight: 1.6 }}>
-                Help us understand your situation better
+                These help calibrate the difficulty of your tasks
               </p>
             </div>
             <StoneQuestions
@@ -1326,40 +1174,39 @@ The system will automatically detect when the data is complete and transition to
 
             {/* Messages scroll area */}
             <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-              <div className="max-w-3xl mx-auto px-6 py-8 pb-24 flex flex-col">
-                {messages.map((message) => (
-                  <div key={message.id} className={`flex gap-4 py-6 border-b border-zinc-100 last:border-0 animate-[fadeIn_0.35s_ease-out] ${message.role === 'user' ? 'justify-end' : ''}`}>
-                    {/* AI Avatar */}
-                    {message.role === 'ai' && (
-                      <div className="flex-shrink-0 mt-0.5 w-[30px] h-[30px] rounded-sm flex items-center justify-center">
-                        <Icons.logo style={{ width: '18px', height: '18px', color: '#7c3aed' }} />
-                      </div>
-                    )}
-                    {/* Content */}
-                    <div className={message.role === 'ai' ? 'flex-1 min-w-0' : 'max-w-[75%]'}>
-                      {message.role === 'ai' ? (
-                        <p className="text-base sm:text-[1.05rem] font-light leading-[1.85] text-zinc-900 m-0">
+              <div className="max-w-2xl mx-auto px-6 pt-12 pb-28 flex flex-col gap-1">
+                {messages.map((message, i) => (
+                  <div
+                    key={message.id}
+                    className={`animate-[fadeIn_0.3s_ease-out] ${message.role === 'user' ? 'flex justify-end mt-3' : 'flex mt-6'}`}
+                  >
+                    {message.role === 'ai' ? (
+                      <div style={{ maxWidth: '88%' }}>
+                        {/* small label on first AI message only */}
+                        {i === 0 && (
+                          <p className="text-[11px] font-medium text-zinc-400 mb-2 tracking-wider uppercase">
+                            coheren
+                          </p>
+                        )}
+                        <p className="text-[1.05rem] font-normal leading-[1.8] text-zinc-900 m-0">
                           {message.content}
                         </p>
-                      ) : (
-                        <div className="bg-[#f4f4f4] text-zinc-800 rounded-2xl rounded-tr-sm px-5 py-3 text-sm sm:text-base font-normal leading-relaxed">
-                          {message.content}
-                        </div>
-                      )}
-                    </div>
+                      </div>
+                    ) : (
+                      <div className="bg-zinc-100 text-zinc-800 rounded-2xl rounded-br-sm px-4 py-2.5 text-[0.9rem] leading-relaxed max-w-[78%]">
+                        {message.content}
+                      </div>
+                    )}
                   </div>
                 ))}
 
                 {/* Typing indicator */}
                 {isTyping && (
-                  <div className="flex gap-4 py-6">
-                    <div className="flex-shrink-0 w-[30px] h-[30px] rounded-sm flex items-center justify-center">
-                      <Icons.logo style={{ width: '18px', height: '18px', color: '#7c3aed' }} />
-                    </div>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <div className="w-2 h-2 rounded-full bg-zinc-400" style={{ animation: 'pulse 1.4s infinite ease-in-out both' }} />
-                      <div className="w-2 h-2 rounded-full bg-zinc-400" style={{ animation: 'pulse 1.4s infinite ease-in-out both 0.2s' }} />
-                      <div className="w-2 h-2 rounded-full bg-zinc-400" style={{ animation: 'pulse 1.4s infinite ease-in-out both 0.4s' }} />
+                  <div className="flex mt-6">
+                    <div className="flex items-center gap-1.5 py-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-zinc-300" style={{ animation: 'pulse 1.4s infinite ease-in-out both' }} />
+                      <div className="w-1.5 h-1.5 rounded-full bg-zinc-300" style={{ animation: 'pulse 1.4s infinite ease-in-out both 0.2s' }} />
+                      <div className="w-1.5 h-1.5 rounded-full bg-zinc-300" style={{ animation: 'pulse 1.4s infinite ease-in-out both 0.4s' }} />
                     </div>
                   </div>
                 )}
@@ -1368,32 +1215,32 @@ The system will automatically detect when the data is complete and transition to
               </div>
             </div>
 
-            {/* Input area — truly floating */}
-            <div className="fixed bottom-0 left-0 right-0 flex justify-center px-6 pt-3" style={{ zIndex: 50, paddingBottom: 'max(24px, env(safe-area-inset-bottom))' }}>
+            {/* Input area — floating */}
+            <div className="fixed bottom-0 left-0 right-0 flex justify-center px-5" style={{ zIndex: 50, paddingBottom: 'max(20px, env(safe-area-inset-bottom))', background: 'linear-gradient(to top, #fff 70%, transparent)' }}>
               {isTyping || onboardingPhase !== 'conversation' ? (
-                <div className="w-full max-w-2xl mx-auto flex items-center px-5 h-12 rounded-full bg-zinc-100 border border-zinc-200">
+                <div className="w-full max-w-xl mx-auto flex items-center px-4 h-11 rounded-xl bg-zinc-50 border border-zinc-100 mb-1">
                   <span className="text-sm text-zinc-400">
-                    {onboardingPhase !== 'conversation' ? 'Generating your plan...' : 'Thinking...'}
+                    {onboardingPhase !== 'conversation' ? 'Building your plan…' : ''}
                   </span>
                 </div>
               ) : (
-                <div className="w-full max-w-2xl mx-auto flex items-center gap-2 bg-white border border-zinc-200 rounded-full px-5 h-12 shadow-sm focus-within:border-zinc-400 transition-colors">
+                <div className="w-full max-w-xl mx-auto flex items-center gap-2 bg-white border border-zinc-200 rounded-xl px-4 h-11 shadow-[0_2px_12px_rgba(0,0,0,0.06)] focus-within:border-zinc-400 transition-colors mb-1">
                   <input
                     ref={inputRef}
                     type="text"
                     value={userInput}
                     onChange={(e) => setUserInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                    placeholder="Type your message..."
+                    placeholder="Reply…"
                     autoFocus
                     className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-800 placeholder:text-zinc-400"
                   />
                   <button
                     onClick={handleSend}
                     disabled={!userInput.trim()}
-                    className="flex-shrink-0 w-7 h-7 rounded-full bg-zinc-900 disabled:bg-zinc-200 flex items-center justify-center transition-colors"
+                    className="flex-shrink-0 w-6 h-6 rounded-lg bg-zinc-900 disabled:bg-zinc-200 flex items-center justify-center transition-colors"
                   >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M5 12l14 0"/><path d="M13 18l6 -6"/><path d="M13 6l6 6"/>
                     </svg>
                   </button>

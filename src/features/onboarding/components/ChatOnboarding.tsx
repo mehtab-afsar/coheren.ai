@@ -359,42 +359,36 @@ Current Data Already Collected: ${JSON.stringify(collectedData)}`
 
       const newData = JSON.parse(extractRaw || '{}');
 
-      // Clean Merge: Only update fields if the AI actually found something new and non-null
-      setCollectedData(prev => {
-        const merged = { ...prev };
+      // Clean Merge: compute synchronously so whisper logic uses up-to-date values
+      const mergedData = { ...collectedData };
+      if (newData.goal) mergedData.goal = newData.goal;
+      if (newData.skillLevel) mergedData.skillLevel = newData.skillLevel;
+      if (newData.timeline) mergedData.timeline = newData.timeline;
+      if (newData.dailyTime) mergedData.dailyTime = newData.dailyTime;
+      if (newData.category) mergedData.category = newData.category;
+      if (newData.energyPattern) mergedData.energyPattern = newData.energyPattern;
+      if (Array.isArray(newData.behavioralFlags) && newData.behavioralFlags.length > 0) {
+        const combined = new Set([...mergedData.behavioralFlags, ...newData.behavioralFlags]);
+        mergedData.behavioralFlags = Array.from(combined);
+      }
+      if (!mergedData.category && mergedData.goal) {
+        mergedData.category = detectCategory(mergedData.goal);
+      }
 
-        // Only update fields if the AI actually found something new and non-null
-        if (newData.goal) merged.goal = newData.goal;
-        if (newData.skillLevel) merged.skillLevel = newData.skillLevel;
-        if (newData.timeline) merged.timeline = newData.timeline;
-        if (newData.dailyTime) merged.dailyTime = newData.dailyTime;
-        if (newData.category) merged.category = newData.category;
-        if (newData.energyPattern) merged.energyPattern = newData.energyPattern;
-        // Accumulate behavioral flags — never overwrite, only add new ones
-        if (Array.isArray(newData.behavioralFlags) && newData.behavioralFlags.length > 0) {
-          const combined = new Set([...merged.behavioralFlags, ...newData.behavioralFlags]);
-          merged.behavioralFlags = Array.from(combined);
+      // Commit to state
+      setCollectedData(mergedData);
+
+      // Beautiful debug table showing exactly what we have
+      console.table({
+        'Collected So Far': {
+          Goal: mergedData.goal || '❌ missing',
+          'Skill Level': mergedData.skillLevel || '❌ missing',
+          Timeline: mergedData.timeline || '❌ missing',
+          'Daily Time': mergedData.dailyTime || '❌ missing',
+          Category: mergedData.category || '❌ missing',
+          'Energy Pattern': mergedData.energyPattern || '❌ missing',
+          'Behavioral Flags': mergedData.behavioralFlags.length > 0 ? mergedData.behavioralFlags.join(', ') : '(none)'
         }
-
-        // Final safety check: if category is still missing, try detection
-        if (!merged.category && merged.goal) {
-          merged.category = detectCategory(merged.goal);
-        }
-
-        // Beautiful debug table showing exactly what we have
-        console.table({
-          'Collected So Far': {
-            Goal: merged.goal || '❌ missing',
-            'Skill Level': merged.skillLevel || '❌ missing',
-            Timeline: merged.timeline || '❌ missing',
-            'Daily Time': merged.dailyTime || '❌ missing',
-            Category: merged.category || '❌ missing',
-            'Energy Pattern': merged.energyPattern || '❌ missing',
-            'Behavioral Flags': merged.behavioralFlags.length > 0 ? merged.behavioralFlags.join(', ') : '(none)'
-          }
-        });
-
-        return merged;
       });
 
       // --- STEP 2: THE CONVERSATIONAL RESPONSE ---
@@ -405,10 +399,10 @@ Current Data Already Collected: ${JSON.stringify(collectedData)}`
 
       // Build RAG context for science-backed coaching
       const userContext: UserContext = {
-        goal: collectedData.goal || undefined,
-        category: collectedData.category || undefined,
-        energyPattern: collectedData.energyPattern as UserContext['energyPattern'] || undefined,
-        skillLevel: collectedData.skillLevel as UserContext['skillLevel'] || undefined,
+        goal: mergedData.goal || undefined,
+        category: mergedData.category || undefined,
+        energyPattern: mergedData.energyPattern as UserContext['energyPattern'] || undefined,
+        skillLevel: mergedData.skillLevel as UserContext['skillLevel'] || undefined,
       };
       const scientificKnowledge = retrieveKnowledge(userContext, 'new-goal');
 
@@ -442,11 +436,11 @@ IMPORTANT:
 The system will automatically detect when the data is complete and transition to the next phase. You do not need to use any specific 'magic words' or commands. Just be a helpful coach until the screen changes.`;
 
       // --- STEP 3: AI WHISPERING (Dynamic Guidance) ---
-      // Priority order: timeline first (required for planning), then others
+      // Use mergedData (not stale collectedData) so whisper reflects what was just extracted
       let nextQuestion: string | null = null;
-      if (!collectedData.timeline) nextQuestion = 'their target timeline or deadline (e.g. "3 months", "6 weeks", "by December")';
-      else if (!collectedData.dailyTime) nextQuestion = 'how much time per day they can commit (e.g. "30 minutes", "1 hour")';
-      else if (!collectedData.skillLevel) nextQuestion = 'their current experience level (beginner / intermediate / advanced)';
+      if (!mergedData.timeline) nextQuestion = 'their target timeline or deadline (e.g. "3 months", "6 weeks", "by December")';
+      else if (!mergedData.dailyTime) nextQuestion = 'how much time per day they can commit (e.g. "30 minutes", "1 hour")';
+      else if (!mergedData.skillLevel) nextQuestion = 'their current experience level (beginner / intermediate / advanced)';
 
       // Create the "Whisper"
       let whisper: string;
@@ -454,7 +448,7 @@ The system will automatically detect when the data is complete and transition to
         whisper = `\n\n(SYSTEM WHISPER: Your ONLY job in this reply is to ask specifically about: ${nextQuestion}. Ask it as a single warm question. Do NOT wrap up or say the plan is ready yet.)`;
       } else {
         // All fields collected — run realism check before declaring ready
-        const realism = validateGoalRealism(collectedData);
+        const realism = validateGoalRealism(mergedData);
         if (realism.issue && !realismAcknowledged) {
           whisper = `\n\n(SYSTEM WHISPER: Before saying the plan is ready, you MUST gently push back on this concern: "${realism.issue}" Raise it warmly, explain the risk, and ask if they want to adjust OR confirm they want to proceed. Do NOT start generating the plan yet.)`;
         } else {

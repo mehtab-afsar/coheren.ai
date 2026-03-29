@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useStore, type Task } from '@core/store/useStore';
+import { useStore, type Task, type WeekPlan } from '@core/store/useStore';
 import { getRecentFeedback } from '@lib/database';
 import { track } from '@lib/analytics';
 import { handleCheckpoint } from '@core/agents/orchestrator';
+import { recalibrateWeek } from '@core/agents/recalibrator';
 import { isCheckpointDay } from '@lib/checkpointHelpers';
 import { flags } from '@config/feature-flags';
 import type { Agent2ProfileOutput } from '@types-app/agents';
@@ -32,18 +33,31 @@ export function useCheckpoint() {
   const [checkpointData, setCheckpointData] = useState<CheckpointData | null>(null);
   const [isRecalibrating, setIsRecalibrating] = useState(false);
   const [recalibrationResult, setRecalibrationResult] = useState<RecalibrationResult | null>(null);
+  const [recalibrationError, setRecalibrationError] = useState<string | null>(null);
 
-  const currentDay    = useStore((state) => state.currentDay);
-  const user          = useStore((state) => state.user);
-  const currentGoal   = useStore((state) => state.currentGoal);
-  const roadmap       = useStore((state) => state.roadmap);
-  const agentRoadmap  = useStore((state) => state.agentRoadmap);
-  const stoneProfile  = useStore((state) => state.stoneProfile);
-  const tasks         = useStore((state) => state.tasks);
-  const setTasks      = useStore((state) => state.setTasks);
+  const currentDay         = useStore((state) => state.currentDay);
+  const user               = useStore((state) => state.user);
+  const currentGoal        = useStore((state) => state.currentGoal);
+  const roadmap            = useStore((state) => state.roadmap);
+  const agentRoadmap       = useStore((state) => state.agentRoadmap);
+  const agentRoadmapV2     = useStore((state) => state.agentRoadmapV2);
+  const stoneProfile       = useStore((state) => state.stoneProfile);
+  const tasks              = useStore((state) => state.tasks);
+  const setTasks           = useStore((state) => state.setTasks);
   const updateAgentRoadmap = useStore((state) => state.updateAgentRoadmap);
+  const updateWeek         = useStore((state) => state.updateWeek);
+  const setPendingWeeklyCheckIn = useStore((state) => state.setPendingWeeklyCheckIn);
 
-  const isCheckpoint = flags.USE_RECALIBRATION && isCheckpointDay(currentDay, 14);
+  const CHECKPOINT_INTERVAL = 7; // weekly recalibration
+  const isCheckpoint = flags.USE_RECALIBRATION && isCheckpointDay(currentDay, CHECKPOINT_INTERVAL);
+
+  // Detect week completion and set pending weekly check-in
+  useEffect(() => {
+    if (currentDay > 0 && currentDay % 7 === 0) {
+      const completedWeek = currentDay / 7;
+      setPendingWeeklyCheckIn(completedWeek);
+    }
+  }, [currentDay]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch checkpoint data when it's a checkpoint day
   useEffect(() => {
@@ -88,43 +102,29 @@ export function useCheckpoint() {
     }
   }, [isCheckpoint, user, currentGoal]);
 
-  const handleCheckpointComplete = async () => {
+  const handleCheckpointComplete = async (weeklyCheckInAnswers?: {
+    pacing: string;
+    hardTopics: string;
+    taskTypesFeedback: string;
+    raw: string[];
+  }): Promise<void> => {
     setIsRecalibrating(true);
 
     try {
       const goalId = (currentGoal as { id?: string }).id;
-      if (!goalId || !roadmap || !checkpointData) {
+      if (!goalId || !roadmap) {
         throw new Error('Missing required data for checkpoint');
       }
 
       // Derive timeline and dailyTime from real store data
-      const timelineDays = agentRoadmap?.roadmap?.totalDays
+      const timelineDays = agentRoadmapV2?.totalDays
+        ?? agentRoadmap?.roadmap?.totalDays
         ?? (roadmap.duration ? roadmap.duration * 7 : 90);
       const dailyMinutes = (() => {
         const raw = roadmap.dailyTime ?? '';
         const match = String(raw).match(/(\d+)/);
         return match ? parseInt(match[1], 10) : 30;
       })();
-
-      // Map stored tasks to a title lookup by approximate day
-      const taskTitleByDay: Record<number, string> = {};
-      for (const t of tasks) {
-        if (t.dayNumber != null) taskTitleByDay[t.dayNumber] = t.title;
-      }
-
-      // Convert recent feedback to Agent 5 format
-      const taskFeedback = checkpointData.recentFeedback.map((f, i) => {
-        const approxDay = currentDay - 13 + i;
-        return {
-          dayNumber: approxDay,
-          title: taskTitleByDay[approxDay] ?? 'Task',
-          difficultyRating: f.difficulty_score,
-          completionTime: f.actual_duration_mins,
-          userComment: f.user_comment,
-          skipped: f.completion_status === 'skipped',
-          skipReason: undefined,
-        };
-      });
 
       // Use real stone profile from store, fallback to minimal stub if not yet set
       const resolvedStoneProfile: Agent2ProfileOutput = stoneProfile ?? {
@@ -138,11 +138,86 @@ export function useCheckpoint() {
         }
       };
 
-      // Use Agent 3 roadmap if available, fall back to legacy roadmap shape
+      // Map stored tasks to feedback format
+      const taskTitleByDay: Record<number, string> = {};
+      for (const t of tasks) {
+        if (t.dayNumber != null) taskTitleByDay[t.dayNumber] = t.title;
+      }
+
+      // Use V2 roadmap with weekly recalibration if available
+      if (agentRoadmapV2) {
+        const goalText = (currentGoal as { specificGoal?: string }).specificGoal || 'Continue your journey';
+        const recentDays = 7;
+        const recentFeedback = checkpointData?.recentFeedback ?? [];
+
+        const taskFeedback = recentFeedback.map((f, i) => {
+          const approxDay = currentDay - (recentDays - 1) + i;
+          return {
+            dayNumber: approxDay,
+            title: taskTitleByDay[approxDay] ?? 'Task',
+            difficultyRating: f.difficulty_score,
+            completionTime: f.actual_duration_mins ?? dailyMinutes,
+            userComment: f.user_comment,
+            skipped: f.completion_status === 'skipped',
+            skipReason: undefined,
+          };
+        });
+
+        const result = await recalibrateWeek({
+          context: { goal: goalText, timeline: timelineDays, dailyMinutes },
+          roadmap: agentRoadmapV2,
+          stoneProfile: resolvedStoneProfile,
+          completedTasks: taskFeedback,
+          currentDay,
+          weekNumber: Math.ceil(currentDay / 7),
+          weeklyCheckInAnswers,
+        });
+
+        // Update the store with the new week plan
+        const nextWeekNumber = Math.ceil(currentDay / 7) + 1;
+        const newWeek: WeekPlan = {
+          ...result.recalibratedWeek,
+          week: nextWeekNumber,
+          status: 'current',
+          recalibratedFrom: Math.ceil(currentDay / 7),
+        };
+        updateWeek(nextWeekNumber, newWeek);
+        setPendingWeeklyCheckIn(null);
+
+        track({
+          event: 'checkpoint_completed',
+          properties: { day: currentDay, completed_tasks: checkpointData?.completedTasks ?? 0, avg_difficulty: checkpointData?.avgDifficulty ?? 3 },
+        });
+
+        setRecalibrationResult({
+          coachMessage:    result.recalibratedWeek.personalizedMessage,
+          nextSprintFocus: result.checkpointAnalysis.nextSprintFocus,
+          stoneDirective:  resolvedStoneProfile.stoneProfile.primaryStone,
+        });
+
+        setIsRecalibrating(false);
+        return;
+      }
+
+      // Legacy path — use old 14-day sprint recalibration if V2 roadmap not available
+      if (!checkpointData) throw new Error('Missing checkpoint data for legacy path');
+
+      const taskFeedback = checkpointData.recentFeedback.map((f, i) => {
+        const approxDay = currentDay - 13 + i;
+        return {
+          dayNumber: approxDay,
+          title: taskTitleByDay[approxDay] ?? 'Task',
+          difficultyRating: f.difficulty_score,
+          completionTime: f.actual_duration_mins ?? dailyMinutes,
+          userComment: f.user_comment,
+          skipped: f.completion_status === 'skipped',
+          skipReason: undefined,
+        };
+      });
+
       const resolvedRoadmap = agentRoadmap?.roadmap
         ?? ((roadmap.strategicPlan || roadmap) as unknown as import('@types-app/agents').Roadmap);
 
-      // Run Agent 5 checkpoint analysis
       const result = await handleCheckpoint(
         (currentGoal as { specificGoal?: string }).specificGoal || 'Continue your journey',
         timelineDays,
@@ -154,7 +229,6 @@ export function useCheckpoint() {
         { userId: user!.id, goalId, agentRoadmap: agentRoadmap ?? undefined }
       );
 
-      // Convert adapted tasks to store format
       const convertedTasks = result.adaptedTasks.map((dailyTask) => ({
         id: String(dailyTask.day),
         title: dailyTask.task.title,
@@ -169,19 +243,15 @@ export function useCheckpoint() {
         steps: dailyTask.task.steps.map(step => step.instruction),
         tips: dailyTask.task.tips,
         successCriteria: dailyTask.task.successCriteria.primary,
-        resources: dailyTask.task.resources // Include matched resources
       }));
 
-      // Update local tasks with new sprint tasks
       setTasks(convertedTasks);
 
-      // Apply recalibration changes back to the agent roadmap
       const adjustedPhase = result.analysis.recalibratedSprint.adjustedPhase;
       const pedChanges = result.analysis.recalibratedSprint.pedagogicalChanges;
       if (adjustedPhase || pedChanges) {
         updateAgentRoadmap((prev) => {
           const updated = { ...prev, roadmap: { ...prev.roadmap, phases: [...prev.roadmap.phases] } };
-          // Find the current phase and update its focus areas
           if (adjustedPhase) {
             const phaseIdx = updated.roadmap.phases.findIndex(
               p => p.phaseName === adjustedPhase.phaseName
@@ -193,7 +263,6 @@ export function useCheckpoint() {
               };
             }
           }
-          // Apply pedagogical changes to review/rest moments
           if (pedChanges) {
             const existingDays = new Set(updated.roadmap.reviewMoments.map(rm => rm.day));
             for (const day of pedChanges.reviewDaysAdded ?? []) {
@@ -220,7 +289,6 @@ export function useCheckpoint() {
       });
       track({ event: 'recalibration_accepted', properties: { day: currentDay, mode: checkpointData.avgDifficulty < 2.5 ? 'simplify' : 'extend' } });
 
-      // Surface the Agent 5 result in the UI (replaces the alert)
       setRecalibrationResult({
         coachMessage:    result.analysis.recalibratedSprint.personalizedMessage,
         nextSprintFocus: result.analysis.checkpointAnalysis.nextSprintFocus,
@@ -230,7 +298,7 @@ export function useCheckpoint() {
       setIsRecalibrating(false);
     } catch (error) {
       console.error('Checkpoint failed:', error);
-      alert('Failed to recalibrate roadmap. Please try again.');
+      setRecalibrationError('Failed to recalibrate roadmap. Please try again.');
       setIsRecalibrating(false);
     }
   };
@@ -310,7 +378,6 @@ export function useCheckpoint() {
         steps: dailyTask.task.steps.map(step => step.instruction),
         tips: dailyTask.task.tips,
         successCriteria: dailyTask.task.successCriteria.primary,
-        resources: dailyTask.task.resources,
       }));
 
       setTasks(convertedTasks);
@@ -373,6 +440,8 @@ export function useCheckpoint() {
     checkpointData,
     isRecalibrating,
     recalibrationResult,
+    recalibrationError,
+    clearRecalibrationError: () => setRecalibrationError(null),
     handleCheckpointComplete,
     triggerEarlyRecalibration,
   };

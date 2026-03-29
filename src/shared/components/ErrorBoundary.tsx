@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import * as Sentry from '@sentry/react';
 import { tokens } from '@core/design-system';
 
 interface Props {
@@ -24,6 +25,7 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error(`[ErrorBoundary${this.props.label ? ` – ${this.props.label}` : ''}]`, error, info.componentStack);
+    Sentry.captureException(error, { extra: { componentStack: info.componentStack, label: this.props.label } });
   }
 
   private handleRetry = () => {

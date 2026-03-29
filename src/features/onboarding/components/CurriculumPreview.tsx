@@ -14,7 +14,7 @@ import type { CurriculumPreview as CurriculumPreviewType, PaceChoice } from '@ty
 
 interface Props {
   preview: CurriculumPreviewType;
-  onPaceSelect: (choice: PaceChoice) => void;
+  onPaceSelect: (choice: PaceChoice, feedback?: string) => void;
 }
 
 const TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string; bg: string; label: string }> = {
@@ -55,10 +55,11 @@ const PACE_OPTIONS: { choice: PaceChoice; label: string; sub: string; emoji: str
 export default function CurriculumPreview({ preview, onPaceSelect }: Props) {
   const [showPacePicker, setShowPacePicker] = useState(false);
   const [selectedPace, setSelectedPace] = useState<PaceChoice | null>(null);
+  const [feedbackText, setFeedbackText] = useState('');
 
   const handlePaceSelect = (choice: PaceChoice) => {
     setSelectedPace(choice);
-    setTimeout(() => onPaceSelect(choice), 400);
+    setTimeout(() => onPaceSelect(choice, feedbackText || undefined), 400);
   };
 
   return (
@@ -108,9 +109,10 @@ export default function CurriculumPreview({ preview, onPaceSelect }: Props) {
               transition={{ duration: 0.2, delay: idx * 0.04 }}
               style={{
                 display: 'flex',
-                alignItems: 'flex-start',
+                alignItems: 'center',
                 gap: 14,
                 padding: '14px 18px',
+                minHeight: 64,
                 borderBottom: isLast ? 'none' : '1px solid #f9fafb',
               }}
             >
@@ -260,6 +262,7 @@ export default function CurriculumPreview({ preview, onPaceSelect }: Props) {
                       alignItems: 'center',
                       gap: 14,
                       padding: '14px 18px',
+                      minHeight: 72,
                       borderRadius: 14,
                       border: isSelected ? `2px solid ${opt.border}` : '2px solid #f3f4f6',
                       background: isSelected ? opt.bg : '#fafafa',
@@ -269,7 +272,7 @@ export default function CurriculumPreview({ preview, onPaceSelect }: Props) {
                       textAlign: 'left',
                     }}
                   >
-                    <span style={{ fontSize: 22, flexShrink: 0 }}>{opt.emoji}</span>
+                    <span style={{ fontSize: 20, flexShrink: 0, lineHeight: 1 }}>{opt.emoji}</span>
                     <div>
                       <p style={{
                         fontSize: 14,
@@ -286,6 +289,35 @@ export default function CurriculumPreview({ preview, onPaceSelect }: Props) {
                   </motion.button>
                 );
               })}
+            </div>
+
+            {/* Optional feedback */}
+            <div style={{ marginTop: 16 }}>
+              <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 8px' }}>
+                Anything else we should know? <span style={{ fontStyle: 'italic' }}>(optional)</span>
+              </p>
+              <textarea
+                value={feedbackText}
+                onChange={e => setFeedbackText(e.target.value)}
+                placeholder="e.g. I travel for work, recovering from injury..."
+                rows={2}
+                style={{
+                  width: '100%',
+                  borderRadius: 12,
+                  border: '1.5px solid #e5e7eb',
+                  padding: '10px 14px',
+                  fontSize: 13,
+                  resize: 'none',
+                  outline: 'none',
+                  fontFamily: 'inherit',
+                  color: '#1a1a2e',
+                  lineHeight: 1.6,
+                  boxSizing: 'border-box',
+                  transition: 'border-color 0.15s',
+                }}
+                onFocus={e => { e.currentTarget.style.borderColor = '#c4b5fd'; }}
+                onBlur={e => { e.currentTarget.style.borderColor = '#e5e7eb'; }}
+              />
             </div>
           </motion.div>
         )}

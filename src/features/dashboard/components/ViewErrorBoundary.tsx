@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react';
+import * as Sentry from '@sentry/react';
 import { AlertTriangle } from 'lucide-react';
 import { tokens } from '@core/design-system';
 
@@ -19,8 +20,8 @@ export class ViewErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: { componentStack: string }) {
-    // In production this would go to Sentry / error monitoring
     console.error('[ViewErrorBoundary]', error, info.componentStack);
+    Sentry.captureException(error, { extra: { componentStack: info.componentStack } });
   }
 
   handleReset = () => this.setState({ hasError: false, error: undefined });

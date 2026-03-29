@@ -1,6 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { Bell } from 'lucide-react';
-import { tokens } from '@core/design-system';
+import { ap } from '@core/design-system/appleTokens';
 import DashboardSidebar from '@features/dashboard/components/DashboardSidebar';
 import BottomNav from '@features/dashboard/components/BottomNav';
 import { ViewErrorBoundary } from '@features/dashboard/components/ViewErrorBoundary';
@@ -37,7 +37,7 @@ export default function Dashboard() {
   useNotifications();
   useAutoAdvance();
   const { currentView, setCurrentView, sidebarOpen, setSidebarOpen } = useDashboardNav();
-  const { checkpointData, isRecalibrating, recalibrationResult, handleCheckpointComplete, triggerEarlyRecalibration } = useCheckpoint();
+  const { checkpointData, isRecalibrating, recalibrationResult, recalibrationError, clearRecalibrationError, handleCheckpointComplete, triggerEarlyRecalibration } = useCheckpoint();
   const { isMobile } = useBreakpoint();
   const { shouldPrompt, shouldTriggerEarlyRecalibration, dismiss, dismissEarlyRecalibration } = useDifficultyMonitor();
   const { isOnline, pendingCount } = useOfflineSync();
@@ -49,10 +49,18 @@ export default function Dashboard() {
 
   const { generateStreakMessage, generatePlanAdjustment } = useCoachMessages();
 
+  const pendingWeeklyCheckIn = useStore(s => s.pendingWeeklyCheckIn);
   const [showDifficultyPrompt, setShowDifficultyPrompt] = useState(false);
   const [showNotificationCenter, setShowNotificationCenter] = useState(false);
   const [showShareCard, setShowShareCard] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
+
+  // Auto-open Coach panel when a weekly check-in is pending
+  useEffect(() => {
+    if (pendingWeeklyCheckIn !== null) {
+      setCoachOpen(true);
+    }
+  }, [pendingWeeklyCheckIn]);
   const [unreadCount, setUnreadCount] = useState(() => getNotifications().filter(n => !n.read).length);
   const [showDebugPanel] = useState(() => new URLSearchParams(window.location.search).get('debug') === 'agents');
 
@@ -110,10 +118,6 @@ export default function Dashboard() {
   const totalMinutes = tasks.filter(t => t.completed).reduce((sum, t) => sum + (t.duration || 0), 0);
   const hoursInvested = Math.round((totalMinutes / 60) * 10) / 10;
 
-  // Desktop-only: shift content right when sidebar is open
-  const marginLeft = isMobile ? '0' : sidebarOpen ? '260px' : '0';
-  const paddingLeft = isMobile ? '16px' : sidebarOpen ? tokens.spacing['4xl'] : 'calc(44px + 48px)';
-
   const renderView = () => {
     // Debug panel overrides all views when ?debug=agents is in URL
     if (showDebugPanel) return <AgentHealthDashboard />;
@@ -134,70 +138,10 @@ export default function Dashboard() {
     }
   };
 
-  const contentInner = (
-    <>
-      {/* Offline banner */}
-      {!isOnline && <OfflineBanner pendingCount={pendingCount} />}
-
-      {/* Difficulty prompt — inline coach card (only on Today view) */}
-      {showDifficultyPrompt && currentView === 'today' && (
-        <DifficultyPrompt
-          onSimplify={handleSimplify}
-          onExtend={handleExtend}
-          onKeep={handleKeep}
-        />
-      )}
-
-      {/* Notification bell — shown when unread > 0 */}
-      {unreadCount > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: tokens.spacing.sm }}>
-          <button
-            onClick={() => { setShowNotificationCenter(true); setUnreadCount(0); }}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 12px',
-              backgroundColor: 'rgba(124,58,237,0.08)',
-              border: '1px solid rgba(124,58,237,0.2)',
-              borderRadius: '99px',
-              cursor: 'pointer',
-              color: '#7c3aed',
-            }}
-          >
-            <Bell size={13} strokeWidth={2} />
-            <span style={{ fontSize: '12px', fontWeight: 600 }}>{unreadCount}</span>
-          </button>
-        </div>
-      )}
-
-      <ViewErrorBoundary>
-        <Suspense fallback={
-          <ViewSkeleton type={
-            currentView === 'insights' ? 'progress'
-            : currentView === 'roadmap' ? 'journey'
-            : currentView === 'you'     ? 'me'
-            : currentView === 'today'   ? 'today'
-            : currentView === 'library' ? 'generic'
-            : 'generic'
-          } />
-        }>
-          <div key={currentView} style={{ animation: 'dashFadeIn 0.18s ease both' }}>
-            {renderView()}
-          </div>
-        </Suspense>
-      </ViewErrorBoundary>
-    </>
-  );
-
   // If it's a checkpoint day, show checkpoint screen instead of normal views
   if (checkpointData) {
     return (
-      <div style={{
-        display: 'flex',
-        minHeight: '100vh',
-        backgroundColor: tokens.colors.background,
-      }}>
+      <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: ap.bg, fontFamily: ap.font }}>
         {!isMobile && (
           <DashboardSidebar
             currentView={currentView}
@@ -210,18 +154,11 @@ export default function Dashboard() {
 
         <div style={{
           flex: 1,
-          display: 'flex',
-          justifyContent: 'center',
-          transition: 'margin-left 500ms cubic-bezier(0.23, 1, 0.32, 1)',
-          marginLeft,
+          marginLeft: isMobile ? 0 : 220,
+          minHeight: '100vh',
+          paddingBottom: isMobile ? 80 : 0,
         }}>
-          <div style={{
-            width: '100%',
-            maxWidth: '800px',
-            padding: isMobile ? '20px 16px' : `${tokens.spacing['4xl']} ${tokens.spacing['4xl']}`,
-            paddingLeft,
-            paddingBottom: isMobile ? 'calc(96px + env(safe-area-inset-bottom))' : undefined,
-          }}>
+          <div style={{ maxWidth: 780, margin: '0 auto', padding: isMobile ? '20px 16px' : '28px 36px' }}>
             <ViewErrorBoundary>
               <CheckpointScreen
                 checkpointDay={currentDay}
@@ -231,7 +168,7 @@ export default function Dashboard() {
                 avgDifficulty={checkpointData.avgDifficulty}
                 strugglingAreas={checkpointData.strugglingAreas}
                 masteringAreas={checkpointData.masteringAreas}
-                onComplete={handleCheckpointComplete}
+                onComplete={() => { handleCheckpointComplete(); }}
                 isRecalibrating={isRecalibrating}
                 recalibrationResult={recalibrationResult}
               />
@@ -248,11 +185,8 @@ export default function Dashboard() {
 
   // Normal dashboard view
   return (
-    <div style={{
-      display: 'flex',
-      minHeight: '100vh',
-      backgroundColor: tokens.colors.background,
-    }}>
+    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: ap.bg, fontFamily: ap.font }}>
+      {/* Sidebar — desktop only */}
       {!isMobile && (
         <DashboardSidebar
           currentView={currentView}
@@ -263,38 +197,87 @@ export default function Dashboard() {
         />
       )}
 
-      {/* Main Content */}
+      {/* Main content */}
       <div style={{
         flex: 1,
-        display: 'flex',
-        justifyContent: 'center',
-        transition: 'margin-left 500ms cubic-bezier(0.23, 1, 0.32, 1)',
-        marginLeft,
+        marginLeft: isMobile ? 0 : 220,
+        minHeight: '100vh',
+        paddingBottom: isMobile ? 80 : 0,
       }}>
+        {/* Top bar — bell icon */}
         <div style={{
-          width: '100%',
-          maxWidth: '800px',
-          padding: isMobile ? '20px 16px' : `${tokens.spacing['4xl']} ${tokens.spacing['4xl']}`,
-          paddingLeft,
-          // Extra bottom padding on mobile so content isn't hidden behind BottomNav
-          paddingBottom: isMobile ? 'calc(96px + env(safe-area-inset-bottom))' : undefined,
+          position: 'sticky', top: 0, zIndex: 30,
+          backgroundColor: ap.bg,
+          borderBottom: `1px solid ${ap.border}`,
+          padding: '12px 36px',
+          display: 'flex', justifyContent: 'flex-end',
+          alignItems: 'center',
         }}>
-          {contentInner}
+          {/* Offline banner inline */}
+          {!isOnline && <OfflineBanner pendingCount={pendingCount} />}
+          <button
+            onClick={() => { setShowNotificationCenter(true); setUnreadCount(0); }}
+            style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', color: ap.textSecondary, display: 'flex', alignItems: 'center' }}
+          >
+            <Bell size={19} strokeWidth={1.2} />
+            {unreadCount > 0 && (
+              <span style={{
+                position: 'absolute', top: -3, right: -3,
+                width: 14, height: 14, borderRadius: 7,
+                backgroundColor: ap.streak, color: '#fff',
+                fontSize: 9, fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>{unreadCount}</span>
+            )}
+          </button>
+        </div>
+
+        {/* Page content */}
+        <div style={{
+          maxWidth: 780, margin: '0 auto',
+          padding: isMobile ? '20px 16px' : '28px 36px',
+          animation: 'apFadeIn 0.3s ease',
+        }}>
+          {/* Difficulty prompt — inline coach card (only on Today view) */}
+          {showDifficultyPrompt && currentView === 'today' && (
+            <DifficultyPrompt
+              onSimplify={handleSimplify}
+              onExtend={handleExtend}
+              onKeep={handleKeep}
+            />
+          )}
+
+          <ViewErrorBoundary>
+            <Suspense fallback={
+              <ViewSkeleton type={
+                currentView === 'insights' ? 'progress'
+                : currentView === 'roadmap' ? 'journey'
+                : currentView === 'you'     ? 'me'
+                : currentView === 'today'   ? 'today'
+                : currentView === 'library' ? 'generic'
+                : 'generic'
+              } />
+            }>
+              <div key={currentView} style={{ animation: 'apFadeIn 0.3s ease' }}>
+                {renderView()}
+              </div>
+            </Suspense>
+          </ViewErrorBoundary>
         </div>
       </div>
 
-      {isMobile && (
-        <BottomNav activeTab={currentView} onTabChange={setCurrentView} />
-      )}
+      {/* BottomNav on mobile */}
+      {isMobile && <BottomNav activeTab={currentView} onTabChange={setCurrentView} />}
 
       {/* Coach Thread */}
       <CoachThread isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
 
-      {/* Modals */}
+      {/* Notification Center */}
       {showNotificationCenter && (
         <NotificationCenter onClose={() => setShowNotificationCenter(false)} />
       )}
 
+      {/* Shareable Card */}
       {showShareCard && (
         <ShareableCard
           streak={streak}
@@ -303,6 +286,37 @@ export default function Dashboard() {
           domain={currentGoal.category || currentGoal.specificGoal || 'Your Goal'}
           onClose={() => setShowShareCard(false)}
         />
+      )}
+
+      {/* Recalibration error toast */}
+      {recalibrationError && (
+        <div style={{
+          position: 'fixed',
+          bottom: 80,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 3000,
+          background: '#fff',
+          border: '1px solid #fca5a5',
+          borderRadius: 14,
+          padding: '12px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+          maxWidth: 360,
+          width: 'calc(100% - 40px)',
+        }}>
+          <span style={{ fontSize: 13, color: '#dc2626', flex: 1 }}>
+            {recalibrationError}
+          </span>
+          <button
+            onClick={clearRecalibrationError}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 16, padding: 0, lineHeight: 1 }}
+          >
+            ×
+          </button>
+        </div>
       )}
     </div>
   );

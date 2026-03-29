@@ -1,8 +1,9 @@
-import { CheckCircle2, Clock, ArrowRight, Sparkles, SkipForward, X, Zap, Brain, BookOpen, Lightbulb, ListChecks } from 'lucide-react';
+import { CheckCircle2, Clock, ArrowRight, Sparkles, SkipForward, Zap, Brain, BookOpen } from 'lucide-react';
 import { useStore } from '@core/store/useStore';
 import { tokens, text, card } from '@core/design-system';
-import { useRef, useState, useCallback, useEffect } from 'react';
-import { useCinemaMode } from '../hooks/useCinemaMode';
+import { ap } from '@core/design-system/appleTokens';
+import { Label, Tile } from '@core/design-system/AppleUI';
+import { useRef, useState, useEffect } from 'react';
 import { useTaskActions } from '../hooks/useTaskActions';
 import { useBreakpoint } from '@hooks/useBreakpoint';
 import { useFocusSession } from '@hooks/useFocusSession';
@@ -31,7 +32,6 @@ export default function TodayView({
     canAdvanceDay,
   } = useStore();
 
-  const { cinemaTaskId, setCinemaTaskId, getYouTubeId, timeToSeconds } = useCinemaMode();
   const { isMobile } = useBreakpoint();
   const { startSession, updateElapsed, endSession } = useFocusSession();
   const completeTask = useStore((state) => state.completeTask);
@@ -46,11 +46,7 @@ export default function TodayView({
   const [easeBackMode, setEaseBackMode] = useState(true);
   // Show all tasks below FocusCard
   const [_showAllTasks, setShowAllTasks] = useState(false);
-  // Ref to the YouTube iframe so we can postMessage it
-  const cinemaIframeRef = useRef<HTMLIFrameElement>(null);
-  // Tracks current video playback position from YouTube infoDelivery messages
-  const cinemaCurrentTimeRef = useRef<number>(0);
-  // Focus Timer (count-up while cinema is open)
+  // Focus Timer (count-up while focus mode is open)
   const [focusSeconds, setFocusSeconds] = useState(0);
   const [focusPaused, setFocusPaused] = useState(false);
   const focusIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -60,28 +56,15 @@ export default function TodayView({
 
   // Note input (single line, saved to localStorage per task)
   const [noteInput, setNoteInput] = useState('');
-  // Focus mode: step checklist + mobile tab (steps vs watch)
+  // Focus mode: step checklist
   const [checkedSteps, setCheckedSteps] = useState<Set<number>>(new Set());
-  const [focusTab, setFocusTab] = useState<'steps' | 'watch'>('steps');
 
-  // Listen for YouTube infoDelivery postMessages to track current time
-  useEffect(() => {
-    if (!cinemaTaskId) return;
-    const handler = (e: MessageEvent) => {
-      try {
-        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-        if (data?.event === 'infoDelivery' && typeof data?.info?.currentTime === 'number') {
-          cinemaCurrentTimeRef.current = data.info.currentTime;
-        }
-      } catch { /* ignore non-JSON or unrelated messages */ }
-    };
-    window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
-  }, [cinemaTaskId]);
+  // Focus task state (replaces cinema mode)
+  const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
 
-  // Count-up focus timer — runs while cinema is open and not paused
+  // Count-up focus timer — runs while focus mode is open and not paused
   useEffect(() => {
-    if (!cinemaTaskId || focusPaused) {
+    if (!focusTaskId || focusPaused) {
       if (focusIntervalRef.current) { clearInterval(focusIntervalRef.current); focusIntervalRef.current = null; }
       return;
     }
@@ -93,15 +76,7 @@ export default function TodayView({
       });
     }, 1000);
     return () => { if (focusIntervalRef.current) { clearInterval(focusIntervalRef.current); focusIntervalRef.current = null; } };
-  }, [cinemaTaskId, focusPaused, updateElapsed]);
-
-  // Pause the embedded YouTube video via postMessage (requires enablejsapi=1)
-  const pauseYouTube = useCallback(() => {
-    cinemaIframeRef.current?.contentWindow?.postMessage(
-      JSON.stringify({ event: 'command', func: 'pauseVideo', args: '' }),
-      '*'
-    );
-  }, []);
+  }, [focusTaskId, focusPaused, updateElapsed]);
   // Streak milestone banner (Day 3, 7, 14, 30, 60, 90)
   const STREAK_MILESTONES = [3, 7, 14, 30, 60, 90];
   const milestoneKey = `streak-milestone-${streak}`;
@@ -160,48 +135,171 @@ export default function TodayView({
     return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
   };
 
-  // ── Cinema Mode data ─────────────────────────────────────────────────────
-  const cinemaTask = cinemaTaskId ? todaysTasks.find(t => t.id === cinemaTaskId) : null;
-  const cinemaResource = cinemaTask?.resources?.primary ?? null;
-  const cinemaVideoId = cinemaResource?.type === 'video' ? getYouTubeId(cinemaResource.url) : null;
-  const cinemaEmbedUrl = cinemaVideoId ? (() => {
-    const p = new URLSearchParams();
-    if (cinemaResource?.watchFrom) p.set('start', String(timeToSeconds(cinemaResource.watchFrom)));
-    if (cinemaResource?.watchTo) p.set('end', String(timeToSeconds(cinemaResource.watchTo)));
-    p.set('autoplay', '1');
-    p.set('rel', '0');
-    p.set('enablejsapi', '1');
-    return `https://www.youtube.com/embed/${cinemaVideoId}?${p.toString()}`;
-  })() : null;
+  const hasFocusMode = (task: typeof todaysTasks[0]) => !task.completed;
 
-  const hasCinemaMode = (task: typeof todaysTasks[0]) => !task.completed;
-
-  // Open cinema: start timer and session
-  const openCinema = (taskId: string) => {
+  // Open focus mode: start timer and session
+  const openFocus = (taskId: string) => {
     try { localStorage.setItem('onboard_focus_done', '1'); } catch { /* ignore */ }
     setFocusSeconds(0);
     setFocusPaused(false);
     setNoteInput('');
     setCheckedSteps(new Set());
-    setFocusTab('steps');
-    cinemaCurrentTimeRef.current = 0;
-    setCinemaTaskId(taskId);
+    setFocusTaskId(taskId);
     const task = todaysTasks.find(t => t.id === taskId);
     startSession(taskId, task?.title ?? taskId);
   };
 
-  // Close cinema: save video position, pause, end session
-  const closeCinema = () => {
-    if (cinemaVideoId && cinemaCurrentTimeRef.current > 5) {
-      localStorage.setItem(`cinema_pos_${cinemaVideoId}`, String(Math.floor(cinemaCurrentTimeRef.current)));
-    }
-    pauseYouTube();
+  // Close focus mode: end session
+  const closeFocus = () => {
     endSession();
-    setCinemaTaskId(null);
+    setFocusTaskId(null);
+    setFocusSeconds(0);
+    setCheckedSteps(new Set());
   };
 
+  // Find the focus task
+  const focusTask = focusTaskId ? todaysTasks.find(t => t.id === focusTaskId) : null;
+
+  // ── Inline Focus Mode render ─────────────────────────────────────────
+  if (focusTask) {
+    const mins = String(Math.floor(focusSeconds / 60)).padStart(2, '0');
+    const secs = String(focusSeconds % 60).padStart(2, '0');
+    const focusTaskExt = focusTask as unknown as Record<string, unknown>;
+    const focusSteps: Array<string | { instruction?: string }> = Array.isArray(focusTaskExt.stepsData) ? focusTaskExt.stepsData as Array<string | { instruction?: string }> : Array.isArray(focusTask.steps) ? focusTask.steps as Array<string | { instruction?: string }> : [];
+    const coachTips: string[] = Array.isArray(focusTaskExt.coachTips) ? focusTaskExt.coachTips as string[] : [];
+
+    return (
+      <div style={{ fontFamily: ap.font }}>
+        {/* Top bar */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          paddingBottom: 16, borderBottom: `1px solid ${ap.border}`, marginBottom: 24,
+        }}>
+          <div>
+            <div style={{ fontSize: 12, color: ap.textTertiary }}>Focus Session</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: ap.textPrimary, letterSpacing: '-0.02em' }}>
+              {focusTask.title}
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 26, fontWeight: 700, color: ap.accent, fontFamily: ap.mono }}>
+              {mins}:{secs}
+            </span>
+            <button
+              onClick={() => setFocusPaused(p => !p)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: ap.textSecondary, fontSize: 16 }}
+            >
+              {focusPaused ? '▶' : '⏸'}
+            </button>
+            <button
+              onClick={closeFocus}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: ap.textTertiary, fontSize: 20 }}
+            >✕</button>
+          </div>
+        </div>
+
+        {/* Split layout */}
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 20 }}>
+          {/* Left: Steps checklist */}
+          <div>
+            <Label left={`Steps · ${checkedSteps.size}/${focusSteps.length}`} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+              {focusSteps.map((step, i) => {
+                const done = checkedSteps.has(i);
+                const stepText = typeof step === 'string' ? step : (step as { instruction?: string }).instruction ?? String(step);
+                return (
+                  <div key={i}
+                    onClick={() => { const s = new Set(checkedSteps); done ? s.delete(i) : s.add(i); setCheckedSteps(s); }}
+                    style={{
+                      display: 'flex', alignItems: 'flex-start', gap: 10,
+                      padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
+                      backgroundColor: done ? ap.accentSoft : ap.surfaceAlt,
+                    }}>
+                    <div style={{
+                      width: 18, height: 18, borderRadius: 4, flexShrink: 0, marginTop: 1,
+                      backgroundColor: done ? ap.accent : 'transparent',
+                      border: `1.5px solid ${done ? ap.accent : ap.textTertiary}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#fff', fontSize: 10,
+                    }}>{done ? '✓' : ''}</div>
+                    <span style={{
+                      fontSize: 13, color: done ? ap.textSecondary : ap.textPrimary,
+                      textDecoration: done ? 'line-through' : 'none', lineHeight: 1.5,
+                    }}>{stepText}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Coach Tips */}
+            {coachTips.length > 0 && (
+              <div style={{ backgroundColor: ap.accentSoft, border: `1px solid ${ap.accentMid}`, borderRadius: 10, padding: '14px 16px' }}>
+                <div style={{ fontSize: 11, fontWeight: 650, color: ap.accent, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Coach Tips</div>
+                {coachTips.map((tip, i) => (
+                  <div key={i} style={{ fontSize: 13, color: ap.textSecondary, marginBottom: i < coachTips.length - 1 ? 6 : 0, lineHeight: 1.5 }}>
+                    · {tip}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Right: Inline task content + notes */}
+          <div>
+            <Label left="Task" />
+            <Tile style={{ overflow: 'hidden', marginBottom: 12 }}>
+              <div style={{ padding: '16px 18px' }}>
+                <div style={{ fontSize: 13.5, color: ap.textSecondary, lineHeight: 1.65 }}>
+                  {focusTask.description}
+                </div>
+                {focusTask.reflection && (
+                  <div style={{
+                    marginTop: 12, padding: '12px 14px',
+                    backgroundColor: ap.surfaceAlt, borderRadius: 8,
+                    fontSize: 13, color: ap.textPrimary, fontStyle: 'italic',
+                  }}>
+                    🤔 {focusTask.reflection}
+                  </div>
+                )}
+              </div>
+            </Tile>
+            <textarea
+              value={noteInput}
+              onChange={e => setNoteInput(e.target.value)}
+              placeholder="Quick note..."
+              style={{
+                width: '100%', border: `1px solid ${ap.border}`, borderRadius: 8,
+                padding: '9px 12px', fontSize: 13, fontFamily: ap.font,
+                backgroundColor: ap.surface, color: ap.textPrimary,
+                resize: 'none', outline: 'none', minHeight: 64, boxSizing: 'border-box',
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
+          <button
+            onClick={closeFocus}
+            style={{
+              padding: '9px 20px', borderRadius: 9, border: `1px solid ${ap.border}`,
+              backgroundColor: ap.surface, color: ap.textSecondary, fontSize: 13,
+              fontFamily: ap.font, cursor: 'pointer',
+            }}>End</button>
+          <button
+            onClick={() => { handleCompleteTask(focusTask.id); closeFocus(); }}
+            style={{
+              padding: '9px 20px', borderRadius: 9, border: 'none',
+              backgroundColor: ap.success, color: '#fff',
+              fontWeight: 650, fontSize: 13, fontFamily: ap.font, cursor: 'pointer',
+            }}>Complete Task</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', fontFamily: ap.font }}>
       {/* ── Particles ───────────────────────────────────────────────────── */}
       {particles.map((particle, index) => {
         const targetX = window.innerWidth / 2;
@@ -281,383 +379,6 @@ export default function TodayView({
         }
       `}</style>
 
-      {/* ── Focus Mode ───────────────────────────────────────────────────── */}
-      {cinemaTask && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9800, display: 'flex', flexDirection: 'column', backgroundColor: '#04040c' }}>
-
-          {/* Top bar: title + timer + close */}
-          <div style={{ padding: '0 24px 0', paddingTop: 'max(20px, env(safe-area-inset-top))', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-            <span style={{ flex: 1, fontSize: 13, color: 'rgba(255,255,255,0.5)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {cinemaTask.title}
-            </span>
-            {/* Focus timer — count-up with ring */}
-            {(() => {
-              const estSecs = cinemaTask.duration * 60;
-              const progress = Math.min(focusSeconds / estSecs, 1);
-              const circumference = 2 * Math.PI * 13;
-              const mins = Math.floor(focusSeconds / 60);
-              const secs = focusSeconds % 60;
-              return (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 }}>
-                  <svg width="32" height="32" viewBox="0 0 32 32" style={{ transform: 'rotate(-90deg)' }}>
-                    <circle cx="16" cy="16" r="13" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="2.5" />
-                    <circle cx="16" cy="16" r="13" fill="none" stroke={progress >= 1 ? '#a78bfa' : tokens.colors.primary} strokeWidth="2.5"
-                      strokeDasharray={`${progress * circumference} ${circumference}`} strokeLinecap="round"
-                      style={{ transition: 'stroke-dasharray 1s linear' }} />
-                  </svg>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.75)', fontVariantNumeric: 'tabular-nums' }}>
-                    {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
-                  </span>
-                  <button
-                    onClick={() => setFocusPaused(p => !p)}
-                    title={focusPaused ? 'Resume timer' : 'Pause timer'}
-                    style={{ width: 28, height: 28, borderRadius: 7, border: 'none', cursor: 'pointer', backgroundColor: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    {focusPaused
-                      ? <svg width="10" height="12" viewBox="0 0 10 12" fill="currentColor"><path d="M0 0l10 6-10 6z"/></svg>
-                      : <svg width="10" height="12" viewBox="0 0 10 12" fill="currentColor"><rect x="0" y="0" width="3.5" height="12"/><rect x="6.5" y="0" width="3.5" height="12"/></svg>
-                    }
-                  </button>
-                </div>
-              );
-            })()}
-            <button
-              onClick={closeCinema}
-              style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, cursor: 'pointer', color: 'rgba(255,255,255,0.6)' }}
-            >
-              <X size={16} strokeWidth={2} />
-            </button>
-          </div>
-
-          {/* Main content — split layout on desktop, tabs on mobile */}
-          <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
-
-            {/* Desktop split: Left panel = steps/tips, Right = video */}
-            {!isMobile ? (
-              <>
-                {/* ── Left: Step checklist ── */}
-                <div style={{
-                  width: cinemaVideoId ? '380px' : '100%',
-                  display: 'flex', flexDirection: 'column',
-                  overflowY: 'auto', padding: '28px 24px 28px 32px',
-                  borderRight: cinemaVideoId ? '1px solid rgba(255,255,255,0.06)' : 'none',
-                  flexShrink: 0,
-                }}>
-                  {/* Task title */}
-                  <h2 style={{ fontSize: 'clamp(18px, 2.5vw, 24px)', fontWeight: 700, color: '#f3e8ff', letterSpacing: '-0.025em', margin: '0 0 6px', lineHeight: 1.25 }}>
-                    {cinemaTask.title}
-                  </h2>
-                  {cinemaTask.description && (
-                    <p style={{ fontSize: 13, color: 'rgba(196,181,253,0.55)', lineHeight: 1.6, margin: '0 0 20px' }}>
-                      {cinemaTask.description.split('. ').slice(0, 2).join('. ')}{cinemaTask.description.split('. ').length > 2 ? '.' : ''}
-                    </p>
-                  )}
-
-                  {/* Steps */}
-                  {Array.isArray((cinemaTask as unknown as Record<string, unknown>).steps) && ((cinemaTask as unknown as Record<string, unknown>).steps as string[]).length > 0 && (
-                    <div style={{ marginBottom: 20 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-                        <ListChecks size={13} color="#a78bfa" strokeWidth={2} />
-                        <span style={{ fontSize: 10, fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                          Steps ({checkedSteps.size}/{((cinemaTask as unknown as Record<string, unknown>).steps as string[]).length})
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {((cinemaTask as unknown as Record<string, unknown>).steps as string[]).map((step, i) => {
-                          const done = checkedSteps.has(i);
-                          return (
-                            <button
-                              key={i}
-                              onClick={() => setCheckedSteps(prev => {
-                                const next = new Set(prev);
-                                if (next.has(i)) next.delete(i); else next.add(i);
-                                return next;
-                              })}
-                              style={{
-                                display: 'flex', alignItems: 'flex-start', gap: 12,
-                                background: done ? 'rgba(167,139,250,0.1)' : 'rgba(255,255,255,0.04)',
-                                border: `1px solid ${done ? 'rgba(167,139,250,0.25)' : 'rgba(255,255,255,0.07)'}`,
-                                borderRadius: 12, padding: '14px 16px',
-                                cursor: 'pointer', textAlign: 'left', width: '100%',
-                                transition: 'all 150ms ease',
-                              }}
-                            >
-                              <div style={{
-                                width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-                                border: `2px solid ${done ? '#a78bfa' : 'rgba(255,255,255,0.2)'}`,
-                                background: done ? '#7c3aed' : 'transparent',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                marginTop: 2, transition: 'all 150ms ease',
-                              }}>
-                                {done && <svg width="9" height="7" viewBox="0 0 9 7" fill="none"><path d="M1 3.5L3.5 6L8 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                              </div>
-                              <div style={{ flex: 1 }}>
-                                <span style={{
-                                  display: 'block',
-                                  fontSize: 10, fontFamily: 'monospace',
-                                  fontVariantNumeric: 'tabular-nums',
-                                  color: done ? '#a78bfa' : 'rgba(167,139,250,0.4)',
-                                  marginBottom: 3, letterSpacing: '0.05em',
-                                  transition: 'color 150ms ease',
-                                }}>
-                                  {String(i + 1).padStart(2, '0')}
-                                </span>
-                                <span style={{
-                                  fontSize: 15, color: done ? 'rgba(196,181,253,0.5)' : 'rgba(255,255,255,0.85)',
-                                  lineHeight: 1.55, textDecoration: done ? 'line-through' : 'none',
-                                  transition: 'all 150ms ease',
-                                }}>
-                                  {typeof step === 'string' ? step : (step as Record<string, unknown>).details as string ?? String(step)}
-                                </span>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Tips */}
-                  {Array.isArray((cinemaTask as unknown as Record<string, unknown>).tips) && ((cinemaTask as unknown as Record<string, unknown>).tips as string[]).length > 0 && (
-                    <div style={{
-                      background: 'rgba(251,191,36,0.06)',
-                      border: '1px solid rgba(251,191,36,0.15)',
-                      borderRadius: 12, padding: '16px 18px',
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                        <Lightbulb size={12} color="#fbbf24" strokeWidth={2} />
-                        <span style={{ fontSize: 10, fontWeight: 700, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Coach Tips</span>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {((cinemaTask as unknown as Record<string, unknown>).tips as string[]).slice(0, 3).map((tip, i) => (
-                          <p key={i} style={{ fontSize: 12, color: 'rgba(251,191,36,0.8)', margin: 0, lineHeight: 1.5 }}>
-                            · {tip}
-                          </p>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* ── Right: Video player — fills edge-to-edge ── */}
-                {cinemaVideoId && cinemaEmbedUrl && (
-                  <div style={{ flex: 1, position: 'relative', background: '#000', minWidth: 0 }}>
-                    <iframe
-                      key={cinemaEmbedUrl}
-                      ref={cinemaIframeRef}
-                      src={cinemaEmbedUrl}
-                      title={cinemaTask.title}
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                      onLoad={() => { cinemaIframeRef.current?.contentWindow?.postMessage('{"event":"listening"}', '*'); }}
-                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
-                    />
-                    {cinemaResource?.watchFrom && (
-                      <p style={{ position: 'absolute', bottom: 8, left: 0, right: 0, fontSize: 11, color: 'rgba(255,255,255,0.3)', textAlign: 'center', margin: 0, pointerEvents: 'none' }}>
-                        Watch from {cinemaResource.watchFrom}{cinemaResource.watchTo ? ` to ${cinemaResource.watchTo}` : ''}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {/* No video: show description centered */}
-                {!cinemaVideoId && !Array.isArray((cinemaTask as unknown as Record<string, unknown>).steps) && cinemaTask.description && (
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
-                    <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.45)', lineHeight: 1.75, textAlign: 'center', maxWidth: 480, margin: 0 }}>
-                      {cinemaTask.description}
-                    </p>
-                  </div>
-                )}
-              </>
-            ) : (
-              /* ── Mobile: Tab switcher ── */
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                {/* Tab bar */}
-                {cinemaVideoId && (
-                  <div style={{ display: 'flex', gap: 0, padding: '0 16px', paddingTop: 8, flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                    {(['steps', 'watch'] as const).map(tab => (
-                      <button
-                        key={tab}
-                        onClick={() => setFocusTab(tab)}
-                        style={{
-                          flex: 1, height: 48, border: 'none', cursor: 'pointer',
-                          fontSize: 13, fontWeight: focusTab === tab ? 700 : 400,
-                          background: 'transparent',
-                          color: focusTab === tab ? '#c4b5fd' : 'rgba(255,255,255,0.3)',
-                          borderRadius: 0, transition: 'all 150ms ease',
-                          borderBottom: focusTab === tab ? '2.5px solid #a78bfa' : '2.5px solid transparent',
-                          textTransform: 'capitalize',
-                          letterSpacing: '0.01em',
-                        }}
-                      >
-                        {tab === 'steps' ? `Steps (${checkedSteps.size}/${((cinemaTask as unknown as Record<string, unknown>).steps as string[] | undefined)?.length ?? 0})` : 'Watch'}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* Steps tab */}
-                {(focusTab === 'steps' || !cinemaVideoId) && (
-                  <div style={{ flex: 1, overflowY: 'auto', padding: '20px 18px 8px' }}>
-                    {/* Task title */}
-                    <h2 style={{ fontSize: 20, fontWeight: 700, color: '#f3e8ff', letterSpacing: '-0.025em', margin: '0 0 12px', lineHeight: 1.25 }}>
-                      {cinemaTask.title}
-                    </h2>
-
-                    {/* Steps */}
-                    {Array.isArray((cinemaTask as unknown as Record<string, unknown>).steps) && ((cinemaTask as unknown as Record<string, unknown>).steps as string[]).length > 0 && (
-                      <div style={{ marginBottom: 16 }}>
-                        <p style={{ fontSize: 10, fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 10px' }}>
-                          Steps
-                        </p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          {((cinemaTask as unknown as Record<string, unknown>).steps as string[]).map((step, i) => {
-                            const done = checkedSteps.has(i);
-                            return (
-                              <button
-                                key={i}
-                                onClick={() => setCheckedSteps(prev => {
-                                  const next = new Set(prev);
-                                  if (next.has(i)) next.delete(i); else next.add(i);
-                                  return next;
-                                })}
-                                style={{
-                                  display: 'flex', alignItems: 'flex-start', gap: 12,
-                                  background: done ? 'rgba(167,139,250,0.1)' : 'rgba(255,255,255,0.04)',
-                                  border: `1px solid ${done ? 'rgba(167,139,250,0.25)' : 'rgba(255,255,255,0.07)'}`,
-                                  borderRadius: 12, padding: '14px 16px',
-                                  cursor: 'pointer', textAlign: 'left', width: '100%',
-                                }}
-                              >
-                                <div style={{
-                                  width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-                                  border: `2px solid ${done ? '#a78bfa' : 'rgba(255,255,255,0.2)'}`,
-                                  background: done ? '#7c3aed' : 'transparent',
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 2,
-                                }}>
-                                  {done && <svg width="9" height="7" viewBox="0 0 9 7" fill="none"><path d="M1 3.5L3.5 6L8 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                  <span style={{
-                                    display: 'block',
-                                    fontSize: 10, fontFamily: 'monospace',
-                                    fontVariantNumeric: 'tabular-nums',
-                                    color: done ? '#a78bfa' : 'rgba(167,139,250,0.4)',
-                                    marginBottom: 3, letterSpacing: '0.05em',
-                                    transition: 'color 150ms ease',
-                                  }}>
-                                    {String(i + 1).padStart(2, '0')}
-                                  </span>
-                                  <span style={{
-                                    fontSize: 15, color: done ? 'rgba(196,181,253,0.5)' : 'rgba(255,255,255,0.85)',
-                                    lineHeight: 1.55, textDecoration: done ? 'line-through' : 'none',
-                                    transition: 'all 150ms ease',
-                                  }}>
-                                    {typeof step === 'string' ? step : (step as Record<string, unknown>).details as string ?? String(step)}
-                                  </span>
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Tips */}
-                    {Array.isArray((cinemaTask as unknown as Record<string, unknown>).tips) && ((cinemaTask as unknown as Record<string, unknown>).tips as string[]).length > 0 && (
-                      <div style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.15)', borderRadius: 12, padding: '12px 14px', marginBottom: 8 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                          <Lightbulb size={12} color="#fbbf24" strokeWidth={2} />
-                          <span style={{ fontSize: 10, fontWeight: 700, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Tips</span>
-                        </div>
-                        {((cinemaTask as unknown as Record<string, unknown>).tips as string[]).slice(0, 3).map((tip, i) => (
-                          <p key={i} style={{ fontSize: 12, color: 'rgba(251,191,36,0.8)', margin: '0 0 4px', lineHeight: 1.5 }}>· {tip}</p>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Watch tab — fills full height edge-to-edge */}
-                {focusTab === 'watch' && cinemaVideoId && cinemaEmbedUrl && (
-                  <div style={{ flex: 1, position: 'relative', background: '#000' }}>
-                    <iframe
-                      key={cinemaEmbedUrl}
-                      ref={cinemaIframeRef}
-                      src={cinemaEmbedUrl}
-                      title={cinemaTask.title}
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                      onLoad={() => { cinemaIframeRef.current?.contentWindow?.postMessage('{"event":"listening"}', '*'); }}
-                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Note input */}
-          <div style={{ padding: '0 24px 12px', flexShrink: 0 }}>
-            <input
-              value={noteInput}
-              onChange={e => setNoteInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && noteInput.trim()) {
-                  try { localStorage.setItem(`note_${cinemaTask.id}`, noteInput.trim()); } catch { /* ignore */ }
-                  setNoteInput('');
-                }
-              }}
-              placeholder="Quick note... (Enter to save)"
-              style={{ width: '100%', backgroundColor: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: 'rgba(255,255,255,0.7)', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
-            />
-          </div>
-
-          {/* Action footer */}
-          <div style={{ padding: '0 24px', paddingBottom: 'calc(24px + env(safe-area-inset-bottom))', flexShrink: 0 }}>
-            {skipReasonTaskId === cinemaTask.id ? (
-              <div style={{ maxWidth: 480, margin: '0 auto' }}>
-                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginBottom: 10, textAlign: 'center' }}>What's getting in the way?</p>
-                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 8, marginBottom: 8 }}>
-                  {([
-                    { storeReason: 'time'       as const, emoji: '⏱️', label: 'No time' },
-                    { storeReason: 'health'     as const, emoji: '😓', label: 'Not feeling well' },
-                    { storeReason: 'difficulty' as const, emoji: '😕', label: 'Too hard' },
-                    { storeReason: 'external'   as const, emoji: '📅', label: 'Something came up' },
-                    { storeReason: 'external'   as const, emoji: '🌪️', label: 'Lost motivation' },
-                  ]).map(({ storeReason, emoji, label }) => (
-                    <button
-                      key={label}
-                      onClick={() => confirmSkip(cinemaTask.id, storeReason, setCinemaTaskId)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.6)' }}
-                    >
-                      <span>{emoji}</span><span>{label}</span>
-                    </button>
-                  ))}
-                </div>
-                <button onClick={() => setSkipReasonTaskId(null)} style={{ width: '100%', background: 'none', border: 'none', fontSize: 12, color: 'rgba(255,255,255,0.2)', cursor: 'pointer', padding: '6px 0' }}>
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', gap: 10, maxWidth: 480, margin: '0 auto' }}>
-                <button
-                  onClick={() => setShowFocusComplete(true)}
-                  style={{ flex: 1, padding: '13px 0', backgroundColor: tokens.colors.primary, color: '#fff', border: 'none', borderRadius: 11, fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, boxShadow: `0 4px 20px ${tokens.colors.primary}45`, letterSpacing: '-0.01em' }}
-                >
-                  <CheckCircle2 size={15} strokeWidth={2.5} /> Complete ✓
-                </button>
-                <button
-                  onClick={e => handleSkipTask(cinemaTask.id, e)}
-                  style={{ padding: '13px 18px', backgroundColor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 11, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
-                >
-                  <SkipForward size={13} /> End early
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* ── Header — greeting + AI context line ─────────────────────────── */}
       <TodayHeader
@@ -771,7 +492,7 @@ export default function TodayView({
                 ]).map(({ storeReason, emoji, label }) => (
                   <button
                     key={label}
-                    onClick={() => confirmSkip(heroTask.id, storeReason, setCinemaTaskId)}
+                    onClick={() => confirmSkip(heroTask.id, storeReason, () => {})}
                     style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, cursor: 'pointer', fontSize: 12, color: '#374151', transition: 'all 120ms ease' }}
                     onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#f3f4f6'; }}
                     onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#fff'; }}
@@ -802,7 +523,7 @@ export default function TodayView({
               isSkipping={skippingTaskId === heroTask.id}
               streak={streak}
               currentDay={currentDay}
-              onStartFocus={(t) => openCinema(t.id)}
+              onStartFocus={(t) => openFocus(t.id)}
               onMarkDone={(t) => {
                 handleCompleteTask(t.id, window.innerWidth / 2, window.innerHeight / 3);
               }}
@@ -833,16 +554,16 @@ export default function TodayView({
         if (!insight) return null;
         return (
           <div style={{
-            display: 'flex', alignItems: 'flex-start', gap: tokens.spacing.sm,
-            marginBottom: tokens.spacing['2xl'],
-            padding: `${tokens.spacing.md} ${tokens.spacing.lg}`,
-            backgroundColor: `${tokens.colors.primary}08`,
-            border: `1px solid ${tokens.colors.primary}18`,
-            borderRadius: tokens.borderRadius.lg,
+            display: 'flex', alignItems: 'flex-start', gap: 10,
+            marginBottom: 20,
+            padding: '14px 16px',
+            backgroundColor: ap.accentSoft,
+            border: `1px solid ${ap.accentMid}`,
+            borderRadius: 12,
           }}>
-            <Brain size={14} strokeWidth={1.5} color={tokens.colors.primary} style={{ flexShrink: 0, marginTop: 2 }} />
-            <p style={{ margin: 0, fontSize: tokens.typography.sizes.sm, color: tokens.colors.text.secondary, lineHeight: 1.55, fontStyle: 'italic' }}>
-              {insight.text}
+            <Brain size={14} strokeWidth={1.5} color={ap.accent} style={{ flexShrink: 0, marginTop: 2 }} />
+            <p style={{ margin: 0, fontSize: 13, color: ap.textSecondary, lineHeight: 1.55, fontStyle: 'italic' }}>
+              💡 {insight.text}
             </p>
           </div>
         );
@@ -923,7 +644,7 @@ export default function TodayView({
         <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacing.xl }}>
           {listTasks.map((task) => {
             const isCompleting = completingTaskId === task.id;
-            const hasCinema = hasCinemaMode(task);
+            const hasFocus = hasFocusMode(task);
 
             return (
               <SwipeableCard
@@ -934,7 +655,7 @@ export default function TodayView({
                   if (!task.completed && !isCompleting) setSkipReasonTaskId(task.id);
                 }}
                 onSwipeRight={() => {
-                  if (!task.completed && !isCompleting && hasCinema) openCinema(task.id);
+                  if (!task.completed && !isCompleting && hasFocus) openFocus(task.id);
                 }}
                 style={{
                   ...card.standard,
@@ -950,13 +671,13 @@ export default function TodayView({
                   borderRadius: tokens.borderRadius.lg,
                   opacity: task.completed ? 0.65 : 1,
                   transition: 'all 0.3s cubic-bezier(0.4,0,0.2,1)',
-                  cursor: !task.completed && hasCinema ? 'pointer' : 'default',
+                  cursor: !task.completed && hasFocus ? 'pointer' : 'default',
                   animation: isCompleting ? 'completedSettle 0.45s cubic-bezier(0.4,0,0.2,1)' : 'none',
                   pointerEvents: isCompleting ? 'none' : 'auto',
                 }}
                 onClick={() => {
-                  if (!task.completed && !isCompleting && hasCinema) {
-                    openCinema(task.id);
+                  if (!task.completed && !isCompleting && hasFocus) {
+                    openFocus(task.id);
                   }
                 }}
                 onMouseEnter={e => {
@@ -1151,7 +872,7 @@ export default function TodayView({
                               ]).map(({ storeReason, emoji, label }) => (
                                 <button
                                   key={label}
-                                  onClick={() => confirmSkip(task.id, storeReason, setCinemaTaskId)}
+                                  onClick={() => confirmSkip(task.id, storeReason, () => {})}
                                   style={{
                                     display: 'flex',
                                     alignItems: 'center',
@@ -1221,9 +942,9 @@ export default function TodayView({
                     {!task.completed && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.md, marginTop: tokens.spacing.lg, flexWrap: 'wrap' as const }}>
                         {/* Deep Focus CTA button */}
-                        {hasCinema && (
+                        {hasFocus && (
                           <button
-                            onClick={e => { e.stopPropagation(); openCinema(task.id); }}
+                            onClick={e => { e.stopPropagation(); openFocus(task.id); }}
                             style={{
                               display: 'inline-flex',
                               alignItems: 'center',
@@ -1246,31 +967,6 @@ export default function TodayView({
                             <Zap size={13} strokeWidth={2} />
                             Deep Focus
                           </button>
-                        )}
-                        {/* Direct resource link */}
-                        {task.resources?.primary?.url && (
-                          <a
-                            href={task.resources.primary.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={e => e.stopPropagation()}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '5px',
-                              fontSize: tokens.typography.sizes.sm,
-                              color: '#0ea5e9',
-                              fontWeight: tokens.typography.weights.regular,
-                              textDecoration: 'none',
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; }}
-                            onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none'; }}
-                          >
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-                              <path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6a3 3 0 0 0-2.1 2.1C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1C24 15.9 24 12 24 12s0-3.9-.5-5.8zM9.75 15.5V8.5l6.25 3.5-6.25 3.5z"/>
-                            </svg>
-                            {task.resources.primary.title || 'Watch resource'}
-                          </a>
                         )}
                       </div>
                     )}
@@ -1544,21 +1240,21 @@ export default function TodayView({
         );
       })()}
 
-      {/* FocusComplete overlay — shown when user taps Mark Done inside cinema */}
-      {showFocusComplete && cinemaTask && (
+      {/* FocusComplete overlay */}
+      {showFocusComplete && heroTask && (
         <FocusComplete
-          taskId={cinemaTask.id}
-          taskTitle={cinemaTask.title}
+          taskId={heroTask.id}
+          taskTitle={heroTask.title}
           timeSpentSeconds={focusSeconds}
           newStreak={streak}
           onComplete={(mood, reflection) => {
-            handleCompleteTask(cinemaTask.id, window.innerWidth / 2, window.innerHeight / 2);
+            handleCompleteTask(heroTask.id, window.innerWidth / 2, window.innerHeight / 2);
             endSession();
             if (setTaskFeedback) {
-              setTaskFeedback(cinemaTask.id, mood, undefined, reflection || undefined, undefined);
+              setTaskFeedback(heroTask.id, mood, undefined, reflection || undefined, undefined);
             }
             setShowFocusComplete(false);
-            setCinemaTaskId(null);
+            setFocusTaskId(null);
           }}
           onClose={() => setShowFocusComplete(false)}
         />

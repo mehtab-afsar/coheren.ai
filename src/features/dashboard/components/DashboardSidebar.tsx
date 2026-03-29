@@ -1,9 +1,7 @@
-import { Home, User, BarChart2, Menu, X, Map, MessageCircle, BookMarked } from 'lucide-react';
-import { useState } from 'react';
-import { tokens } from '@core/design-system';
+import { Home, Map, BarChart2, BookMarked, User, MessageCircle } from 'lucide-react';
 import { useStore } from '@core/store/useStore';
-import { Icons } from '@shared/components/ui/icons';
 import { useUserLevel } from '@hooks/useUserLevel';
+import { ap } from '@core/design-system/appleTokens';
 
 interface DashboardSidebarProps {
   currentView: 'today' | 'roadmap' | 'insights' | 'library' | 'you';
@@ -13,358 +11,116 @@ interface DashboardSidebarProps {
   onToggle?: (open: boolean) => void;
 }
 
-const SIDEBAR_BG = '#08080f';
-const SIDEBAR_BORDER = 'rgba(255,255,255,0.06)';
-const NAV_INACTIVE = 'rgba(255,255,255,0.4)';
-const NAV_ACTIVE_TEXT = '#c4b5fd';
-const NAV_ACTIVE_BG = 'rgba(124,58,237,0.12)';
-const NAV_ACTIVE_BORDER = '#7c3aed';
-const NAV_HOVER_BG = 'rgba(255,255,255,0.05)';
-
-export default function DashboardSidebar({ currentView, onViewChange, onCoachOpen, isOpen: controlledIsOpen, onToggle }: DashboardSidebarProps) {
+export default function DashboardSidebar({ currentView, onViewChange, onCoachOpen }: DashboardSidebarProps) {
   const setStep = useStore((state) => state.setStep);
   const { universalProfile, roadmap } = useStore();
   const level = useUserLevel();
 
-  const initials = universalProfile?.name
-    ? universalProfile.name.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()
-    : '?';
-  const [internalIsOpen, setInternalIsOpen] = useState(() =>
-    window.matchMedia('(min-width: 768px)').matches
-  );
+  const userName = universalProfile?.name || '';
 
-  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
-  const setIsOpen = (open: boolean) => {
-    if (onToggle) onToggle(open);
-    else setInternalIsOpen(open);
-  };
-
-  const menuItems = [
-    { id: 'today'    as const, label: 'Today',    icon: Home },
-    { id: 'roadmap'  as const, label: 'Journey',  icon: Map },
-    { id: 'insights' as const, label: 'Progress', icon: BarChart2 },
-    { id: 'library'  as const, label: 'Library',  icon: BookMarked },
-    { id: 'you'      as const, label: 'You',       icon: User },
+  const navItems = [
+    { id: 'today'    as const, icon: Home,      label: 'Today' },
+    { id: 'roadmap'  as const, icon: Map,        label: 'Journey' },
+    { id: 'insights' as const, icon: BarChart2,  label: 'Progress' },
+    { id: 'library'  as const, icon: BookMarked, label: 'Library' },
+    { id: 'you'      as const, icon: User,        label: 'You' },
   ];
 
   return (
-    <>
-      {/* Toggle button — shown when sidebar is closed */}
-      {!isOpen && (
+    <div style={{
+      width: 220, minWidth: 220, height: '100vh', position: 'fixed', left: 0, top: 0,
+      backgroundColor: ap.surface, borderRight: `1px solid ${ap.border}`,
+      display: 'flex', flexDirection: 'column', fontFamily: ap.font, zIndex: 40,
+    }}>
+      {/* Logo */}
+      <div style={{ padding: '22px 18px 16px' }}>
         <button
-          onClick={() => setIsOpen(true)}
-          style={{
-            position: 'fixed',
-            top: tokens.spacing.xl,
-            left: tokens.spacing.xl,
-            zIndex: 1000,
-            width: '40px',
-            height: '40px',
-            backgroundColor: SIDEBAR_BG,
-            border: `1px solid ${SIDEBAR_BORDER}`,
-            borderRadius: tokens.borderRadius.md,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
-            transition: 'all 200ms ease',
+          onClick={() => {
+            setStep(0);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = 'rgba(124,58,237,0.5)';
-            e.currentTarget.style.backgroundColor = '#0f0f1a';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = SIDEBAR_BORDER;
-            e.currentTarget.style.backgroundColor = SIDEBAR_BG;
-          }}
-          aria-label="Open sidebar"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}
         >
-          <Menu size={18} strokeWidth={1.5} color="rgba(255,255,255,0.6)" />
+          <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.03em', color: ap.textPrimary }}>
+            coheren<span style={{ color: ap.accent }}>.</span>ai
+          </div>
+          <div style={{ fontSize: 10, fontWeight: 500, color: ap.textTertiary, letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 3 }}>
+            Think less · Do more
+          </div>
         </button>
-      )}
-
-      {/* Sidebar */}
-      <div
-        style={{
-          position: 'fixed',
-          left: isOpen ? '0' : '-260px',
-          top: 0,
-          width: '260px',
-          height: '100vh',
-          background: 'linear-gradient(180deg, #08080f 0%, #0d0d1a 100%)',
-          borderRight: `1px solid ${SIDEBAR_BORDER}`,
-          transition: 'left 500ms cubic-bezier(0.23, 1, 0.32, 1)',
-          zIndex: 999,
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        {/* Logo + Close */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: `${tokens.spacing.lg} ${tokens.spacing.xl}`,
-          borderBottom: `1px solid ${SIDEBAR_BORDER}`,
-        }}>
-          <button
-            onClick={() => {
-              setStep(0);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-            style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              gap: tokens.spacing.md,
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: 0,
-              textAlign: 'left',
-            }}
-          >
-            <Icons.logo style={{ width: '22px', height: '22px', color: '#7c3aed' }} />
-            <div>
-              <h2 style={{
-                fontSize: tokens.typography.sizes.base,
-                fontWeight: tokens.typography.weights.medium,
-                color: 'rgba(255,255,255,0.92)',
-                marginBottom: 0,
-                letterSpacing: '-0.01em',
-              }}>
-                coheren.ai
-              </h2>
-              <p style={{
-                fontSize: tokens.typography.sizes.xs,
-                fontWeight: tokens.typography.weights.light,
-                color: 'rgba(255,255,255,0.25)',
-                margin: 0,
-                letterSpacing: '0.01em',
-              }}>
-                Think less. Do more.
-              </p>
-            </div>
-          </button>
-
-          <button
-            onClick={() => setIsOpen(false)}
-            style={{
-              width: '28px',
-              height: '28px',
-              backgroundColor: 'transparent',
-              border: 'none',
-              borderRadius: tokens.borderRadius.sm,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'background 150ms ease',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-            aria-label="Close sidebar"
-          >
-            <X size={16} strokeWidth={1.5} color="rgba(255,255,255,0.3)" />
-          </button>
-        </div>
-
-        {/* Nav */}
-        <nav style={{ flex: 1, padding: `${tokens.spacing.lg} 0` }}>
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = currentView === item.id;
-
-            return (
-              <button
-                key={item.id}
-                onClick={() => onViewChange(item.id)}
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: tokens.spacing.md,
-                  padding: `10px ${tokens.spacing.xl}`,
-                  backgroundColor: isActive ? NAV_ACTIVE_BG : 'transparent',
-                  border: 'none',
-                  borderLeft: isActive ? `2px solid ${NAV_ACTIVE_BORDER}` : '2px solid transparent',
-                  cursor: 'pointer',
-                  transition: 'all 180ms cubic-bezier(0.4,0,0.2,1)',
-                  textAlign: 'left',
-                  boxShadow: isActive ? 'inset 0 0 28px rgba(124,58,237,0.07)' : 'none',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isActive) {
-                    e.currentTarget.style.backgroundColor = NAV_HOVER_BG;
-                    e.currentTarget.style.transform = 'translateX(3px)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive) {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                    e.currentTarget.style.transform = 'translateX(0)';
-                  }
-                }}
-              >
-                <Icon
-                  size={17}
-                  strokeWidth={isActive ? 2 : 1.5}
-                  color={isActive ? NAV_ACTIVE_TEXT : NAV_INACTIVE}
-                  style={{ filter: isActive ? `drop-shadow(0 0 6px ${NAV_ACTIVE_TEXT}90)` : 'none', transition: 'all 180ms ease' }}
-                />
-                <span style={{
-                  fontSize: tokens.typography.sizes.base,
-                  color: isActive ? NAV_ACTIVE_TEXT : NAV_INACTIVE,
-                  fontWeight: isActive ? tokens.typography.weights.medium : tokens.typography.weights.light,
-                  letterSpacing: isActive ? '-0.01em' : 'normal',
-                }}>
-                  {item.label}
-                </span>
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* Coach separator + button */}
-        <div style={{ padding: `0 0 ${tokens.spacing.sm} 0`, borderTop: `1px solid ${SIDEBAR_BORDER}` }}>
-          <button
-            onClick={() => onCoachOpen?.()}
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              gap: tokens.spacing.md,
-              padding: `10px ${tokens.spacing.xl}`,
-              backgroundColor: 'transparent',
-              border: 'none',
-              borderLeft: '2px solid transparent',
-              cursor: 'pointer',
-              transition: 'all 180ms cubic-bezier(0.4,0,0.2,1)',
-              textAlign: 'left',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = NAV_HOVER_BG;
-              e.currentTarget.style.transform = 'translateX(3px)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.transform = 'translateX(0)';
-            }}
-          >
-            <MessageCircle
-              size={17}
-              strokeWidth={1.5}
-              color={NAV_INACTIVE}
-              style={{ transition: 'all 180ms ease' }}
-            />
-            <span style={{
-              fontSize: tokens.typography.sizes.base,
-              color: NAV_INACTIVE,
-              fontWeight: tokens.typography.weights.light,
-            }}>
-              Coach
-            </span>
-          </button>
-        </div>
-
-        {/* Footer */}
-        <div style={{
-          padding: `${tokens.spacing.lg} ${tokens.spacing.xl}`,
-          borderTop: `1px solid ${SIDEBAR_BORDER}`,
-        }}>
-          {/* User identity row */}
-          {universalProfile?.name && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: tokens.spacing.md,
-              marginBottom: tokens.spacing.lg,
-              padding: `${tokens.spacing.sm} ${tokens.spacing.md}`,
-              backgroundColor: 'rgba(124,58,237,0.07)',
-              border: '1px solid rgba(124,58,237,0.15)',
-              borderRadius: tokens.borderRadius.md,
-            }}>
-              {/* Initials circle */}
-              <div style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '12px',
-                fontWeight: 700,
-                color: '#fff',
-                flexShrink: 0,
-                letterSpacing: '-0.01em',
-              }}>
-                {initials}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{
-                  fontSize: tokens.typography.sizes.sm,
-                  fontWeight: tokens.typography.weights.medium,
-                  color: 'rgba(255,255,255,0.85)',
-                  margin: 0,
-                  letterSpacing: '-0.01em',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}>
-                  {universalProfile.name}
-                </p>
-                {roadmap?.title && (
-                  <p style={{
-                    fontSize: '10px',
-                    color: 'rgba(167,139,250,0.55)',
-                    margin: '1px 0 0',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    fontWeight: tokens.typography.weights.light,
-                    letterSpacing: '0.01em',
-                  }}>
-                    {roadmap.title}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Level badge */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', fontWeight: tokens.typography.weights.light, letterSpacing: '0.04em' }}>
-              LEVEL
-            </span>
-            <span style={{
-              fontSize: '11px',
-              fontWeight: tokens.typography.weights.medium,
-              color: level.color,
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase' as const,
-            }}>
-              {level.label}
-            </span>
-          </div>
-          {/* Progress bar toward next level */}
-          <div style={{ height: '3px', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: '99px', overflow: 'hidden', marginBottom: '6px' }}>
-            <div style={{
-              height: '100%',
-              width: `${level.progress}%`,
-              backgroundColor: level.color,
-              borderRadius: '99px',
-              transition: 'width 0.8s cubic-bezier(0.4,0,0.2,1)',
-              boxShadow: `0 0 6px ${level.color}80`,
-            }} />
-          </div>
-          <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.18)', fontWeight: tokens.typography.weights.light, margin: 0, letterSpacing: '0.02em' }}>
-            {level.tier === 'master' ? level.tagline : `${level.score} / ${level.nextAt} pts`}
-          </p>
-        </div>
       </div>
 
-    </>
+      {/* Nav */}
+      <nav style={{ padding: '0 10px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {navItems.map(({ id, icon: Icon, label }) => {
+          const active = currentView === id;
+          return (
+            <button key={id} onClick={() => onViewChange(id)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '9px 10px', borderRadius: 9, border: 'none', cursor: 'pointer',
+                backgroundColor: active ? ap.surfaceAlt : 'transparent',
+                color: active ? ap.textPrimary : ap.textSecondary,
+                fontWeight: active ? 600 : 500, fontSize: 14,
+                fontFamily: ap.font, transition: 'background 0.15s',
+                textAlign: 'left', width: '100%',
+              }}>
+              <Icon size={19} strokeWidth={1.2} />
+              {label}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Divider + Coach */}
+      <div style={{ margin: '8px 10px' }}>
+        <div style={{ height: 1, backgroundColor: ap.border }} />
+      </div>
+      <div style={{ padding: '0 10px' }}>
+        <button onClick={() => onCoachOpen?.()}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '9px 10px', borderRadius: 9, border: 'none', cursor: 'pointer',
+            backgroundColor: 'transparent', color: ap.textSecondary,
+            fontWeight: 500, fontSize: 14, fontFamily: ap.font,
+            textAlign: 'left', width: '100%',
+          }}>
+          <MessageCircle size={19} strokeWidth={1.2} />
+          Coach
+        </button>
+      </div>
+
+      {/* Spacer */}
+      <div style={{ flex: 1 }} />
+
+      {/* User card */}
+      <div style={{ padding: 12 }}>
+        <div style={{
+          backgroundColor: ap.surfaceAlt, borderRadius: 10,
+          border: `1px solid ${ap.border}`, padding: '10px 12px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: 7, flexShrink: 0,
+              background: `linear-gradient(135deg, ${ap.accent}, #8B7CF6)`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: 11, fontWeight: 700,
+            }}>
+              {(userName || 'AB').slice(0, 2).toUpperCase()}
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: ap.textPrimary, lineHeight: 1.2 }}>{userName || 'User'}</div>
+              <div style={{ fontSize: 11, color: ap.textTertiary, lineHeight: 1.3, marginTop: 1 }}>
+                {roadmap?.title || 'Your Journey'}
+              </div>
+            </div>
+          </div>
+          <div style={{ height: 3, borderRadius: 3, backgroundColor: 'rgba(0,0,0,.07)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${level.progress}%`, backgroundColor: ap.accent, borderRadius: 3, transition: 'width 0.8s ease' }} />
+          </div>
+          <div style={{ fontSize: 11, color: ap.textTertiary, marginTop: 4 }}>{level.label} · {level.progress}%</div>
+        </div>
+      </div>
+    </div>
   );
 }

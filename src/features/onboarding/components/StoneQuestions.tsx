@@ -129,9 +129,11 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
         borderRadius: 24,
         boxShadow: '0 4px 24px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03)',
         padding: '32px 28px',
-        minHeight: 320,
+        minHeight: 360,
+        height: 360,
         display: 'flex',
         flexDirection: 'column',
+        overflow: 'hidden',
       }}>
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div

@@ -33,8 +33,15 @@ import type {
   PaceCalibration,
   PaceChoice,
 } from '@types-app/agents';
+import type { AgentRoadmapV2, WeekPlan, WeekDay, MonthPlan } from '@core/store/useStore';
 import { callPremium as callReasoning } from '@lib/ai-router'; // Sonnet for curriculum quality
 import { retrieveKnowledgeSemantic } from '@core/rag/semantic-retriever';
+
+// Agent3Output now returns AgentRoadmapV2 for the new hierarchical roadmap
+export type Agent3OutputV2 = AgentRoadmapV2;
+
+// Re-export WeekPlan / WeekDay / MonthPlan for consumers
+export type { WeekPlan, WeekDay, MonthPlan };
 
 // ─── Domain Pedagogy Map ──────────────────────────────────────────────────────
 // Each domain has a research-backed pedagogical framework that determines
@@ -274,190 +281,101 @@ RESOLUTION — apply ALL of the following:
 5. adaptationRules.if_completing_easily for all phases: "Publish what you have now — do not refine further."`,
 };
 
-// ─── Spaced Repetition Assessment Schedule ──────────────────────────────────
-// Deterministic schedule for when to insert retrieval/challenge/assessment days.
-// These are injected post-LLM into reviewMoments to ensure testing happens.
-
-const SPACED_REPETITION_SCHEDULE: { afterDays: number; type: ReviewMoment['type'] }[] = [
-  { afterDays: 1,  type: 'reflection' },       // next-day quick recall
-  { afterDays: 3,  type: 'checkpoint' },        // 3-day retrieval
-  { afterDays: 7,  type: 'mid_assessment' },    // weekly challenge
-  { afterDays: 14, type: 'mid_assessment' },    // bi-weekly assessment
-];
-
-/**
- * Generate assessment ReviewMoments based on spaced repetition schedule.
- * For each phase, creates retrieval and assessment days relative to phase start.
- * Also adds a final_assessment on the last day of the roadmap.
- */
-function generateAssessmentMoments(phases: Phase[], totalDays: number): ReviewMoment[] {
-  const moments: ReviewMoment[] = [];
-  const usedDays = new Set<number>();
-
-  let phaseStartDay = 1;
-  for (const phase of phases) {
-    const phaseEndDay = phaseStartDay + phase.durationDays - 1;
-
-    // Insert spaced repetition moments relative to phase start
-    for (const schedule of SPACED_REPETITION_SCHEDULE) {
-      const assessDay = phaseStartDay + schedule.afterDays;
-      // Only add if within this phase and within total days
-      if (assessDay <= phaseEndDay && assessDay <= totalDays && !usedDays.has(assessDay)) {
-        usedDays.add(assessDay);
-        moments.push({
-          day: assessDay,
-          type: schedule.type,
-          prompt: schedule.type === 'reflection'
-            ? `Quick recall: What did you learn in the last session? Name 2-3 key points.`
-            : schedule.type === 'checkpoint'
-            ? `Retrieval check: Can you demonstrate the core skills from this phase so far?`
-            : `Assessment: Show what you know from ${phase.phaseName}.`,
-          relatedSkills: phase.primaryGoals?.slice(0, 3) ?? [],
-          relatedDays: Array.from(
-            { length: Math.min(schedule.afterDays, assessDay - phaseStartDay) },
-            (_, i) => phaseStartDay + i
-          ),
-        });
-      }
-    }
-
-    // End-of-phase assessment (if phase is long enough)
-    if (phase.durationDays >= 7) {
-      const endAssessDay = phaseEndDay;
-      if (!usedDays.has(endAssessDay) && endAssessDay <= totalDays) {
-        usedDays.add(endAssessDay);
-        moments.push({
-          day: endAssessDay,
-          type: 'mid_assessment',
-          prompt: `Phase ${phase.phaseNumber} assessment: Demonstrate mastery of ${phase.phaseName}.`,
-          relatedSkills: phase.primaryGoals ?? [],
-          relatedDays: Array.from(
-            { length: phase.durationDays },
-            (_, i) => phaseStartDay + i
-          ),
-        });
-      }
-    }
-
-    phaseStartDay = phaseEndDay + 1;
-  }
-
-  // Final assessment on last day
-  if (!usedDays.has(totalDays)) {
-    moments.push({
-      day: totalDays,
-      type: 'final_assessment',
-      prompt: 'Final assessment: Comprehensive review of everything you have learned.',
-      relatedSkills: phases.flatMap(p => p.primaryGoals?.slice(0, 2) ?? []),
-      relatedDays: Array.from({ length: Math.min(totalDays, 7) }, (_, i) => totalDays - i).reverse(),
-    });
-  }
-
-  return moments.sort((a, b) => a.day - b.day);
-}
-
 // ─── System Prompt ────────────────────────────────────────────────────────────
-
-const FEW_SHOT_EXAMPLES = `
-## CONCRETE OUTPUT EXAMPLES — Study these before generating
-
-### GOOD PHASE (specific, verifiable, actionable):
-{
-  "phaseNumber": 1,
-  "phaseName": "Core Mechanics",
-  "durationDays": 45,
-  "primaryGoals": [
-    "Solve 20 beginner algorithm problems without looking at solutions",
-    "Build a working CLI application from scratch"
-  ],
-  "focusAreas": { "variables-and-data-types": 20, "control-flow": 30, "functions-and-scope": 30, "arrays-and-objects": 20 },
-  "keyMilestones": [
-    "Complete 20 HackerRank Easy problems — timed at under 15 min each without hints",
-    "CLI number guessing game working: accepts input, tracks guesses, announces winner"
-  ],
-  "scienceRationale": "Deliberate practice research (Ericsson): beginners need 30+ repetitions per concept before transfer occurs. Blocked practice first (variables → loops → functions) builds schema before interleaving.",
-  "adaptationRules": {
-    "if_completing_easily": "Add 5-minute time pressure to each problem — speed is the next challenge",
-    "if_struggling": "Spend 2 extra days on control flow; only move to functions when loops feel automatic"
-  }
-}
-
-### BAD PHASE (vague, unverifiable — NEVER produce this):
-{
-  "phaseName": "Foundation Building",
-  "primaryGoals": ["Learn the basics", "Get comfortable with the material"],
-  "keyMilestones": ["Understand core concepts", "Feel more confident"]
-}
-WHY IT'S BAD: "Learn the basics" is not a goal. "Understand core concepts" cannot be verified. Agent 4 cannot generate a specific daily task from these.
-
-### GOOD PHASE (kinesthetic example):
-{
-  "phaseNumber": 1,
-  "phaseName": "Technique Foundation",
-  "durationDays": 28,
-  "primaryGoals": [
-    "Run 3km continuously at a conversational pace (can hold a sentence while running)",
-    "Establish correct foot strike and posture mechanics"
-  ],
-  "focusAreas": { "easy-aerobic-runs": 60, "form-drills": 25, "mobility-and-warmup": 15 },
-  "keyMilestones": [
-    "Complete a 3km run without stopping — pace does not matter, only continuity",
-    "Pass posture checklist: heel not striking first, arms at 90 degrees, looking 10m ahead"
-  ],
-  "scienceRationale": "Sports periodization: technique must be established at low intensity (RPE 4-5) before volume increases. Muscle memory of poor form is very hard to unlearn once volume rises.",
-  "adaptationRules": {
-    "if_completing_easily": "Extend long run by 500m per week — do NOT increase pace yet",
-    "if_struggling": "Switch to run/walk intervals: 2 min run, 1 min walk, total 20 min"
-  }
-}
-
-## MILESTONE QUALITY RULES (read carefully):
-- BAD: "understand X" / "learn Y" / "get comfortable with Z" / "feel ready" — these are UNVERIFIABLE
-- BAD: "practice regularly" / "work on fundamentals" — too vague for Agent 4 to act on
-- GOOD: "solve 15 problems without hints in under 10 min each" — measurable, binary (done/not done)
-- GOOD: "produce a 500-word rough draft — quality irrelevant, existence is the milestone"
-- GOOD: "complete 3 full practice sets of 20 reps each with a 60-second rest" — specific, countable
-`;
-
 function buildSystemPrompt(domain: string): string {
   const pedagogy = DOMAIN_PEDAGOGY[domain] ?? DOMAIN_PEDAGOGY['Lifestyle'];
 
   return `You are Agent 3: Curriculum Architect — a world-class instructional designer.
 
-Your job is to transform a goal analysis and behavioral profile into a structured, phased learning roadmap.
+Your job is to transform a goal analysis and behavioral profile into a structured, month/week/day learning roadmap.
 You are NOT a motivational coach. You are an architect designing a building. Every decision must be justified.
 
 ## Your Pedagogical Framework for This Goal's Domain
 ${pedagogy}
 
 ## Core Curriculum Principles (apply to ALL domains)
-- Progressive Overload: Each phase is harder than the last. Never plateau.
+- Progressive Overload: Each month/week is harder than the last. Never plateau.
 - Spacing Effect: Review prior material before introducing new material. Never cram.
-- Scaffolding: Each phase explicitly builds on skills from the prior phase.
-- Feedback Loops: Every phase has a measurable checkpoint outcome.
+- Scaffolding: Each month explicitly builds on skills from the prior month.
+- Feedback Loops: Every week has a measurable outcome.
 - Consolidation before Complexity: Do not add new skills before current skills are stable.
+- Weekly Recalibration: Only Week 1 gets fully planned days. All other weeks start tentative and are planned after weekly check-ins.
 
-## Phase Count Rules (NON-NEGOTIABLE)
-- Short-term goal (<90 days): 2–3 phases
-- Mid-term goal (90–365 days): 3–4 phases
-- Long-term goal (>365 days): 4–5 phases
-Never create more or fewer phases than these rules permit.
+## Structure Rules (NON-NEGOTIABLE)
+- ONLY Week 1 has days[] populated (exactly 7 days). ALL other weeks have days: [].
+- Day 7 of each week is ALWAYS type "rest" (recovery/consolidation).
+- Week status: week 1 = "current", all others = "tentative".
+- Weeks are numbered absolutely across the whole roadmap (Week 1, 2, 3...).
+- Days are numbered absolutely across the whole roadmap (Day 1, 2, 3...).
+- frameworkReason MUST reference the user's specific stones by name.
 
-## Day-Level Skeletons (REQUIRED)
-Each phase MUST include a "daySkeleton" array with one entry per day in the phase.
-Each entry specifies: day number (1-indexed within phase), theme (what the day covers),
-taskType (learning|practice|reflection|challenge|retrieval|rest), intensity (0.0–1.0),
-and focusArea (must match a key from that phase's focusAreas).
-Rules:
-- Every 7th day should be "rest" type with intensity ≤ 0.2
-- Intensity should ramp within each phase (start low, peak mid-phase, taper at end)
-- Include at least 1 "reflection" day per 7 days
-- Include at least 1 "retrieval" day per 14 days (spaced repetition)
-- Themes must be specific enough for Agent 4 to generate a real task (NOT "learn basics")
-
-${FEW_SHOT_EXAMPLES}
-
-## Return ONLY valid JSON. No commentary, no markdown.`;
+OUTPUT FORMAT — return ONLY valid JSON, no markdown:
+{
+  "totalDays": <number>,
+  "totalWeeks": <number>,
+  "totalMonths": <number>,
+  "domainPedagogy": "<exact framework name>",
+  "frameworkName": "<full descriptive name e.g. 'Spaced Repetition — Ebbinghaus Method'>",
+  "frameworkReason": "<2-3 sentences: why this framework for this user's domain AND stones. Reference the stones by name.>",
+  "frameworkScience": "<2-3 sentences from the research/science behind this framework>",
+  "frameworkSources": [
+    { "title": "<book/paper title>", "author": "<author>", "note": "<one sentence on how it was used>" }
+  ],
+  "months": [
+    {
+      "month": 1,
+      "title": "<Month theme name>",
+      "phaseName": "<same as title or phase name>",
+      "startDay": 1,
+      "endDay": <days in month>,
+      "startWeek": 1,
+      "endWeek": <last week of month>,
+      "primaryGoals": ["<goal 1>", "<goal 2>"],
+      "scienceRationale": "<science rationale for this phase>",
+      "weeks": [
+        {
+          "week": 1,
+          "title": "<Week 1 focus topic>",
+          "theme": "<short description of what this week covers>",
+          "startDay": 1,
+          "endDay": 7,
+          "status": "current",
+          "recalibratedFrom": null,
+          "days": [
+            { "day": 1, "weekDay": 1, "type": "learning", "title": "<day title>", "theme": "<day theme>", "intensity": 0.3, "focusArea": "<focus area>" },
+            { "day": 2, "weekDay": 2, "type": "practice", "title": "...", "theme": "...", "intensity": 0.35, "focusArea": "..." },
+            { "day": 3, "weekDay": 3, "type": "practice", "title": "...", "theme": "...", "intensity": 0.4, "focusArea": "..." },
+            { "day": 4, "weekDay": 4, "type": "reflection", "title": "...", "theme": "...", "intensity": 0.2, "focusArea": "..." },
+            { "day": 5, "weekDay": 5, "type": "practice", "title": "...", "theme": "...", "intensity": 0.45, "focusArea": "..." },
+            { "day": 6, "weekDay": 6, "type": "challenge", "title": "...", "theme": "...", "intensity": 0.5, "focusArea": "..." },
+            { "day": 7, "weekDay": 7, "type": "rest", "title": "Rest & Consolidation", "theme": "Active rest", "intensity": 0.1, "focusArea": "recovery" }
+          ]
+        },
+        {
+          "week": 2,
+          "title": "<Week 2 tentative topic>",
+          "theme": "<Week 2 theme — will be refined after Week 1 check-in>",
+          "startDay": 8,
+          "endDay": 14,
+          "status": "tentative",
+          "recalibratedFrom": null,
+          "days": []
+        },
+        { "week": 3, "title": "...", "theme": "...", "startDay": 15, "endDay": 21, "status": "tentative", "recalibratedFrom": null, "days": [] },
+        { "week": 4, "title": "...", "theme": "...", "startDay": 22, "endDay": 28, "status": "tentative", "recalibratedFrom": null, "days": [] }
+      ]
+    }
+  ],
+  "progressionCurve": {
+    "month_1": { "intensity": 0.3, "volume": "low" },
+    "month_2": { "intensity": 0.6, "volume": "medium" },
+    "month_3": { "intensity": 0.9, "volume": "high" }
+  },
+  "stoneModificationSummary": "<1-2 sentences>",
+  "modifiers_from_stones": {
+    "<StoneName>": { "removed": ["..."], "added": ["..."], "modified": ["..."] }
+  }
+}`;
 }
 
 // ─── User Prompt ─────────────────────────────────────────────────────────────
@@ -467,7 +385,7 @@ function buildUserPrompt(
   goalAnalysis: Agent1Output,
   stoneProfile: Agent2ProfileOutput,
   ragContext: string,
-  phaseCount: number,
+  monthCount: number,
 ): string {
   const g = goalAnalysis.goalAnalysis;
   const sp = stoneProfile.stoneProfile;
@@ -498,7 +416,9 @@ function buildUserPrompt(
     .filter(Boolean)
     .join('\n');
 
-  return `Build a ${context.timeline}-day curriculum roadmap with exactly ${phaseCount} phases.
+  const totalWeeks = Math.ceil(context.timeline / 7);
+
+  return `Build a ${context.timeline}-day month/week/day curriculum roadmap with ${monthCount} months.
 
 ## Goal Intelligence (from Agent 1)
 Goal: "${g.goal}"
@@ -506,6 +426,8 @@ Domain: ${g.domain}${g.subDomains.length ? ` + [${g.subDomains.join(', ')}]` : '
 Complexity: ${g.complexity}
 Horizon: ${g.horizon}
 Daily Time Available: ${context.dailyTimeAvailable} minutes
+Total Days: ${context.timeline}
+Total Weeks: ${totalWeeks}
 Constraints: ${g.constraintsDetected.join(', ') || 'None'}
 Risks: ${g.risksDetected.join(', ') || 'None'}
 Typical Realistic Timeline: ${g.typicalTimeline.realistic}
@@ -532,7 +454,7 @@ Archetype: ${sp.userArchetype}
 Primary Stone (highest risk): ${sp.primaryStone}
 All Stones: ${sp.stones.map(s => `${s.type} (${s.severity})`).join(', ')}
 Agent 2 Guidance for Curriculum:
-${sp.agent3Guidance.map(g => `  - ${g}`).join('\n')}
+${sp.agent3Guidance.map(gi => `  - ${gi}`).join('\n')}
 Agent 5 Prediction: "${sp.agent5Note}"
 
 ${tiebreakers ? `${tiebreakers}
@@ -544,55 +466,14 @@ ${stoneInstructions || '(No stones detected — use default curriculum structure
 ## Scientific Foundation (from Knowledge Base)
 ${ragContext || '(No RAG context available — use domain pedagogy defaults)'}
 
-## Output Schema (return exactly this structure)
-{
-  "roadmap": {
-    "totalDays": ${context.timeline},
-    "totalPhases": ${phaseCount},
-    "phases": [
-      {
-        "phaseNumber": 1,
-        "phaseName": "descriptive name",
-        "weeks": [1, 2],
-        "durationDays": 14,
-        "primaryGoals": ["specific goal 1", "specific goal 2"],
-        "focusAreas": { "area_name": 40, "area_name_2": 60 },
-        "keyMilestones": ["concrete, measurable milestone"],
-        "scienceRationale": "Why this phase structure works — cite source if RAG provided it",
-        "buildingOn": "what this phase relies on from the previous phase",
-        "daySkeleton": [
-          { "day": 1, "theme": "specific topic/drill for this day", "taskType": "learning", "intensity": 0.3, "focusArea": "area_name" },
-          { "day": 2, "theme": "...", "taskType": "practice", "intensity": 0.4, "focusArea": "area_name_2" }
-        ],
-        "adaptationRules": {
-          "if_completing_easily": "specific next step, not just 'do more'",
-          "if_struggling": "specific reduction, not just 'slow down'"
-        }
-      }
-    ],
-    "progressionCurve": {
-      "phase_1": { "intensity": 0.3, "volume": "low", "technique_depth": "shallow" },
-      "phase_2": { "intensity": 0.5, "volume": "medium", "technique_depth": "medium" }
-    },
-    "reviewMoments": [
-      { "day": 7, "type": "reflection", "prompt": "specific question tied to phase 1 goals" }
-    ],
-    "restDays": {
-      "pattern": "every_7th_day",
-      "customDays": [],
-      "restType": "active_recovery"
-    },
-    "modifiers_from_stones": {
-      "${sp.primaryStone}": {
-        "removed": ["what was removed because of this stone"],
-        "added": ["what was added because of this stone"],
-        "modified": ["what was changed because of this stone"]
-      }
-    }
-  },
-  "domainPedagogy": "name of the pedagogical framework applied (e.g. 'Sports Periodization')",
-  "stoneModificationSummary": "1-2 sentence summary of how the stone profile changed the default curriculum"
-}`;
+CRITICAL RULES:
+- Only Week 1 gets populated days[] (7 days exactly). ALL other weeks have days: [].
+- Day 7 of each week is always type: "rest" (recovery/consolidation).
+- Week status: week 1 = "current", all others = "tentative".
+- Weeks are numbered absolutely (Week 1, 2, 3... across the whole roadmap).
+- Days are numbered absolutely (Day 1, 2, 3... across the whole roadmap).
+- frameworkReason MUST reference the user's specific stones by name: ${sp.stones.map(s => s.type).join(', ')}.
+- Return ONLY valid JSON in the format shown in your system prompt. No markdown, no commentary.`;
 }
 
 // ─── JSON Repair ──────────────────────────────────────────────────────────────
@@ -610,129 +491,181 @@ function repairJSON(raw: string): string {
     .replace(/[\u201C\u201D]/g, '"');
 }
 
-// ─── Phase Count Derivation ───────────────────────────────────────────────────
+// ─── Month Count Derivation ───────────────────────────────────────────────────
 
-function derivePhaseCount(timeline: number, horizon: string): number {
+export function computePhaseCount(timeline: number, horizon: string): number {
   if (horizon === 'Short-term' || timeline <= 90)  return 2;
   if (horizon === 'Long-term'  || timeline > 365)  return 4;
   return 3; // Mid-term default
 }
 
-// ─── Validate + Normalize ────────────────────────────────────────────────────
+// ─── Validate + Normalize V2 ─────────────────────────────────────────────────
 
-function validateAndNormalize(raw: unknown, context: AgentContext, phaseCount: number): Agent3Output {
-  const parsed = raw as Agent3Output;
-  const roadmap = parsed?.roadmap as Roadmap | undefined;
+function validateAndNormalizeV2(raw: unknown, context: AgentContext): AgentRoadmapV2 {
+  const parsed = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
 
-  if (!roadmap || typeof roadmap !== 'object') {
-    throw new Error('Agent 3: Missing roadmap in response');
-  }
+  const totalDays = typeof parsed.totalDays === 'number' ? parsed.totalDays : context.timeline;
+  const totalWeeks = typeof parsed.totalWeeks === 'number' ? parsed.totalWeeks : Math.ceil(totalDays / 7);
+  const totalMonths = typeof parsed.totalMonths === 'number' ? parsed.totalMonths : Math.ceil(totalDays / 30);
 
-  // Enforce totalDays
-  roadmap.totalDays = context.timeline;
-  roadmap.totalPhases = phaseCount;
+  const validDayTypes = ['learning', 'practice', 'reflection', 'challenge', 'retrieval', 'rest'] as const;
 
-  // Ensure phases array
-  if (!Array.isArray(roadmap.phases) || roadmap.phases.length === 0) {
-    throw new Error('Agent 3: No phases in roadmap');
-  }
+  // Normalize months
+  const rawMonths = Array.isArray(parsed.months) ? parsed.months : [];
+  const months: MonthPlan[] = rawMonths.map((m: unknown, mi: number) => {
+    const month = (typeof m === 'object' && m !== null ? m : {}) as Record<string, unknown>;
+    const rawWeeks = Array.isArray(month.weeks) ? month.weeks : [];
 
-  // Normalize each phase
-  roadmap.phases = roadmap.phases.slice(0, phaseCount).map((phase, i) => {
-    const p = phase as Phase;
-    p.phaseNumber    = i + 1;
-    p.phaseName      ??= `Phase ${i + 1}`;
-    p.weeks          = Array.isArray(p.weeks) && p.weeks.length > 0 ? p.weeks : [i + 1];
-    p.durationDays   = typeof p.durationDays === 'number' && p.durationDays > 0
-      ? p.durationDays
-      : Math.round(context.timeline / phaseCount);
-    p.primaryGoals   = Array.isArray(p.primaryGoals) ? p.primaryGoals : [];
-    p.keyMilestones  = Array.isArray(p.keyMilestones) ? p.keyMilestones : [];
-    p.scienceRationale ??= '';
-    p.focusAreas     ??= {};
+    const weeks: WeekPlan[] = rawWeeks.map((w: unknown, wi: number) => {
+      const week = (typeof w === 'object' && w !== null ? w : {}) as Record<string, unknown>;
+      const weekNumber = typeof week.week === 'number' ? week.week : (mi * 4) + wi + 1;
 
-    // Validate/generate daySkeleton
-    if (!Array.isArray(p.daySkeleton) || p.daySkeleton.length === 0) {
-      // Generate a basic skeleton if the LLM didn't provide one
-      const focusKeys = Object.keys(p.focusAreas);
-      p.daySkeleton = Array.from({ length: p.durationDays }, (_, d) => {
-        const dayNum = d + 1;
-        const isRest = dayNum % 7 === 0;
-        const isReflection = dayNum % 7 === 6;
-        const isRetrieval = dayNum % 14 === 13;
-        return {
-          day: dayNum,
-          theme: isRest ? 'Rest & recovery' : isReflection ? 'Weekly reflection' : `${p.phaseName} practice`,
-          taskType: isRest ? 'rest' as const : isReflection ? 'reflection' as const : isRetrieval ? 'retrieval' as const : 'practice' as const,
-          intensity: isRest ? 0.1 : Math.min(0.3 + (dayNum / p.durationDays) * 0.5, 0.9),
-          focusArea: focusKeys[d % Math.max(focusKeys.length, 1)] ?? 'general',
-        };
-      });
-    } else {
-      // Validate existing skeleton entries
-      const validTypes = ['practice', 'learning', 'reflection', 'challenge', 'retrieval', 'rest'];
-      p.daySkeleton = p.daySkeleton.map((ds, d) => ({
-        day: ds.day ?? d + 1,
-        theme: ds.theme ?? `${p.phaseName} day ${d + 1}`,
-        taskType: validTypes.includes(ds.taskType) ? ds.taskType : 'practice' as const,
-        intensity: typeof ds.intensity === 'number' ? Math.min(1, Math.max(0, ds.intensity)) : 0.5,
-        focusArea: ds.focusArea ?? 'general',
-      }));
-    }
+      // Only Week 1 gets days populated; all others get empty array
+      const isFirstWeek = weekNumber === 1;
+      let days: WeekDay[] = [];
 
-    return p;
+      if (isFirstWeek && Array.isArray(week.days) && week.days.length > 0) {
+        days = (week.days as unknown[]).map((d: unknown, di: number) => {
+          const day = (typeof d === 'object' && d !== null ? d : {}) as Record<string, unknown>;
+          return {
+            day:       typeof day.day       === 'number' ? day.day       : di + 1,
+            weekDay:   typeof day.weekDay   === 'number' ? day.weekDay   : di + 1,
+            type:      (validDayTypes as readonly string[]).includes(day.type as string)
+              ? (day.type as WeekDay['type'])
+              : (di === 6 ? 'rest' : 'practice'),
+            title:     typeof day.title     === 'string' ? day.title     : `Day ${di + 1}`,
+            theme:     typeof day.theme     === 'string' ? day.theme     : '',
+            intensity: typeof day.intensity === 'number' ? Math.min(1, Math.max(0, day.intensity)) : 0.3,
+            focusArea: typeof day.focusArea === 'string' ? day.focusArea : 'general',
+          };
+        });
+
+        // Ensure exactly 7 days, enforce rest on day 7
+        while (days.length < 7) {
+          const di = days.length;
+          days.push({
+            day: (typeof week.startDay === 'number' ? week.startDay : 1) + di,
+            weekDay: di + 1,
+            type: di === 6 ? 'rest' : 'practice',
+            title: di === 6 ? 'Rest & Consolidation' : `Day ${di + 1}`,
+            theme: di === 6 ? 'Active rest' : '',
+            intensity: di === 6 ? 0.1 : 0.3,
+            focusArea: di === 6 ? 'recovery' : 'general',
+          });
+        }
+        // Enforce day 7 is always rest
+        if (days[6]) {
+          days[6] = { ...days[6], type: 'rest', intensity: Math.min(days[6].intensity, 0.2) };
+        }
+      } else if (isFirstWeek) {
+        // Generate basic Week 1 days if LLM didn't provide them
+        const startDay = typeof week.startDay === 'number' ? week.startDay : 1;
+        const weekTypes: WeekDay['type'][] = ['learning', 'practice', 'practice', 'reflection', 'practice', 'challenge', 'rest'];
+        days = weekTypes.map((type, di) => ({
+          day: startDay + di,
+          weekDay: di + 1,
+          type,
+          title: type === 'rest' ? 'Rest & Consolidation' : `Day ${di + 1} — ${type}`,
+          theme: type === 'rest' ? 'Active rest' : '',
+          intensity: type === 'rest' ? 0.1 : 0.3 + di * 0.03,
+          focusArea: type === 'rest' ? 'recovery' : 'general',
+        }));
+      }
+
+      return {
+        week: weekNumber,
+        title: typeof week.title === 'string' ? week.title : `Week ${weekNumber}`,
+        theme: typeof week.theme === 'string' ? week.theme : '',
+        startDay: typeof week.startDay === 'number' ? week.startDay : (weekNumber - 1) * 7 + 1,
+        endDay:   typeof week.endDay   === 'number' ? week.endDay   : weekNumber * 7,
+        status:   isFirstWeek ? 'current' : 'tentative',
+        days,
+        recalibratedFrom: typeof week.recalibratedFrom === 'number' ? week.recalibratedFrom : undefined,
+      };
+    });
+
+    return {
+      month: typeof month.month === 'number' ? month.month : mi + 1,
+      title: typeof month.title === 'string' ? month.title : `Month ${mi + 1}`,
+      phaseName: typeof month.phaseName === 'string' ? month.phaseName : (typeof month.title === 'string' ? month.title : `Phase ${mi + 1}`),
+      startWeek: typeof month.startWeek === 'number' ? month.startWeek : mi * 4 + 1,
+      endWeek: typeof month.endWeek === 'number' ? month.endWeek : (mi + 1) * 4,
+      startDay: typeof month.startDay === 'number' ? month.startDay : mi * 30 + 1,
+      endDay: typeof month.endDay === 'number' ? month.endDay : Math.min((mi + 1) * 30, totalDays),
+      primaryGoals: Array.isArray(month.primaryGoals) ? month.primaryGoals as string[] : [],
+      scienceRationale: typeof month.scienceRationale === 'string' ? month.scienceRationale : '',
+      weeks,
+    };
   });
 
-  // Ensure we have exactly phaseCount phases (pad if LLM returned fewer)
-  while (roadmap.phases.length < phaseCount) {
-    const idx = roadmap.phases.length;
-    roadmap.phases.push({
-      phaseNumber:      idx + 1,
-      phaseName:        `Phase ${idx + 1}`,
-      weeks:            [idx + 1],
-      durationDays:     Math.round(context.timeline / phaseCount),
-      primaryGoals:     ['Continue progression from previous phase'],
-      focusAreas:       {},
-      keyMilestones:    ['Complete all scheduled sessions'],
-      scienceRationale: '',
-    });
-  }
+  // Ensure progressionCurve
+  const progressionCurve = (typeof parsed.progressionCurve === 'object' && parsed.progressionCurve !== null)
+    ? parsed.progressionCurve as Record<string, { intensity: number; volume: string }>
+    : { month_1: { intensity: 0.3, volume: 'low' }, month_2: { intensity: 0.6, volume: 'medium' } };
 
-  // Ensure reviewMoments from LLM
-  if (!Array.isArray(roadmap.reviewMoments)) {
-    roadmap.reviewMoments = [];
-  }
+  return {
+    totalDays,
+    totalWeeks,
+    totalMonths,
+    domainPedagogy:          typeof parsed.domainPedagogy         === 'string' ? parsed.domainPedagogy         : 'Standard Progression',
+    frameworkName:           typeof parsed.frameworkName          === 'string' ? parsed.frameworkName          : '',
+    frameworkReason:         typeof parsed.frameworkReason        === 'string' ? parsed.frameworkReason        : '',
+    frameworkScience:        typeof parsed.frameworkScience       === 'string' ? parsed.frameworkScience       : '',
+    frameworkSources:        Array.isArray(parsed.frameworkSources) ? parsed.frameworkSources as AgentRoadmapV2['frameworkSources'] : [],
+    months,
+    progressionCurve,
+    stoneModificationSummary: typeof parsed.stoneModificationSummary === 'string' ? parsed.stoneModificationSummary : 'No modifications applied.',
+    modifiers_from_stones:   (typeof parsed.modifiers_from_stones === 'object' && parsed.modifiers_from_stones !== null)
+      ? parsed.modifiers_from_stones as AgentRoadmapV2['modifiers_from_stones']
+      : {},
+  };
+}
+// ─── Compatibility Bridge (V2 → Legacy Agent3Output for Agent 4) ─────────────
 
-  // Merge spaced repetition assessment moments into reviewMoments
-  const assessmentMoments = generateAssessmentMoments(roadmap.phases, roadmap.totalDays);
-  const existingDays = new Set(roadmap.reviewMoments.map(rm => rm.day));
-  for (const am of assessmentMoments) {
-    if (!existingDays.has(am.day)) {
-      roadmap.reviewMoments.push(am);
-      existingDays.add(am.day);
-    }
-  }
-  roadmap.reviewMoments.sort((a, b) => a.day - b.day);
+/**
+ * Converts AgentRoadmapV2 (month/week/day hierarchy) into the legacy Agent3Output
+ * structure that Agent 4 (task-generator) still consumes.
+ * Populates daySkeleton from the pre-planned Week 1 days.
+ */
+export function buildLegacyAgent3Output(v2: AgentRoadmapV2): Agent3Output {
+  const phases: Phase[] = v2.months.map((month, idx) => {
+    // Build daySkeleton from week days that are populated
+    const daySkeleton = month.weeks
+      .flatMap(w => w.days)
+      .map(d => ({
+        day: d.day - (month.startDay - 1), // day within phase
+        theme: d.theme,
+        taskType: d.type as 'practice' | 'learning' | 'reflection' | 'challenge' | 'retrieval' | 'rest',
+        intensity: d.intensity,
+        focusArea: d.focusArea,
+      }));
 
-  // Ensure restDays
-  roadmap.restDays ??= { pattern: 'every_7th_day', customDays: [], restType: 'active_recovery' };
-
-  // Ensure progressionCurve has entries
-  if (!roadmap.progressionCurve || Object.keys(roadmap.progressionCurve).length === 0) {
-    roadmap.progressionCurve = {
-      phase_1: { intensity: 0.3, volume: 'low',    technique_depth: 'shallow' },
-      phase_2: { intensity: 0.5, volume: 'medium', technique_depth: 'medium'  },
+    return {
+      phaseNumber: idx + 1,
+      phaseName: month.title,
+      weeks: Array.from({ length: month.endWeek - month.startWeek + 1 }, (_, i) => month.startWeek + i),
+      durationDays: month.endDay - month.startDay + 1,
+      primaryGoals: month.primaryGoals,
+      focusAreas: {},
+      keyMilestones: month.primaryGoals.slice(0, 2),
+      scienceRationale: month.scienceRationale,
+      daySkeleton: daySkeleton.length > 0 ? daySkeleton : undefined,
     };
-  }
+  });
 
-  // Ensure modifiers_from_stones
-  roadmap.modifiers_from_stones ??= {};
-
-  // Ensure top-level fields
-  parsed.domainPedagogy          ??= 'Standard Progression';
-  parsed.stoneModificationSummary ??= 'No modifications applied.';
-
-  return parsed;
+  return {
+    roadmap: {
+      totalDays: v2.totalDays,
+      totalPhases: v2.totalMonths,
+      phases,
+      progressionCurve: v2.progressionCurve as Record<string, import('@types-app/agents').ProgressionPoint>,
+      reviewMoments: [] as ReviewMoment[],
+      restDays: { pattern: 'weekly', customDays: [6, 0], restType: 'active_recovery' as const },
+      modifiers_from_stones: {} as Roadmap['modifiers_from_stones'],
+    },
+    domainPedagogy: v2.domainPedagogy,
+    stoneModificationSummary: v2.stoneModificationSummary,
+  };
 }
 
 // ─── Main Export ─────────────────────────────────────────────────────────────
@@ -742,11 +675,11 @@ export async function buildCurriculum(
   goalAnalysis: Agent1Output,
   stoneProfile: Agent2ProfileOutput,
   ragContext?: string,
-): Promise<Agent3Output> {
+): Promise<AgentRoadmapV2> {
   const g = goalAnalysis.goalAnalysis;
 
-  // Derive phase count from timeline/horizon (never from LLM)
-  const phaseCount = derivePhaseCount(context.timeline, g.horizon);
+  // Derive month count from timeline/horizon (never from LLM)
+  const phaseCount = computePhaseCount(context.timeline, g.horizon);
 
   // Fetch RAG context if not provided by caller — multi-query for richer context
   let science = ragContext ?? '';
@@ -771,13 +704,13 @@ export async function buildCurriculum(
       { role: 'user',   content: buildUserPrompt(context, goalAnalysis, stoneProfile, science, phaseCount) },
     ],
     temperature: 0.3,
-    max_tokens:  4000,
+    max_tokens:  6000,
     response_format: { type: 'json_object' },
   });
   if (!content) throw new Error('Agent 3: No response received from model');
 
   const raw = JSON.parse(repairJSON(content)) as unknown;
-  return validateAndNormalize(raw, context, phaseCount);
+  return validateAndNormalizeV2(raw, context);
 }
 
 // ============================================

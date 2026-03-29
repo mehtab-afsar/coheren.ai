@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '@core/store/useStore';
 import { useBreakpoint } from '@hooks/useBreakpoint';
 import UpcomingPreview from './journey/UpcomingPreview';
+import { ap } from '@core/design-system/appleTokens';
 
 export default function RoadmapView() {
   const { roadmap, currentDay, tasks } = useStore();
@@ -126,7 +127,7 @@ export default function RoadmapView() {
   }
 
   return (
-    <div style={{ paddingBottom: 32 }}>
+    <div style={{ paddingBottom: 32, fontFamily: ap.font }}>
 
       {/* ── 1. Goal Hero card ── */}
       {(() => {

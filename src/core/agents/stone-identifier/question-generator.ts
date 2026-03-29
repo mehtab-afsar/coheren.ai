@@ -67,8 +67,21 @@ Every option must explain exactly how it changes the curriculum:
 - Not: "affects plan"
 - Yes: "adds 'recovery day' structure after every 3 days, reduces Phase 1 volume by 25%"
 
-### 6. Generate 4–5 Questions Only
-Quality over quantity. Each question must be high-signal. Skip low-impact probes.
+### 6. Generate Exactly 2 Questions
+You must return exactly 2 questions — no more, no less.
+Pick the 2 patterns that are MOST likely to split the curriculum path for this specific goal and domain.
+A question is high-signal if different answers would produce meaningfully different plans.
+Low-signal = interesting but doesn't change the roadmap. Skip those.
+
+### 7. Research-Backed Question Design
+Ground your questions in behavioural science:
+- **Past behaviour is the best predictor** (Sheeran 2002): Ask what happened the last time they tried, not what they plan to do.
+- **Implementation intention gap** (Gollwitzer): "When exactly will you do this?" reveals whether a concrete cue exists.
+- **Identity-based habits** (Clear): Whether someone sees themselves as "a person who does X" predicts follow-through far more than motivation.
+- **Friction is the real obstacle** (Fogg): The smallest inconvenience will kill a habit. Surface environmental or structural friction.
+- **Social commitment** (Ariely): Public goals and accountability partners double follow-through rates.
+
+The best 2 questions reveal which of these dynamics is most likely to determine success for THIS specific person's goal.
 
 ## Output Format
 Return ONLY valid JSON, no markdown:
@@ -122,7 +135,7 @@ function buildUserPrompt(context: AgentContext, goalAnalysis: Agent1Output): str
       : null,
   ].filter(Boolean).join('\n');
 
-  return `Generate 4–5 readiness probe questions for this user. You are uncovering their psychological and behavioural patterns — NOT collecting data they already gave you.
+  return `Generate EXACTLY 2 readiness probe questions for this user. You are uncovering the 2 most critical psychological and behavioural patterns — NOT collecting data they already gave you.
 
 ## Everything Already Known (DO NOT RE-ASK ANY OF THIS)
 ${alreadyKnown}
@@ -147,10 +160,13 @@ ${context.behavioralFlags && context.behavioralFlags.length > 0
   : 'No specific flags detected — probe general resilience and accountability patterns.'}
 
 ## Instructions
-- Every question must name the goal ("${context.goal}") or a specific aspect of it
-- Each question maps to exactly one stone type from the taxonomy
-- Order by importance: put the question most likely to split the curriculum path first
-- Never ask what's already known`;
+- Return EXACTLY 2 questions — the 2 highest-signal ones for this specific goal and domain
+- Every question must reference the goal ("${context.goal}") or a concrete aspect of it
+- Each question maps to exactly one stone type
+- Order by split power: question 1 = the single pattern most likely to change the entire curriculum structure
+- Ground questions in past behaviour, not intentions — "What happened last time" beats "What do you plan to do"
+- Never ask what's already known
+- The 2 questions together should give a complete picture of why this person might struggle`;
 }
 
 // Keyword safety net: reject questions whose core topic overlaps with chat-collected fields.
@@ -186,8 +202,8 @@ function validateOutput(raw: unknown, context?: AgentContext): Agent2Output {
     throw new Error('Agent 2 Mode 1: Missing requiredStones array');
   }
 
-  // Cap at 5 questions
-  parsed.requiredStones = parsed.requiredStones.slice(0, 5);
+  // Cap at exactly 2 questions
+  parsed.requiredStones = parsed.requiredStones.slice(0, 2);
 
   // Ensure each stone has required fields
   parsed.requiredStones = parsed.requiredStones.filter(

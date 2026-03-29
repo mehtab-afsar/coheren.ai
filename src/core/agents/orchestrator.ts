@@ -5,7 +5,7 @@
 
 import { analyzeGoal, buildClarifications } from './goal-analyzer';
 import { identifyStones, extractStones, extractPreliminary, crossValidateStones } from './stone-identifier';
-import { buildCurriculum, buildCurriculumPreview, resolvePaceCalibration } from './curriculum-builder';
+import { buildCurriculum, buildCurriculumPreview, resolvePaceCalibration, buildLegacyAgent3Output } from './curriculum-builder';
 import { generateTask } from './task-generator';
 import { recalibrateCurriculum, convertToFeedback } from './recalibrator';
 import { withAgentLogging } from '@lib/agent-logger';
@@ -27,6 +27,7 @@ import type {
   PaceCalibration,
   PaceChoice,
 } from '@types-app/agents';
+import type { AgentRoadmapV2 } from '@core/store/useStore';
 // Minimal interface to avoid circular import with @core/store/useStore
 interface Task {
   day?: number;
@@ -103,7 +104,7 @@ export async function runCurriculumBuilder(
   dailyTime: number,
   goalAnalysis: Agent1Output,
   stoneProfile: Agent2ProfileOutput
-): Promise<Agent3Output> {
+): Promise<AgentRoadmapV2> {
   const context: AgentContext = {
     userId: 'temp',
     goal,
@@ -164,7 +165,7 @@ export async function generateCompleteRoadmap(
   preComputedStoneProfile?: Agent2ProfileOutput
 ): Promise<{
   goalAnalysis: Agent1Output;
-  roadmap: Agent3Output;
+  roadmap: AgentRoadmapV2;
   firstTask: DailyTask;
   stoneProfile: Agent2ProfileOutput;
 }> {
@@ -181,11 +182,14 @@ export async function generateCompleteRoadmap(
 
   const stoneProfile = preComputedStoneProfile ?? await extractStones(context, goalAnalysis, stoneAnswers);
 
-  const roadmap = await buildCurriculum(context, goalAnalysis, stoneProfile);
+  const roadmapV2 = await buildCurriculum(context, goalAnalysis, stoneProfile);
+
+  // Convert to legacy format for Agent 4 (task-generator still uses Agent3Output)
+  const legacyRoadmap = buildLegacyAgent3Output(roadmapV2);
 
   const firstTask = await generateTask(
     1,
-    roadmap,
+    legacyRoadmap,
     stoneProfile,
     dailyTime,
     undefined,
@@ -193,10 +197,9 @@ export async function generateCompleteRoadmap(
     skillLevel || 'beginner'
   );
 
-
   return {
     goalAnalysis,
-    roadmap,
+    roadmap: roadmapV2,
     firstTask,
     stoneProfile,
   };
@@ -507,14 +510,17 @@ export function runStoneCrossValidation(
 }
 
 /**
- * Stage 3b: Generate 7-day preview from Agent 3 output. No LLM call.
+ * Stage 3b: Generate 7-day preview from Agent 3 output or AgentRoadmapV2. No LLM call.
  */
 export function getCurriculumPreview(
-  agent3Output: Agent3Output,
+  agent3Output: Agent3Output | AgentRoadmapV2,
   category: string,
   dailyMinutes: number,
 ): CurriculumPreview {
-  return buildCurriculumPreview(agent3Output, category, dailyMinutes);
+  const legacy = 'months' in agent3Output
+    ? buildLegacyAgent3Output(agent3Output)
+    : agent3Output;
+  return buildCurriculumPreview(legacy, category, dailyMinutes);
 }
 
 /**

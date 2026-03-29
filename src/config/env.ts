@@ -44,6 +44,9 @@ export const env = {
   POSTHOG_KEY:  optional('VITE_POSTHOG_KEY'),
   POSTHOG_HOST: optional('VITE_POSTHOG_HOST', 'https://app.posthog.com'),
 
+  // ── Error monitoring (Sentry) — optional: silently disabled if not set ───
+  SENTRY_DSN: optional('VITE_SENTRY_DSN'),
+
   // ── Convenience ───────────────────────────────────────────────────────────
   IS_PROD: import.meta.env.PROD === true,
   IS_DEV:  import.meta.env.DEV  === true,
@@ -64,6 +67,7 @@ export function validateEnv(): void {
       `  Groq     : ${env.GROQ_API_KEY       ? '✓ set' : '✗ missing (optional)'}`,
       `  Jina     : ${env.JINA_API_KEY       ? '✓ set' : '✗ missing (optional)'}`,
       `  PostHog  : ${env.POSTHOG_KEY        ? '✓ set' : '— analytics disabled'}`,
+      `  Sentry   : ${env.SENTRY_DSN        ? '✓ set' : '— error monitoring disabled'}`,
     ].join('\n');
     console.info(`[env] Environment loaded (${env.MODE}):\n${status}`);
   }

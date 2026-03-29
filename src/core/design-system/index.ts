@@ -13,3 +13,7 @@ export { button, card, progress, text, hoverHandlers } from './components';
 
 // Re-export types
 export type { Colors, Typography, Spacing, BorderRadius, Shadows, Transitions } from './tokens';
+
+// Apple design system
+export { ap } from './appleTokens';
+export { Chip, Bar, Label, Tile, Divider } from './AppleUI';

@@ -3,6 +3,7 @@ import { Flame, TrendingUp, Calendar, CheckCircle, Brain, ChevronDown, ChevronUp
 import { motion } from 'framer-motion';
 import { useStore } from '@core/store/useStore';
 import { useBreakpoint } from '@hooks/useBreakpoint';
+import { ap } from '@core/design-system/appleTokens';
 import StreakCalendar, { type CalendarDay } from './progress/StreakCalendar';
 import PersonalRecords from './progress/PersonalRecords';
 import TrendSparkline from './progress/TrendSparkline';
@@ -151,10 +152,10 @@ export default function InsightsView() {
     .slice(0, 30);
 
   return (
-    <div style={{ paddingBottom: 32 }}>
+    <div style={{ paddingBottom: 32, fontFamily: ap.font }}>
 
       {/* Page title */}
-      <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111', margin: '0 0 20px', letterSpacing: '-0.03em' }}>
+      <h1 style={{ fontSize: 26, fontWeight: 700, color: ap.textPrimary, margin: '0 0 24px', letterSpacing: '-0.03em' }}>
         Progress
       </h1>
 
@@ -162,39 +163,40 @@ export default function InsightsView() {
       <div style={{
         display: 'flex',
         gap: 8,
-        marginBottom: 20,
+        marginBottom: 24,
         overflowX: isMobile ? 'auto' : 'visible',
         scrollbarWidth: 'none',
         WebkitOverflowScrolling: 'touch',
         flexWrap: isMobile ? 'nowrap' : 'wrap',
         paddingBottom: isMobile ? 4 : 0,
       }}>
-        {momentumStats.map(({ icon: Icon, label, value, context, color, bg, border }, idx) => (
+        {momentumStats.map(({ icon: Icon, label, value, context, color }, idx) => (
           <motion.div
             key={label}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: idx * 0.07 }}
             style={{
-              background: bg,
-              border: `1px solid ${border}`,
+              background: ap.surface,
+              border: `1px solid ${ap.border}`,
               borderRadius: 14,
-              padding: '12px 14px',
+              padding: '14px 16px',
               flexShrink: 0,
               minWidth: isMobile ? 140 : 0,
               flex: isMobile ? 'none' : 1,
+              boxShadow: ap.shadow,
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
               <Icon size={12} color={color} />
-              <span style={{ fontSize: 9, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              <span style={{ fontSize: 9, fontWeight: 700, color: ap.textTertiary, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                 {label}
               </span>
             </div>
-            <p style={{ fontSize: 26, fontWeight: 700, color: '#111', margin: '0 0 2px', letterSpacing: '-0.03em', lineHeight: 1 }}>
+            <p style={{ fontSize: 26, fontWeight: 700, color: ap.textPrimary, margin: '0 0 2px', letterSpacing: '-0.03em', lineHeight: 1, fontFamily: ap.mono }}>
               {value}
             </p>
-            <p style={{ fontSize: 11, color: '#6b7280', margin: 0 }}>{context}</p>
+            <p style={{ fontSize: 11, color: ap.textTertiary, margin: 0 }}>{context}</p>
           </motion.div>
         ))}
       </div>
@@ -254,21 +256,21 @@ export default function InsightsView() {
             Deep Insights
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 8 }}>
-            <div style={{ background: '#fff', border: '1px solid #f0f0f5', borderRadius: 16, padding: 16, overflow: 'hidden' }}>
+            <div style={{ background: ap.surface, border: `1px solid ${ap.border}`, borderRadius: 14, padding: 16, overflow: 'hidden', boxShadow: ap.shadow }}>
               <ConsistencyScore score={metrics.consistencyScore} />
             </div>
             {metrics.taskTypeBreakdown.length > 0 && (
-              <div style={{ background: '#fff', border: '1px solid #f0f0f5', borderRadius: 16, padding: 16, overflow: 'hidden' }}>
+              <div style={{ background: ap.surface, border: `1px solid ${ap.border}`, borderRadius: 14, padding: 16, overflow: 'hidden', boxShadow: ap.shadow }}>
                 <TaskTypeBreakdown data={metrics.taskTypeBreakdown} />
               </div>
             )}
             {metrics.difficultyTrend.length >= 2 && (
-              <div style={{ background: '#fff', border: '1px solid #f0f0f5', borderRadius: 16, padding: 16, overflow: 'hidden' }}>
+              <div style={{ background: ap.surface, border: `1px solid ${ap.border}`, borderRadius: 14, padding: 16, overflow: 'hidden', boxShadow: ap.shadow }}>
                 <DifficultyTrend data={metrics.difficultyTrend} />
               </div>
             )}
             {metrics.skipPatterns.length > 0 && (
-              <div style={{ background: '#fff', border: '1px solid #f0f0f5', borderRadius: 16, padding: 16, overflow: 'hidden' }}>
+              <div style={{ background: ap.surface, border: `1px solid ${ap.border}`, borderRadius: 14, padding: 16, overflow: 'hidden', boxShadow: ap.shadow }}>
                 <SkipPatterns data={metrics.skipPatterns} />
               </div>
             )}

@@ -344,6 +344,8 @@ export interface DailyTask {
     buildingOn?: string[];
     nextUp?: string;
     adaptations_applied?: TaskAdaptations;
+    coachTips?: string[];
+    reflection?: string;
     resources?: {
       primary: TaskResource | null;
       supplementary: TaskResource[];

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Play, CheckCircle2, SkipForward, Target, BookOpen, MessageCircle, RotateCcw, Zap, Clock, Flame, FileText, ExternalLink, Video } from 'lucide-react';
+import { Play, CheckCircle2, SkipForward, Target, BookOpen, MessageCircle, RotateCcw, Zap, Clock, Flame } from 'lucide-react';
 import { useState } from 'react';
 import type { Task } from '@core/store/useStore';
 import { useBreakpoint } from '@hooks/useBreakpoint';
@@ -81,9 +81,6 @@ export default function FocusCard({
   const taskExt = task as unknown as Record<string, unknown>;
   const whyThisMatters = typeof taskExt.whyThisMatters === 'string' ? taskExt.whyThisMatters : null;
   const successCriteria = typeof taskExt.successCriteria === 'string' ? taskExt.successCriteria : null;
-  const primaryResource = taskExt.resources && typeof taskExt.resources === 'object'
-    ? (taskExt.resources as Record<string, unknown>).primary as Record<string, unknown> | null
-    : null;
 
   // Structured steps — try objects first, fall back to string array
   const rawSteps = taskExt.stepsData ?? task.steps;
@@ -95,7 +92,6 @@ export default function FocusCard({
       })
     : [];
 
-  const hasVideo = primaryResource?.type === 'video' && typeof primaryResource?.url === 'string';
 
   // Motivational quote — prefer whyThisMatters, else generate one
   const quote = whyThisMatters ?? getMotivationalQuote(task.title, typeof taskExt.goalText === 'string' ? taskExt.goalText : undefined);
@@ -148,43 +144,7 @@ export default function FocusCard({
           {dayLabel && `${dayLabel} · `}{typeInfo.label}
         </span>
 
-        {/* Cinema / resource button */}
-        {hasVideo && (
-          <button
-            onClick={() => onStartFocus(task)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 7,
-              padding: '9px 16px',
-              borderRadius: 12,
-              border: '1px solid rgba(255,255,255,0.08)',
-              background: 'rgba(255,255,255,0.02)',
-              backdropFilter: 'blur(20px)',
-              fontSize: 13,
-              fontWeight: 500,
-              color: 'rgba(255,255,255,0.7)',
-              cursor: 'pointer',
-              transition: 'all 0.3s cubic-bezier(0.4,0,0.2,1)',
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.borderColor = 'rgba(124,58,237,0.4)';
-              e.currentTarget.style.background = 'rgba(124,58,237,0.08)';
-              e.currentTarget.style.color = '#c4b5fd';
-              e.currentTarget.style.transform = 'translateY(-1px)';
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
-              e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
-              e.currentTarget.style.color = 'rgba(255,255,255,0.7)';
-              e.currentTarget.style.transform = 'translateY(0)';
-            }}
-          >
-            <Video size={14} strokeWidth={1.8} />
-            Cinema
-          </button>
-        )}
-        {!hasVideo && streak > 0 && (
+        {streak > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <Flame size={13} strokeWidth={2} color="#fbbf24" />
             <span style={{ fontSize: 13, fontWeight: 700, color: '#fbbf24' }}>{streak}</span>
@@ -359,35 +319,6 @@ export default function FocusCard({
         </div>
       )}
 
-      {/* ── Resource chip (non-video) ── */}
-      {primaryResource && !hasVideo && typeof primaryResource.url === 'string' && typeof primaryResource.title === 'string' && (
-        <a
-          href={primaryResource.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '6px 12px 6px 10px',
-            background: 'rgba(255,255,255,0.05)',
-            border: '1px solid rgba(255,255,255,0.09)',
-            borderRadius: 99,
-            fontSize: 12,
-            color: 'rgba(196,181,253,0.75)',
-            textDecoration: 'none',
-            marginBottom: 24,
-            maxWidth: '100%',
-            overflow: 'hidden',
-          }}
-        >
-          <FileText size={11} strokeWidth={2} />
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-            {primaryResource.title}
-          </span>
-          <ExternalLink size={10} strokeWidth={2} style={{ flexShrink: 0, opacity: 0.4 }} />
-        </a>
-      )}
 
       {/* ── Success Criteria ── */}
       {successCriteria && (

@@ -150,7 +150,8 @@ function App() {
                 steps: (content.steps as string[]) ?? [],
                 tips: (content.tips as string[]) ?? [],
                 successCriteria: (content.successCriteria as string) ?? '',
-                resources: content.resources as import('@core/store/useStore').Task['resources'],
+                coachTips: (content.coachTips as string[]) ?? [],
+                reflection: (content.reflection as string) ?? undefined,
                 difficultyRating: t.difficulty_rating as number | undefined,
                 actualDuration: t.actual_duration as number | undefined,
               };
@@ -278,39 +279,41 @@ function App() {
       {step === 4 && <AuthPage key="signin" mode="signin" />}
       {step === 10 && user && <Settings key="settings" />}
 
-    {/* Quick reset button - bottom right corner for development */}
-      <div style={{
-        position: 'fixed',
-        bottom: '16px',
-        right: '16px',
-        zIndex: 9999
-      }}>
-        <button
-          onClick={() => {
-            if (confirm('Reset everything and start fresh?')) {
-              localStorage.clear();
-              window.location.reload();
-            }
-          }}
-          style={{
-            padding: '8px 16px',
-            background: '#ef5350',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            fontSize: '12px',
-            fontWeight: 300,
-            opacity: 0.3,
-            transition: 'opacity 0.2s'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-          onMouseLeave={(e) => e.currentTarget.style.opacity = '0.3'}
-          title="Reset all data (or press Ctrl+Shift+R)"
-        >
-          Reset
-        </button>
-      </div>
+    {/* Quick reset button - bottom right corner (dev only) */}
+      {import.meta.env.DEV && (
+        <div style={{
+          position: 'fixed',
+          bottom: '16px',
+          right: '16px',
+          zIndex: 9999
+        }}>
+          <button
+            onClick={() => {
+              if (confirm('Reset everything and start fresh?')) {
+                localStorage.clear();
+                window.location.reload();
+              }
+            }}
+            style={{
+              padding: '8px 16px',
+              background: '#ef5350',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: 300,
+              opacity: 0.3,
+              transition: 'opacity 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+            onMouseLeave={(e) => e.currentTarget.style.opacity = '0.3'}
+            title="Reset all data (or press Ctrl+Shift+R)"
+          >
+            Reset
+          </button>
+        </div>
+      )}
     </ErrorBoundary>
   );
 }

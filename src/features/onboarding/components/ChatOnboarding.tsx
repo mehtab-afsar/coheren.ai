@@ -14,10 +14,10 @@ import type { GoalCategory } from '@types-app/index';
 
 
 // Import agent system
-import { runOnboardingAgents, generateCompleteRoadmap, generateTaskBatch, getGoalClarifications, runStoneRound2, runStoneCrossValidation, getCurriculumPreview, getPaceCalibration } from '@core/agents';
-import type { BuildingStone, StoneAnswer, Agent1Output, DailyTask, GoalClarificationOutput, StoneRound2Output, CurriculumPreview, PaceCalibration, PaceChoice } from '@core/agents';
+import { runOnboardingAgents, generateCompleteRoadmap, generateTaskBatch, getCurriculumPreview, getPaceCalibration, buildLegacyAgent3Output } from '@core/agents';
+import type { BuildingStone, StoneAnswer, Agent1Output, DailyTask, CurriculumPreview, PaceCalibration, PaceChoice } from '@core/agents';
+import type { AgentRoadmapV2 } from '@core/store/useStore';
 import StoneQuestions from '@features/onboarding/components/StoneQuestions';
-import GoalClarificationStep from '@features/onboarding/components/GoalClarificationStep';
 import StoneProfileConfirmation from '@features/onboarding/components/StoneProfileConfirmation';
 import CurriculumPreviewComponent from '@features/onboarding/components/CurriculumPreview';
 import { syncCompleteRoadmap } from '@lib/database';
@@ -99,16 +99,23 @@ interface ChatOnboardingProps {
 }
 
 export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: ChatOnboardingProps) {
-  // Read initial goal from store (set by landing page)
+  // Read initial goal and user from store
   const initialGoal = useStore((state) => state.initialGoal);
   const setInitialGoal = useStore((state) => state.setInitialGoal);
+  const storeUser = useStore((state) => state.user);
+  const userName = storeUser?.user_metadata?.full_name
+    || storeUser?.email?.split('@')[0]
+    || '';
 
   const [messages, setMessages] = useState<Message[]>(() => {
+    const greeting = userName
+      ? `Hey ${userName} — what are you trying to get better at?`
+      : "What are you trying to get better at?";
     const initMessages: Message[] = [
       {
         id: '1',
         role: 'ai',
-        content: "What are you trying to get better at?",
+        content: greeting,
         timestamp: new Date(),
       },
     ];
@@ -137,14 +144,14 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
   const updateCurrentGoal = useStore((state) => state.updateCurrentGoal);
   const setRoadmap = useStore((state) => state.setRoadmap);
   const setAgentData = useStore((state) => state.setAgentData);
+  const setAgentRoadmapV2 = useStore((state) => state.setAgentRoadmapV2);
   const setTasks = useStore((state) => state.setTasks);
   const checkInTime = useStore((state) => state.checkInTime);
 
-  // Collected data from conversation
+  // Collected data from conversation (name comes from signup — not re-asked)
   const [collectedData, setCollectedData] = useState<{
     goal: string;
     category: GoalCategory | null;
-    name: string;
     energyPattern: string;
     wakeTime: string;
     dailyTime: string;
@@ -155,7 +162,6 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
   }>({
     goal: initialGoal || '',
     category: initialGoal ? detectCategory(initialGoal) : null,
-    name: '',
     energyPattern: '',
     wakeTime: '',
     dailyTime: '',
@@ -167,7 +173,7 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
 
   // Agent system state
   const [onboardingPhase, setOnboardingPhase] = useState<
-    'conversation' | 'analyzing' | 'goal_clarification' | 'stones' | 'stone_round2' | 'stone_confirmation' | 'generating' | 'curriculum_preview'
+    'conversation' | 'analyzing' | 'stones' | 'stone_confirmation' | 'generating' | 'curriculum_preview'
   >('conversation');
   const [goalAnalysis, setGoalAnalysis] = useState<Agent1Output | null>(null);
   const [stones, setStones] = useState<BuildingStone[]>([]);
@@ -176,13 +182,11 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
   // Realism check state
   const [realismAcknowledged, setRealismAcknowledged] = useState(false);
 
-  // Multi-stage validation state
-  const [goalClarifications, setGoalClarifications] = useState<GoalClarificationOutput | null>(null);
+  // Stone answers + profile state
   const [round1Answers, setRound1Answers] = useState<StoneAnswer[]>([]);
-  const [stoneRound2, setStoneRound2] = useState<StoneRound2Output | null>(null);
   const [stoneProfile, setStoneProfile] = useState<import('@core/agents').Agent2ProfileOutput | null>(null);
   const [curriculumPreviewData, setCurriculumPreviewData] = useState<CurriculumPreview | null>(null);
-  const [_agentRoadmapData, setAgentRoadmapData] = useState<import('@core/agents').Agent3Output | null>(null);
+  const [_agentRoadmapData, setAgentRoadmapData] = useState<AgentRoadmapV2 | null>(null);
   const [_paceCalibration, setPaceCalibration] = useState<PaceCalibration | null>(null);
 
   // Auth gate (shown after roadmap generation for unauthenticated users)
@@ -330,7 +334,6 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
             content: `You are a data extraction bot. Analyze the FULL conversation and return ONLY a JSON object.
 
 Extract these fields based on conversation context:
-- name: The person's name (e.g., "I'm John", "My name is Sarah", "Call me Alex")
 - goal: What they want to achieve (e.g., "learn boxing", "get fit", "prepare for UPSC")
 - skillLevel: Their experience level - must be one of: "beginner", "intermediate", or "advanced"
 - category: Type of goal - one of: "Fitness", "Learning", "Exam", "Habit", "Creative", "Hobby"
@@ -342,10 +345,9 @@ Extract these fields based on conversation context:
 CRITICAL RULES:
 1. Use conversation context to understand what each response refers to
 2. If the AI asked "What's your goal?" and user says "boxing", extract goal: "boxing" (NOT name!)
-3. If the AI asked "What's your name?" and user says "John", extract name: "John" (NOT goal!)
-4. If a field is already collected (Current Data shows it), keep it null unless user is correcting it
+3. If a field is already collected (Current Data shows it), keep it null unless user is correcting it
 5. Return ONLY the JSON object, no other text
-6. TURN RULE: This is conversation turn ${turnCountRef.current}. ${turnCountRef.current <= 1 ? 'On turn 1, ONLY extract goal, category, and skillLevel if clearly stated. Do NOT extract timeline, dailyTime, name, or energyPattern — those will be collected via explicit questions.' : 'Extract all fields normally.'}
+6. TURN RULE: This is conversation turn ${turnCountRef.current}. ${turnCountRef.current <= 1 ? 'On turn 1, ONLY extract goal, category, and skillLevel if clearly stated. Do NOT extract timeline, dailyTime, or energyPattern — those will be collected via explicit questions.' : 'Extract all fields normally.'}
 
 Current Data Already Collected: ${JSON.stringify(collectedData)}`
           },
@@ -362,7 +364,6 @@ Current Data Already Collected: ${JSON.stringify(collectedData)}`
         const merged = { ...prev };
 
         // Only update fields if the AI actually found something new and non-null
-        if (newData.name) merged.name = newData.name;
         if (newData.goal) merged.goal = newData.goal;
         if (newData.skillLevel) merged.skillLevel = newData.skillLevel;
         if (newData.timeline) merged.timeline = newData.timeline;
@@ -384,7 +385,6 @@ Current Data Already Collected: ${JSON.stringify(collectedData)}`
         console.table({
           'Collected So Far': {
             Goal: merged.goal || '❌ missing',
-            Name: merged.name || '❌ missing',
             'Skill Level': merged.skillLevel || '❌ missing',
             Timeline: merged.timeline || '❌ missing',
             'Daily Time': merged.dailyTime || '❌ missing',
@@ -418,7 +418,7 @@ Current Data Already Collected: ${JSON.stringify(collectedData)}`
 ---
 CORE GOAL:
 Guide the user through a warm, natural conversation to understand their:
-1. Goal & Name
+1. Goal (what they want to achieve)
 2. Skill Level (beginner to advanced)
 3. Timeline & Daily Time Commitment
 4. Energy Patterns (when they are most productive)
@@ -426,7 +426,7 @@ Guide the user through a warm, natural conversation to understand their:
 COACHING STYLE (Self-Determination Theory):
 - AUTONOMY: Offer suggestions, not commands. Use "You might try" instead of "You must."
 - COMPETENCE: Celebrate their ambition. If they say "I want to learn Boxing," respond with "That's a powerful skill to build! I love the focus on discipline."
-- RELATEDNESS: Use their name once extracted. Be a supportive partner, not a robotic script.
+- RELATEDNESS: ${userName ? `Address the user as ${userName}.` : 'Be warm and personal.'} Be a supportive partner, not a robotic script.
 
 CONVERSATION RULES:
 - Keep responses SHORT (1-3 sentences). People hate walls of text in chat.
@@ -436,7 +436,7 @@ CONVERSATION RULES:
 
 TRANSITION LOGIC:
 Once you feel you have a solid grasp of their goal, timeline, and lifestyle, simply wrap up the thought and tell them you're ready to build the plan.
-(Example: "That gives me everything I need, ${collectedData.name || '[Name]'}! I'm putting the pieces together for your roadmap now...")
+(Example: "That gives me everything I need${userName ? `, ${userName}` : ''}! I'm putting the pieces together for your roadmap now...")
 
 IMPORTANT:
 The system will automatically detect when the data is complete and transition to the next phase. You do not need to use any specific 'magic words' or commands. Just be a helpful coach until the screen changes.`;
@@ -447,8 +447,6 @@ The system will automatically detect when the data is complete and transition to
       if (!collectedData.timeline) nextQuestion = 'their target timeline or deadline (e.g. "3 months", "6 weeks", "by December")';
       else if (!collectedData.dailyTime) nextQuestion = 'how much time per day they can commit (e.g. "30 minutes", "1 hour")';
       else if (!collectedData.skillLevel) nextQuestion = 'their current experience level (beginner / intermediate / advanced)';
-      else if (!collectedData.name) nextQuestion = 'their name';
-      else if (!collectedData.energyPattern) nextQuestion = 'their peak energy time (morning / afternoon / evening)';
 
       // Create the "Whisper"
       let whisper: string;
@@ -546,25 +544,19 @@ The system will automatically detect when the data is complete and transition to
         {
           skillLevel: collectedData.skillLevel || undefined,
           energyPattern: collectedData.energyPattern || undefined,
-          name: collectedData.name || undefined,
           category: collectedData.category || undefined,
         }
       );
 
       setGoalAnalysis(analysis);
-      setStones(identifiedStones.requiredStones);
+      // Cap at exactly 2 stone questions
+      setStones(identifiedStones.requiredStones.slice(0, 2));
 
       // Brief delay for the analyzing transition to be visible
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Check if Agent 1 flagged ambiguity or unrealistic goals → show clarification step
-      const clarifications = getGoalClarifications(analysis);
-      if (clarifications.needsClarification || clarifications.realityCheck?.triggered) {
-        setGoalClarifications(clarifications);
-        setOnboardingPhase('goal_clarification');
-      } else {
-        setOnboardingPhase('stones');
-      }
+      // Always go straight to stone questions — realism validation already handled in chat
+      setOnboardingPhase('stones');
       setIsTyping(false);
       setIsGeneratingPlan(false);
 
@@ -595,7 +587,6 @@ The system will automatically detect when the data is complete and transition to
   useEffect(() => {
     const isReady = !!(
       collectedData.goal &&
-      collectedData.name &&
       collectedData.skillLevel &&
       collectedData.dailyTime &&
       collectedData.timeline
@@ -612,7 +603,7 @@ The system will automatically detect when the data is complete and transition to
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collectedData, onboardingPhase, isGeneratingPlan, realismAcknowledged]);
 
-  // Handler for Round 1 stone questions completion → trigger Round 2
+  // Stone questions complete → extract profile directly → show confirmation
   const handleStoneQuestionsComplete = async (answers: StoneAnswer[]) => {
     setRound1Answers(answers);
 
@@ -625,59 +616,17 @@ The system will automatically detect when the data is complete and transition to
     try {
       const dailyMinutes = parseDailyTimeToMinutes(collectedData.dailyTime);
       const timelineDays = (collectedData.timeline ? calculateDurationInMonths(collectedData.timeline) : 3) * 30;
-
-      // Run preliminary extraction to generate Round 2 follow-ups
-      const round2 = await runStoneRound2(collectedData.goal, timelineDays, dailyMinutes, goalAnalysis, answers);
-      setStoneRound2(round2);
-
-      if (round2.followUpQuestions.length > 0) {
-        setOnboardingPhase('stone_round2');
-      } else {
-        // No follow-ups needed — go straight to full extraction
-        setOnboardingPhase('generating');
-        generateStrategicPlanWithAgents(answers);
-      }
-    } catch {
-      // If Round 2 fails, proceed normally
-      setOnboardingPhase('generating');
-      generateStrategicPlanWithAgents(answers);
-    }
-  };
-
-  // Handler for Round 2 stone follow-up completion → cross-validate → show confirmation
-  const handleStoneRound2Complete = async (round2Answers: StoneAnswer[]) => {
-    if (!stoneRound2 || !goalAnalysis) {
-      setOnboardingPhase('generating');
-      generateStrategicPlanWithAgents(round1Answers);
-      return;
-    }
-
-    // Cross-validate to detect misattributions
-    const crossVal = runStoneCrossValidation(stoneRound2, round2Answers);
-
-    // Run full stone extraction with all answers combined
-    const allAnswers = [...round1Answers, ...round2Answers];
-
-    try {
-      const dailyMinutes = parseDailyTimeToMinutes(collectedData.dailyTime);
-      const timelineDays = (collectedData.timeline ? calculateDurationInMonths(collectedData.timeline) : 3) * 30;
       const { extractStones } = await import('@core/agents');
       const profile = await extractStones(
         { userId: 'temp', goal: collectedData.goal, timeline: timelineDays, dailyTimeAvailable: dailyMinutes },
         goalAnalysis,
-        allAnswers
+        answers
       );
-
-      // Inject cross-validation correction if it improved confidence
-      if (crossVal.confidenceImprovement > 0.05) {
-        profile.stoneProfile.primaryStone = crossVal.correctedPrimary;
-      }
-
       setStoneProfile(profile);
       setOnboardingPhase('stone_confirmation');
     } catch {
       setOnboardingPhase('generating');
-      generateStrategicPlanWithAgents(allAnswers);
+      generateStrategicPlanWithAgents(answers);
     }
   };
 
@@ -688,19 +637,19 @@ The system will automatically detect when the data is complete and transition to
     generateStrategicPlanWithAgents(allAnswers, stoneProfile ?? undefined);
   };
 
-  // User said stone profile doesn't fit → skip confirmation, proceed with raw answers
-  const handleStoneProfileDoesntFit = () => {
+  // User said stone profile doesn't fit → proceed with raw answers (feedback logged)
+  const handleStoneProfileDoesntFit = (_feedback?: string) => {
     setOnboardingPhase('generating');
     generateStrategicPlanWithAgents(round1Answers);
   };
 
   // User selected pace on preview screen → apply calibration and finalize onboarding
-  const handlePaceSelect = async (choice: PaceChoice) => {
+  const handlePaceSelect = async (choice: PaceChoice, _feedback?: string) => {
     const calibration = getPaceCalibration(choice);
     setPaceCalibration(calibration);
 
     const pending = (window as unknown as Record<string, unknown>).__pendingOnboarding as {
-      agentRoadmap: import('@core/agents').Agent3Output;
+      agentRoadmap: AgentRoadmapV2;
       firstTask: DailyTask;
       stoneProfile: import('@core/agents').Agent2ProfileOutput;
       dailyMinutes: number;
@@ -720,7 +669,10 @@ The system will automatically detect when the data is complete and transition to
 
     const { agentRoadmap, firstTask, stoneProfile: sp, dailyMinutes, durationInMonths } = pending;
 
-    // Convert agent roadmap to our existing format
+    // Build legacy Agent3Output for Agent 4 / DB sync (still uses old format)
+    const legacyRoadmap = buildLegacyAgent3Output(agentRoadmap);
+
+    // Convert agent roadmap to our existing UI format using the V2 months structure
     const roadmap = {
       title: collectedData.goal,
       category: collectedData.category!,
@@ -728,10 +680,10 @@ The system will automatically detect when the data is complete and transition to
       dailyTime: collectedData.dailyTime || '30 minutes',
       recommendedTime: collectedData.energyPattern === 'morning' ? '7:00 AM' :
                       collectedData.energyPattern === 'evening' ? '7:00 PM' : '2:00 PM',
-      phases: agentRoadmap.roadmap.phases.map(phase => ({
-        title: phase.phaseName,
-        weeks: `${phase.weeks[0]}-${phase.weeks[phase.weeks.length - 1]}`,
-        description: phase.primaryGoals.join('. ')
+      phases: agentRoadmap.months.map(month => ({
+        title: month.title,
+        weeks: `${month.startWeek}-${month.endWeek}`,
+        description: month.primaryGoals.join('. ')
       })),
       startDate: new Date().toISOString().split('T')[0],
       endDate: new Date(new Date().getTime() + durationInMonths * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -741,7 +693,7 @@ The system will automatically detect when the data is complete and transition to
     };
 
     updateUniversalProfile({
-      name: collectedData.name,
+      name: userName,
       energyPattern: collectedData.energyPattern as 'morning' | 'afternoon' | 'evening' | 'night',
       skillLevel: collectedData.skillLevel || undefined,
       weekendAvailability: '',
@@ -759,7 +711,8 @@ The system will automatically detect when the data is complete and transition to
     });
 
     setRoadmap(roadmap);
-    setAgentData(agentRoadmap, sp);
+    setAgentData(legacyRoadmap, sp);    // legacy format for Agent 4
+    setAgentRoadmapV2(agentRoadmap);    // V2 for Journey/Library views
 
     const inferTaskType = (title: string): 'practice' | 'learning' | 'reflection' => {
       const t = title.toLowerCase();
@@ -783,21 +736,21 @@ The system will automatically detect when the data is complete and transition to
       steps: agentTask.task.steps.map(step => step.instruction),
       tips: agentTask.task.tips,
       successCriteria: agentTask.task.successCriteria.primary,
-      resources: agentTask.task.resources,
+      coachTips: agentTask.task.coachTips ?? [],
     });
 
     const initialTasks = [toStoreTask(firstTask, 1)];
     setTasks(initialTasks);
 
     // Generate days 2-7 in background with calibration applied
-    generateTaskBatch(2, 7, agentRoadmap, sp, dailyMinutes, collectedData.category || undefined, collectedData.skillLevel || 'beginner')
+    generateTaskBatch(2, 7, legacyRoadmap, sp, dailyMinutes, collectedData.category || undefined, collectedData.skillLevel || 'beginner')
       .then((batchTasks: DailyTask[]) => {
         const extraTasks = batchTasks.map((t: DailyTask, i: number) => toStoreTask(t, i + 2));
         const allTasks = [...initialTasks, ...extraTasks];
         setTasks(allTasks);
         const u = useStore.getState().user;
         if (u) {
-          syncCompleteRoadmap(u.id, collectedData.goal, `Generated via AI for ${collectedData.category}`, goalAnalysis!, pending.answers, agentRoadmap, allTasks, sp)
+          syncCompleteRoadmap(u.id, collectedData.goal, `Generated via AI for ${collectedData.category}`, goalAnalysis!, pending.answers, legacyRoadmap, allTasks, sp)
             .catch(() => { /* non-critical */ });
         } else {
           // Value-first funnel: user hasn't signed up yet — update pending sync with full task list
@@ -819,7 +772,7 @@ The system will automatically detect when the data is complete and transition to
       setPendingSyncData({
         goalAnalysisData: goalAnalysis!,
         answers: pending.answers,
-        agentRoadmap,
+        agentRoadmap: legacyRoadmap,
         initialTasksData: initialTasks,
         stoneProfile: sp,
       });
@@ -1066,68 +1019,6 @@ The system will automatically detect when the data is complete and transition to
         </div>
       )}
 
-      {/* Goal Clarification Phase */}
-      {onboardingPhase === 'goal_clarification' && goalClarifications && (
-        <div style={{
-          flex: 1,
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          padding: tokens.spacing.xl,
-          position: 'relative',
-          zIndex: 1,
-        }}>
-          <GoalClarificationStep
-            clarificationOutput={goalClarifications}
-            onComplete={() => {
-              setOnboardingPhase('stones');
-            }}
-          />
-        </div>
-      )}
-
-      {/* Stone Round 2 Phase */}
-      {onboardingPhase === 'stone_round2' && stoneRound2 && stoneRound2.followUpQuestions.length > 0 && (
-        <div style={{
-          flex: 1,
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          padding: tokens.spacing.xl,
-          position: 'relative',
-          zIndex: 1,
-        }}>
-          <div style={{ maxWidth: '700px', width: '100%' }}>
-            <div style={{ marginBottom: tokens.spacing['2xl'], textAlign: 'center' }}>
-              <h2 style={{
-                fontSize: tokens.typography.sizes['3xl'],
-                fontWeight: tokens.typography.weights.light,
-                color: tokens.colors.text.primary,
-                marginBottom: tokens.spacing.md,
-              }}>
-                One more round
-              </h2>
-              <p style={{ fontSize: tokens.typography.sizes.base, color: tokens.colors.text.secondary, lineHeight: 1.6 }}>
-                These help calibrate the difficulty of your tasks
-              </p>
-            </div>
-            <StoneQuestions
-              stones={stoneRound2.followUpQuestions.map(q => ({
-                stoneId: q.id,
-                stoneName: q.resolves,
-                importance: 'medium' as const,
-                reasoning: q.resolves,
-                question: {
-                  text: q.question,
-                  type: q.type,
-                  options: q.options.map(o => ({ value: o.value, label: o.label, impact: { pointsTo: o.pointsTo } })),
-                },
-              }))}
-              onComplete={handleStoneRound2Complete}
-            />
-          </div>
-        </div>
-      )}
 
       {/* Stone Profile Confirmation Phase */}
       {onboardingPhase === 'stone_confirmation' && stoneProfile && (
@@ -1143,7 +1034,7 @@ The system will automatically detect when the data is complete and transition to
           <StoneProfileConfirmation
             stoneProfile={stoneProfile}
             onConfirm={handleStoneProfileConfirmed}
-            onDoesntFit={handleStoneProfileDoesntFit}
+            onDoesntFit={(feedback) => handleStoneProfileDoesntFit(feedback)}
           />
         </div>
       )}

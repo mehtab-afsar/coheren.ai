@@ -5,11 +5,73 @@ import { generateTasksForDay, generateTasksFromAIPlan } from '@shared/utils/task
 import type { User } from '@supabase/supabase-js';
 import { getCurrentUser } from '@lib/supabase';
 import { updateTaskCompletion, updateTaskSkip, updateProfile, saveTaskFeedback, syncDailyTasksToDB } from '@lib/database';
-import type { TaskResource, Agent3Output, Agent2ProfileOutput, DailyTask, TaskStep, AssessmentQuestion, AssessmentResult } from '@types-app/agents.js';
+import type { Agent3Output, Agent2ProfileOutput, DailyTask, TaskStep, AssessmentQuestion, AssessmentResult } from '@types-app/agents.js';
 import { runTaskGenerator } from '@core/agents';
 import { generateFallbackTask } from '@core/agents/fallback-task-generator';
 import { track } from '@lib/analytics';
 import { flags } from '@config/feature-flags';
+
+// ── New hierarchical roadmap types ──────────────────────────────────────────
+export interface WeekDay {
+  day: number;       // absolute day number (1-indexed from goal start)
+  weekDay: number;   // 1-7 within the week
+  type: 'learning' | 'practice' | 'reflection' | 'challenge' | 'retrieval' | 'rest';
+  title: string;
+  theme: string;
+  intensity: number; // 0-1
+  focusArea: string;
+}
+
+export interface WeekPlan {
+  week: number;      // absolute week number (1-indexed)
+  title: string;     // e.g. "Basics of Python"
+  theme: string;     // e.g. "Variables, types, basic I/O"
+  startDay: number;
+  endDay: number;
+  status: 'completed' | 'current' | 'tentative' | 'locked';
+  days: WeekDay[];   // populated for current + completed weeks; empty for tentative
+  recalibratedFrom?: number; // which week's feedback generated this week
+}
+
+export interface MonthPlan {
+  month: number;     // 1-indexed
+  title: string;     // e.g. "Foundation"
+  phaseName: string;
+  startWeek: number;
+  endWeek: number;
+  startDay: number;
+  endDay: number;
+  primaryGoals: string[];
+  scienceRationale: string;
+  weeks: WeekPlan[];
+}
+
+export interface AgentRoadmapV2 {
+  totalDays: number;
+  totalWeeks: number;
+  totalMonths: number;
+  domainPedagogy: string;
+  frameworkName: string;    // e.g. "Spaced Repetition — Ebbinghaus Method"
+  frameworkReason: string;  // why chosen for this user's stones + domain
+  frameworkScience: string; // 2-3 sentences from RAG knowledge base
+  frameworkSources: Array<{ title: string; author: string; note: string }>;
+  months: MonthPlan[];
+  progressionCurve: Record<string, { intensity: number; volume: string }>;
+  stoneModificationSummary: string;
+  modifiers_from_stones: Record<string, { removed: string[]; added: string[]; modified: string[] }>;
+}
+
+export interface WeeklyCheckIn {
+  weekNumber: number;
+  completedAt: string;
+  answers: {
+    pacing: string;
+    hardTopics: string;
+    taskTypesFeedback: string;
+    raw: string[];
+  };
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 export interface Task {
   id: string;
@@ -31,11 +93,8 @@ export interface Task {
   tips?: string[]; // helpful tips
   successCriteria?: string; // what success looks like
   checkInTime?: string; // scheduled time
-  // Learning resources
-  resources?: {
-    primary: TaskResource | null;
-    supplementary: TaskResource[];
-  };
+  coachTips?: string[];
+  reflection?: string;
   // Agent 5 (Re-calibrator) feedback fields
   difficultyRating?: number; // 1-5 scale (1=easy, 5=very hard)
   actualDuration?: number; // actual minutes taken
@@ -93,6 +152,9 @@ interface AppStore extends OnboardingState {
   roadmap: Roadmap | null;
   // Persisted agent data for ongoing task generation
   agentRoadmap: Agent3Output | null;
+  agentRoadmapV2: AgentRoadmapV2 | null;
+  weeklyCheckIns: WeeklyCheckIn[];
+  pendingWeeklyCheckIn: number | null;
   stoneProfile: Agent2ProfileOutput | null;
   tasks: Task[];
   currentDay: number;
@@ -115,6 +177,10 @@ interface AppStore extends OnboardingState {
   setRoadmap: (roadmap: Roadmap) => void;
   setAgentData: (agentRoadmap: Agent3Output, stoneProfile: Agent2ProfileOutput) => void;
   updateAgentRoadmap: (updater: (roadmap: Agent3Output) => Agent3Output) => void;
+  setAgentRoadmapV2: (roadmap: AgentRoadmapV2) => void;
+  updateWeek: (weekNumber: number, updatedWeek: WeekPlan) => void;
+  addWeeklyCheckIn: (checkIn: WeeklyCheckIn) => void;
+  setPendingWeeklyCheckIn: (weekNumber: number | null) => void;
   setTasks: (tasks: Task[]) => void;
   completeTask: (taskId: string) => Promise<void>;
   setTaskFeedback: (taskId: string, difficultyRating: number, feedbackTags?: string[], userComment?: string, actualDuration?: number) => Promise<void>;
@@ -145,6 +211,9 @@ export const useStore = create<AppStore>()(
       checkInTime: '07:00',
       roadmap: null,
       agentRoadmap: null,
+      agentRoadmapV2: null,
+      weeklyCheckIns: [],
+      pendingWeeklyCheckIn: null,
       stoneProfile: null,
       tasks: [],
       currentDay: 1,
@@ -193,6 +262,24 @@ export const useStore = create<AppStore>()(
         if (!state.agentRoadmap) return state;
         return { agentRoadmap: updater(state.agentRoadmap) };
       }),
+
+      setAgentRoadmapV2: (roadmap: AgentRoadmapV2) => set({ agentRoadmapV2: roadmap }),
+
+      updateWeek: (weekNumber: number, updatedWeek: WeekPlan) =>
+        set((state) => {
+          if (!state.agentRoadmapV2) return state;
+          const months = state.agentRoadmapV2.months.map(m => ({
+            ...m,
+            weeks: m.weeks.map(w => w.week === weekNumber ? { ...updatedWeek } : w),
+          }));
+          return { agentRoadmapV2: { ...state.agentRoadmapV2, months } };
+        }),
+
+      addWeeklyCheckIn: (checkIn: WeeklyCheckIn) =>
+        set((state) => ({ weeklyCheckIns: [...state.weeklyCheckIns, checkIn] })),
+
+      setPendingWeeklyCheckIn: (weekNumber: number | null) =>
+        set({ pendingWeeklyCheckIn: weekNumber }),
 
       setTasks: (tasks) => set({ tasks }),
 
@@ -499,7 +586,8 @@ export const useStore = create<AppStore>()(
                 steps: agentTask.task.steps.map((s: TaskStep) => s.instruction),
                 tips: agentTask.task.tips,
                 successCriteria: agentTask.task.successCriteria.primary,
-                resources: agentTask.task.resources,
+                coachTips: agentTask.task.coachTips ?? [],
+                reflection: agentTask.task.reflection,
                 // Assessment data
                 assessmentQuestions: assessmentData.assessmentQuestions,
               };
@@ -551,7 +639,7 @@ export const useStore = create<AppStore>()(
                 steps: fallbackTask.task.steps.map((s: TaskStep) => s.instruction),
                 tips: fallbackTask.task.tips,
                 successCriteria: fallbackTask.task.successCriteria.primary,
-                resources: fallbackTask.task.resources,
+                coachTips: fallbackTask.task.coachTips ?? [],
               };
               set((s) => ({
                 tasks: s.tasks
@@ -623,6 +711,9 @@ export const useStore = create<AppStore>()(
         currentGoal: {},
         roadmap: null,
         agentRoadmap: null,
+        agentRoadmapV2: null,
+        weeklyCheckIns: [],
+        pendingWeeklyCheckIn: null,
         stoneProfile: null,
         tasks: [],
         currentDay: 1,

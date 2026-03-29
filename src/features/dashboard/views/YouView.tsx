@@ -4,6 +4,7 @@ import { useStore } from '@core/store/useStore';
 import { tokens, text, card } from '@core/design-system';
 import { useBreakpoint } from '@hooks/useBreakpoint';
 import { updateProfile } from '@lib/database';
+import { ap } from '@core/design-system/appleTokens';
 
 type YouTab = 'you' | 'settings';
 
@@ -85,9 +86,6 @@ export default function YouView() {
 
   const stones = stoneProfile?.stoneProfile?.stones || [];
 
-  const TAB_ACTIVE_BG = `${tokens.colors.primary}12`;
-  const TAB_ACTIVE_COLOR = tokens.colors.primary;
-  const TAB_INACTIVE_COLOR = tokens.colors.text.tertiary;
 
   // Your Setup key-value rows
   const setupRows = [
@@ -99,14 +97,13 @@ export default function YouView() {
   ];
 
   return (
-    <div>
+    <div style={{ fontFamily: ap.font }}>
       {/* ── Header ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.xl }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <h1 style={{
-          flex: 1,
-          fontSize: tokens.typography.sizes['2xl'],
-          fontWeight: tokens.typography.weights.semibold,
-          color: tokens.colors.text.primary,
+          fontSize: 26,
+          fontWeight: 700,
+          color: ap.textPrimary,
           letterSpacing: '-0.03em',
           margin: 0,
         }}>
@@ -114,11 +111,10 @@ export default function YouView() {
         </h1>
         <span style={{
           display: 'inline-flex', alignItems: 'center',
-          padding: '3px 10px',
-          background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-          borderRadius: '99px', fontSize: '11px',
-          fontWeight: tokens.typography.weights.medium, color: '#fff',
-          letterSpacing: '0.02em', boxShadow: '0 2px 8px rgba(124,58,237,0.35)', flexShrink: 0,
+          padding: '3px 9px', borderRadius: 6,
+          fontSize: 11, fontWeight: 600,
+          color: ap.textSecondary, backgroundColor: ap.surfaceAlt,
+          fontFamily: ap.font,
         }}>
           Day {currentDay}
         </span>
@@ -126,64 +122,62 @@ export default function YouView() {
 
       {/* ── Identity Hero Card ── */}
       <div style={{
-        background: 'linear-gradient(135deg, #1e0a3c 0%, #2d1060 50%, #1a0a2e 100%)',
-        borderRadius: tokens.borderRadius.xl,
-        padding: tokens.spacing['2xl'],
-        marginBottom: tokens.spacing.xl,
-        boxShadow: '0 8px 32px rgba(124,58,237,0.25), 0 0 0 1px rgba(167,139,250,0.12)',
-        position: 'relative' as const, overflow: 'hidden' as const,
+        backgroundColor: ap.surface,
+        borderRadius: 14,
+        border: `1px solid ${ap.border}`,
+        boxShadow: ap.shadow,
+        padding: '18px 20px',
+        marginBottom: 20,
       }}>
-        <div style={{ position: 'absolute', top: '-20%', right: '-10%', width: '220px', height: '220px', background: 'radial-gradient(circle, rgba(167,139,250,0.1) 0%, transparent 70%)', pointerEvents: 'none' }} />
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.xl, position: 'relative' as const }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{
-            width: 60, height: 60, borderRadius: '50%', flexShrink: 0,
-            background: 'linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%)',
-            border: '2px solid rgba(167,139,250,0.35)',
+            width: 46, height: 46, borderRadius: 12, flexShrink: 0,
+            background: `linear-gradient(135deg, ${ap.accent}, #8B7CF6)`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 22, fontWeight: 700, color: '#fff', letterSpacing: '-0.02em',
-            boxShadow: '0 4px 16px rgba(124,58,237,0.4)',
+            fontSize: 16, fontWeight: 700, color: '#fff',
           }}>
             {initials}
           </div>
 
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h2 style={{
-              fontSize: 'clamp(17px, 5vw, 22px)',
-              fontWeight: tokens.typography.weights.semibold,
-              color: '#f3e8ff', letterSpacing: '-0.025em', margin: '0 0 4px', lineHeight: 1.2,
+            <div style={{
+              fontSize: 16, fontWeight: 700, color: ap.textPrimary,
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
             }}>
               {universalProfile.name || 'Welcome'}
-            </h2>
-            <p style={{
-              fontSize: tokens.typography.sizes.sm, color: 'rgba(196,181,253,0.65)', margin: 0,
-              lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
-            }}>
-              Day {currentDay} of your {goalTitle.toLowerCase()} journey
-            </p>
+            </div>
+            <div style={{ fontSize: 12, color: ap.textTertiary, marginTop: 2 }}>
+              Day {currentDay} · {goalTitle}
+            </div>
+            <div style={{ marginTop: 6 }}>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center',
+                padding: '3px 9px', borderRadius: 6,
+                fontSize: 11, fontWeight: 600,
+                color: ap.streak, backgroundColor: ap.streakSoft,
+                fontFamily: ap.font,
+              }}>
+                🔥 {streak} days
+              </span>
+            </div>
           </div>
-        </div>
-
-        {/* Contextual line */}
-        <div style={{ marginTop: tokens.spacing.lg, paddingTop: tokens.spacing.md, borderTop: '1px solid rgba(167,139,250,0.12)', position: 'relative' as const }}>
-          <p style={{ fontSize: 12, color: 'rgba(196,181,253,0.55)', margin: 0, fontStyle: 'italic' }}>
-            Day {currentDay} — {streak > 0 ? `${streak}-day streak active` : 'Start your streak today'}
-          </p>
         </div>
       </div>
 
-      {/* Tab bar */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: tokens.spacing['2xl'], backgroundColor: tokens.colors.gray[50], borderRadius: tokens.borderRadius.md, padding: 4, width: 'fit-content' }}>
-        {([['you', 'You'], ['settings', 'Settings']] as [YouTab, string][]).map(([tab, label]) => (
-          <button key={tab} onClick={() => setActiveTab(tab)} style={{
-            padding: '7px 18px', borderRadius: tokens.borderRadius.sm, border: 'none', cursor: 'pointer',
-            fontSize: tokens.typography.sizes.sm,
-            fontWeight: activeTab === tab ? tokens.typography.weights.medium : tokens.typography.weights.light,
-            backgroundColor: activeTab === tab ? TAB_ACTIVE_BG : 'transparent',
-            color: activeTab === tab ? TAB_ACTIVE_COLOR : TAB_INACTIVE_COLOR,
-            transition: 'all 150ms ease', letterSpacing: activeTab === tab ? '-0.01em' : 'normal',
-          }}>
+      {/* Segmented Control */}
+      <div style={{
+        display: 'flex', padding: 2, borderRadius: 9,
+        backgroundColor: ap.surfaceAlt, marginBottom: 20,
+      }}>
+        {([['you', 'Profile'], ['settings', 'Settings']] as [YouTab, string][]).map(([tab, label]) => (
+          <button key={tab} onClick={() => setActiveTab(tab)}
+            style={{
+              flex: 1, padding: '7px 0', borderRadius: 7, border: 'none', cursor: 'pointer',
+              fontSize: 13, fontWeight: 600, fontFamily: ap.font,
+              backgroundColor: activeTab === tab ? ap.surface : 'transparent',
+              color: activeTab === tab ? ap.textPrimary : ap.textTertiary,
+              boxShadow: activeTab === tab ? '0 1px 3px rgba(0,0,0,.08)' : 'none',
+            }}>
             {label}
           </button>
         ))}

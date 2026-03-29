@@ -20,6 +20,42 @@ import type {
   Agent5Input,
   Agent5Output,
 } from '@types-app/agents';
+import type { AgentRoadmapV2, WeekDay } from '@core/store/useStore';
+
+// ─── New output types for weekly recalibration ────────────────────────────────
+
+export interface RecalibratedWeek {
+  weekNumber: number;    // the NEW week being generated (completedWeek + 1)
+  title: string;
+  theme: string;
+  startDay: number;
+  endDay: number;
+  days: WeekDay[];       // full 7 days for the new week
+  rationale: string;     // why these adjustments
+  personalizedMessage: string;
+  paceAdjustment: 'slow-down' | 'maintain' | 'accelerate';
+}
+
+export interface Agent5WeeklyOutput {
+  checkpointAnalysis: CheckpointAnalysis;
+  recalibratedWeek: RecalibratedWeek;
+}
+
+// Extended input for weekly cycle
+export interface Agent5WeeklyInput {
+  context: { goal: string; timeline: number; dailyMinutes: number };
+  roadmap: AgentRoadmapV2;
+  stoneProfile: import('@types-app/agents').Agent2ProfileOutput;
+  completedTasks: CompletedTaskFeedback[];
+  currentDay: number;
+  weekNumber: number;
+  weeklyCheckInAnswers?: {
+    pacing: string;
+    hardTopics: string;
+    taskTypesFeedback: string;
+    raw: string[];
+  };
+}
 // Minimal interface to avoid circular import with @core/store/useStore
 interface Task {
   day?: number;
@@ -463,4 +499,220 @@ export function convertToFeedback(tasks: Task[]): CompletedTaskFeedback[] {
     skipped: task.skipped,
     skipReason: task.skipReason
   }));
+}
+
+// ============================================================
+// WEEKLY RECALIBRATION (new — replaces 14-day sprint model)
+// ============================================================
+
+const AGENT5_WEEKLY_SYSTEM_PROMPT = `You are Agent 5: The Recalibrator — a performance-aware curriculum coach.
+
+Your job: analyse a pre-computed performance snapshot and weekly check-in answers to produce a stone-aware, data-driven plan for the NEXT WEEK (7 days).
+
+## Recalibration Statuses
+- ACCELERATE — user is ahead; compress timeline, introduce challenge
+- MAINTAIN — on track; preserve structure, add variety
+- SIMPLIFY — struggling technically; reduce scope, add scaffolding
+- RECOVER — burnout / skip streak detected; protect motivation, shrink load
+
+## Core Rules
+1. The STATUS is provided — trust it. Your job is to apply it, not re-derive it.
+2. The Stone Directive is provided — it must be reflected in the week plan and personalizedMessage.
+3. If weekly check-in says "too fast" → reduce intensity regardless of completion rate.
+4. If specific topics were hard → add more practice on those areas in the new week.
+5. ALWAYS generate exactly 7 days. Day 7 is ALWAYS type "rest".
+6. Never skip foundational skills — adjust PACE, not CONTENT.
+7. personalizedMessage must be warm, second-person, concrete, and 2–3 sentences.
+8. Return ONLY valid JSON. No markdown, no code blocks.`;
+
+export async function recalibrateWeek(input: Agent5WeeklyInput): Promise<Agent5WeeklyOutput> {
+  const { context, roadmap, stoneProfile, completedTasks, currentDay, weekNumber, weeklyCheckInAnswers } = input;
+
+  // Pre-compute signals
+  const signals = computeSignals(completedTasks, context.dailyMinutes);
+  const { status } = signals;
+
+  // Stone directive
+  const primaryStone = stoneProfile.stoneProfile.primaryStone;
+  const stoneDirective = STONE_RECALIBRATION_MATRIX[primaryStone]?.[status] ??
+    `Apply ${status} recalibration strategy for a learner with ${primaryStone} stone.`;
+
+  // RAG fetch for recovery science
+  let ragContext = '';
+  if (status === 'SIMPLIFY' || status === 'RECOVER') {
+    try {
+      const query = status === 'RECOVER'
+        ? `burnout recovery habit formation ${context.goal}`
+        : `learning plateau difficulty reduction scaffolding ${context.goal}`;
+      const ragString = await retrieveKnowledgeSemantic({ query, matchCount: 3 });
+      ragContext = ragString ? `\n## Recovery Science (RAG)\n${ragString}` : '';
+    } catch {
+      // non-fatal
+    }
+  }
+
+  // Roadmap summary
+  const roadmapSummary = roadmap.months.map(m =>
+    `Month ${m.month} "${m.title}": Weeks ${m.startWeek}–${m.endWeek} — ${m.primaryGoals.slice(0, 2).join(', ')}`
+  ).join('\n');
+
+  const nextStart = currentDay + 1;
+  const nextEnd = Math.min(currentDay + 7, roadmap.totalDays);
+  const nextWeekNumber = weekNumber + 1;
+
+  const checkInSection = weeklyCheckInAnswers
+    ? `
+USER'S WEEK ${weekNumber} CHECK-IN ANSWERS:
+- How pacing felt: "${weeklyCheckInAnswers.pacing}"
+- What felt hard: "${weeklyCheckInAnswers.hardTopics}"
+- Task types feedback: "${weeklyCheckInAnswers.taskTypesFeedback}"
+
+Use these qualitative answers alongside performance signals. If pacing was "too fast" → reduce intensity regardless of completion rate. If specific topics were hard → add more practice on those areas in the new week.
+`
+    : '';
+
+  const userPrompt = `## Weekly Recalibration Request — Week ${nextWeekNumber}
+
+### Learner
+- Goal: ${context.goal}
+- Day: ${currentDay} of ${context.timeline}
+- Daily budget: ${context.dailyMinutes} min
+- Completed Week: ${weekNumber}
+
+### Roadmap (summary)
+${roadmapSummary}
+
+### Stone Profile
+- Archetype: ${stoneProfile.stoneProfile.userArchetype}
+- Primary stone: ${primaryStone}
+- All stones: ${stoneProfile.stoneProfile.stones.map(s => `${s.type} (${s.severity})`).join(', ')}
+- Agent 5 note: ${stoneProfile.stoneProfile.agent5Note}
+
+### Performance Signals (last 7 days)
+- STATUS: **${status}**
+- Completion rate: ${signals.completionRate.toFixed(1)}%  (${signals.completedCount}/${signals.totalTasks} tasks)
+- Avg difficulty: ${signals.avgDifficulty.toFixed(2)}/5
+- Consecutive skips (max streak): ${signals.consecutiveSkips}
+- Struggling areas (rated 4-5): ${signals.strugglingAreas.join(', ') || 'none'}
+- Mastering areas (rated 1-2): ${signals.masteringAreas.join(', ') || 'none'}
+
+### Stone Directive for ${status}
+${stoneDirective}
+${ragContext}
+${checkInSection}
+
+### Task
+Generate a recalibrated week plan for Days ${nextStart}–${nextEnd} (Week ${nextWeekNumber}).
+Map STATUS to: ACCELERATE→excelling, MAINTAIN→on-track, SIMPLIFY→struggling, RECOVER→struggling.
+Map paceAdjustment: ACCELERATE→accelerate, MAINTAIN→maintain, SIMPLIFY/RECOVER→slow-down.
+Return JSON only.
+
+OUTPUT FORMAT — return ONLY valid JSON:
+{
+  "checkpointAnalysis": {
+    "checkpointDay": ${currentDay},
+    "overallMastery": "struggling|on-track|excelling",
+    "strugglingAreas": ["..."],
+    "masteringAreas": ["..."],
+    "paceAdjustment": "slow-down|maintain|accelerate",
+    "motivationalInsights": "...",
+    "recommendations": ["..."],
+    "nextSprintFocus": "..."
+  },
+  "recalibratedWeek": {
+    "weekNumber": ${nextWeekNumber},
+    "title": "<specific week title>",
+    "theme": "<what this week focuses on>",
+    "startDay": ${nextStart},
+    "endDay": ${nextEnd},
+    "paceAdjustment": "slow-down|maintain|accelerate",
+    "rationale": "<why these adjustments based on signals + check-in>",
+    "personalizedMessage": "<warm 2-3 sentence message to the user>",
+    "days": [
+      { "day": ${nextStart}, "weekDay": 1, "type": "learning", "title": "...", "theme": "...", "intensity": 0.3, "focusArea": "..." },
+      { "day": ${nextStart + 1}, "weekDay": 2, "type": "practice", "title": "...", "theme": "...", "intensity": 0.35, "focusArea": "..." },
+      { "day": ${nextStart + 2}, "weekDay": 3, "type": "practice", "title": "...", "theme": "...", "intensity": 0.4, "focusArea": "..." },
+      { "day": ${nextStart + 3}, "weekDay": 4, "type": "reflection", "title": "...", "theme": "...", "intensity": 0.2, "focusArea": "..." },
+      { "day": ${nextStart + 4}, "weekDay": 5, "type": "practice", "title": "...", "theme": "...", "intensity": 0.45, "focusArea": "..." },
+      { "day": ${nextStart + 5}, "weekDay": 6, "type": "challenge", "title": "...", "theme": "...", "intensity": 0.5, "focusArea": "..." },
+      { "day": ${nextEnd}, "weekDay": 7, "type": "rest", "title": "Rest & Consolidation", "theme": "Active rest", "intensity": 0.1, "focusArea": "recovery" }
+    ]
+  }
+}`;
+
+  const { content: response } = await callReasoning({
+    messages: [
+      { role: 'system', content: AGENT5_WEEKLY_SYSTEM_PROMPT },
+      { role: 'user', content: userPrompt }
+    ],
+    temperature: 0.3,
+    max_tokens: 4000,
+    response_format: { type: 'json_object' }
+  });
+  if (!response) throw new Error('Agent 5 Weekly: returned no response');
+
+  const parsed = JSON.parse(response) as Record<string, unknown>;
+
+  // Normalize checkpointAnalysis
+  const ca = (parsed.checkpointAnalysis as Record<string, unknown>) ?? {};
+  const checkpointAnalysis: CheckpointAnalysis = {
+    checkpointDay: typeof ca.checkpointDay === 'number' ? ca.checkpointDay : currentDay,
+    overallMastery: (ca.overallMastery as CheckpointAnalysis['overallMastery']) ?? 'on-track',
+    strugglingAreas: Array.isArray(ca.strugglingAreas) ? ca.strugglingAreas as string[] : signals.strugglingAreas,
+    masteringAreas: Array.isArray(ca.masteringAreas) ? ca.masteringAreas as string[] : signals.masteringAreas,
+    paceAdjustment: (ca.paceAdjustment as CheckpointAnalysis['paceAdjustment']) ?? 'maintain',
+    motivationalInsights: typeof ca.motivationalInsights === 'string' ? ca.motivationalInsights : '',
+    recommendations: Array.isArray(ca.recommendations) ? ca.recommendations as string[] : [],
+    nextSprintFocus: typeof ca.nextSprintFocus === 'string' ? ca.nextSprintFocus : '',
+  };
+
+  // Normalize recalibratedWeek
+  const rw = (parsed.recalibratedWeek as Record<string, unknown>) ?? {};
+  const validDayTypes = ['learning', 'practice', 'reflection', 'challenge', 'retrieval', 'rest'] as const;
+  const rawDays = Array.isArray(rw.days) ? rw.days : [];
+  const days: WeekDay[] = rawDays.map((d: unknown, di: number) => {
+    const day = (typeof d === 'object' && d !== null ? d : {}) as Record<string, unknown>;
+    return {
+      day:       typeof day.day       === 'number' ? day.day       : nextStart + di,
+      weekDay:   typeof day.weekDay   === 'number' ? day.weekDay   : di + 1,
+      type:      (validDayTypes as readonly string[]).includes(day.type as string)
+        ? (day.type as WeekDay['type'])
+        : (di === 6 ? 'rest' : 'practice'),
+      title:     typeof day.title     === 'string' ? day.title     : `Day ${di + 1}`,
+      theme:     typeof day.theme     === 'string' ? day.theme     : '',
+      intensity: typeof day.intensity === 'number' ? Math.min(1, Math.max(0, day.intensity)) : (di === 6 ? 0.1 : 0.35),
+      focusArea: typeof day.focusArea === 'string' ? day.focusArea : (di === 6 ? 'recovery' : 'general'),
+    };
+  });
+
+  // Ensure 7 days minimum and enforce rest on day 7
+  while (days.length < 7) {
+    const di = days.length;
+    days.push({
+      day: nextStart + di,
+      weekDay: di + 1,
+      type: di === 6 ? 'rest' : 'practice',
+      title: di === 6 ? 'Rest & Consolidation' : `Day ${di + 1}`,
+      theme: di === 6 ? 'Active rest' : '',
+      intensity: di === 6 ? 0.1 : 0.3,
+      focusArea: di === 6 ? 'recovery' : 'general',
+    });
+  }
+  if (days[6]) {
+    days[6] = { ...days[6], type: 'rest', intensity: Math.min(days[6].intensity, 0.2) };
+  }
+
+  const recalibratedWeek: RecalibratedWeek = {
+    weekNumber:          typeof rw.weekNumber         === 'number' ? rw.weekNumber         : nextWeekNumber,
+    title:               typeof rw.title              === 'string' ? rw.title              : `Week ${nextWeekNumber}`,
+    theme:               typeof rw.theme              === 'string' ? rw.theme              : '',
+    startDay:            typeof rw.startDay           === 'number' ? rw.startDay           : nextStart,
+    endDay:              typeof rw.endDay             === 'number' ? rw.endDay             : nextEnd,
+    paceAdjustment:      (rw.paceAdjustment as RecalibratedWeek['paceAdjustment']) ?? 'maintain',
+    rationale:           typeof rw.rationale          === 'string' ? rw.rationale          : '',
+    personalizedMessage: typeof rw.personalizedMessage === 'string' ? rw.personalizedMessage : '',
+    days,
+  };
+
+  return { checkpointAnalysis, recalibratedWeek };
 }

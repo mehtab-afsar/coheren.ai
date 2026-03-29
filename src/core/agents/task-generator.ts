@@ -25,8 +25,6 @@ import type {
   AssessmentQuestion,
 } from '@types-app/agents';
 import { callEconomy, callReasoning } from '@lib/ai-router';
-import { matchTaskToResources } from '@lib/resourceMatcher';
-import { getResourcesForGoal, parseDuration } from '@lib/resourceLibrary';
 import { retrieveKnowledgeSemantic } from '@core/rag/semantic-retriever';
 import { planSession, serializeBlueprint } from './session-planner';
 
@@ -208,7 +206,7 @@ ${stoneRules || 'No special delivery adjustments required.'}
 ── DOMAIN + STONE TIEBREAKER ──
 If domain is Career AND FearOfFailure is an active stone:
 - KEEP the Experiment framing in the title (e.g. "Experiment: Write LinkedIn About section").
-- successCriteria.primary MUST name a specific deliverable — even a rough one counts.
+- successCriteria must name a specific deliverable — even a rough one counts.
   Examples: "About section written (quality is irrelevant, existence is the goal)",
             "Three job titles researched and noted down", "Email draft saved in drafts folder".
 - Do NOT use open-ended criteria such as "just try it" or "see what happens".
@@ -216,80 +214,52 @@ If domain is Career AND FearOfFailure is an active stone:
 If domain is Financial AND FearOfFailure is an active stone:
 - ALL steps MUST be labeled "(Simulation)" — zero real-money action in this session.
 - Title starts with "Experiment:" (e.g. "Experiment: Paper-Trade Your First ETF Purchase").
-- successCriteria.primary measures understanding, not financial outcome:
-  e.g. "You're done when you've completed the simulation and written one thing you noticed — there's no wrong answer."
-- Add a "Safety Net" tip as the final tip: "This is a simulation. No real money will move. Your only job is to notice how the process feels."
-- coaching_cue must reinforce that observation is the goal, not profit.
+- successCriteria measures understanding, not financial outcome.
+- Add a "Safety Net" coachTip as the final tip: "This is a simulation. No real money will move. Your only job is to notice how the process feels."
 
 If domain is Financial AND ProcrastinationPattern is an active stone:
 - Step 1 MUST be a concrete platform/tool ACTION — not a video or reading step.
-  e.g. "Open your paper-trading account (or Investopedia Stock Simulator) and navigate to the search bar." — zero setup reading allowed.
 - Step 2 is a ≤10-min simulation action before any learning content.
 - Remove ALL standalone "watch/read X" steps — any learning must be embedded inside action steps as brief parenthetical notes.
-- Add an implementation intention as the final tip: "If I feel the urge to research more first, I will do step 1 anyway for just 2 minutes."
+- Add an implementation intention as the final coachTip.
 
 If domain is Financial AND Overcommitment is an active stone:
 - Any real-money step must specify the minimum viable amount: "Use no more than $5 or 1% of your planned budget — whichever is smaller."
-- Add a hard-stop tip: "One action per session. Close the platform after completing step [N]. More moves do not mean more progress."
+- Add a hard-stop coachTip: "One action per session. Close the platform after completing step [N]. More moves do not mean more progress."
 
 ── GLOBAL RULES ──
-1. estimatedMinutes ≤ ${dailyTimeAvailable}. Never exceed the daily time budget.
+1. duration (minutes) ≤ ${dailyTimeAvailable}. Never exceed the daily time budget.
 2. Steps must be specific and actionable — no vague instructions ("practice X" → "do 3×10 reps of X with a 90-second rest").
 3. Every step has a duration (e.g., "10 minutes", "2 sets of 8 reps").
-4. Include a Cinema Mode resource: a REAL, embeddable YouTube video URL (https://www.youtube.com/watch?v=VIDEO_ID) from a specific well-known educational channel you know. Set watchFrom/watchTo to the exact segment relevant to this task. The video ID must be a real 11-character YouTube video ID — do NOT use search URLs.
-5. successCriteria.primary must be completion-based — not "do it perfectly" but "do it the specified number of times."
-6. whyThisMatters connects to the original goal, not just the phase theme.
+4. NO YouTube links, NO external URLs, NO "go watch this video". All content is self-contained.
+5. For learning tasks: explain the concept inline with examples. The user must understand it without going anywhere else.
+6. For practice tasks: describe the exercise precisely. The user must know exactly what to do.
+7. successCriteria must be completion-based — not "do it perfectly" but "do it the specified number of times."
+8. coachTips come from the RAG science context provided — cite the framework/principle.
 
-Return ONLY valid JSON in this exact schema:
+OUTPUT FORMAT — return ONLY valid JSON:
 {
   "day": <number>,
-  "phase": <number>,
   "week": <number>,
+  "month": <number>,
   "task": {
     "title": "<action-oriented, specific>",
-    "description": "<one sentence>",
-    "estimatedMinutes": <number>,
+    "type": "<learning|practice|reflection|challenge|retrieval|rest>",
+    "duration": <number in minutes>,
+    "description": "<2-3 paragraphs explaining the concept OR describing the exercise. For learning tasks: teach the concept inline with examples. For practice tasks: describe exactly what the user will do. For reflection tasks: pose a thoughtful question. NO external links. NO 'go watch this video'. All content is self-contained.>",
     "steps": [
       {
         "stepNumber": 1,
         "instruction": "<imperative verb + specific action>",
         "duration": "<time or rep count>",
-        "details": "<optional extra context>",
-        "resource": {
-          "type": "video",
-          "url": "https://www.youtube.com/watch?v=<REAL_VIDEO_ID>",
-          "timestamp": "<e.g. 1:30–4:00>",
-          "focusPoints": ["<coaching cue 1>", "<coaching cue 2>"]
-        }
+        "tip": "<optional coaching cue>"
       }
     ],
-    "tips": ["<tip 1>", "<tip 2>", "<tip 3>"],
-    "successCriteria": {
-      "primary": "<completion-based>",
-      "bonus": "<optional stretch goal>"
-    },
-    "whyThisMatters": "<2 sentences connecting to original goal>",
-    "commonMistakes": ["<mistake 1>", "<mistake 2>"],
-    "buildingOn": ["<Day X: skill>"],
-    "nextUp": "<one sentence preview of tomorrow>",
+    "coachTips": ["<tip 1 from RAG knowledge>", "<tip 2 stone-aware>", "<tip 3>"],
+    "successCriteria": "<how the user knows they are done — completion-based, never quality-based>",
+    "reflection": "<optional end-of-task question>",
     "adaptations_applied": {
-      "<StoneType>": "<how this stone changed this specific task>"
-    },
-    "resources": {
-      "primary": {
-        "type": "video",
-        "title": "<specific video title from a real YouTube video>",
-        "url": "https://www.youtube.com/watch?v=<REAL_11_CHAR_VIDEO_ID>",
-        "platform": "YouTube",
-        "channel": "<channel name, e.g. JustinGuitar / freeCodeCamp / PsycheTruth>",
-        "duration": "<total video length, e.g. 12:34>",
-        "description": "<what this video teaches>",
-        "why": "<why this exact segment is perfect for this day's task>",
-        "watchFrom": "<MM:SS — start of relevant segment, e.g. 2:30>",
-        "watchTo": "<MM:SS — end of relevant segment, e.g. 8:45>",
-        "watchMinutes": <number — watchTo minus watchFrom in minutes>
-      },
-      "supplementary": []
+      "<StoneType>": "<what was changed and why>"
     }
   }
 }`;
@@ -400,20 +370,6 @@ export function sanitizeResourceUrl(url: unknown, _taskTitle?: string): string |
   return null;
 }
 
-function sanitizeResourceObject(res: unknown, taskTitle: string): unknown {
-  if (typeof res !== 'object' || res === null) return res;
-  const r = res as Record<string, unknown>;
-  if (typeof r.url === 'string') {
-    const sanitized = sanitizeResourceUrl(r.url, taskTitle);
-    if (!sanitized) {
-      // URL was a placeholder/search URL — drop it entirely so resource library can fill in
-      return { ...r, url: null };
-    }
-    return { ...r, url: sanitized };
-  }
-  return res;
-}
-
 // ─── JSON Repair ──────────────────────────────────────────────────────────────
 // LLMs often wrap JSON in markdown code fences or produce minor syntax errors.
 
@@ -492,8 +448,9 @@ function validateTaskQuality(task: DailyTask['task'], dailyTimeAvailable?: numbe
   }
 
   // Duration must not exceed daily time budget
-  if (dailyTimeAvailable && task.estimatedMinutes > dailyTimeAvailable * 1.1) {
-    issues.push(`Duration ${task.estimatedMinutes}min exceeds budget ${dailyTimeAvailable}min`);
+  const taskDuration = task.estimatedMinutes ?? (task as unknown as Record<string, unknown>).duration;
+  if (dailyTimeAvailable && typeof taskDuration === 'number' && taskDuration > dailyTimeAvailable * 1.1) {
+    issues.push(`Duration ${taskDuration}min exceeds budget ${dailyTimeAvailable}min`);
   }
 
   // Steps must be specific (at least 6 words)
@@ -514,13 +471,16 @@ function validateTaskQuality(task: DailyTask['task'], dailyTimeAvailable?: numbe
     }
   }
 
-  // Must have at least 2 tips
-  if (!task.tips || task.tips.length < 2) {
-    issues.push(`Only ${task.tips?.length ?? 0} tips — minimum 2 required`);
+  // Must have at least 2 coachTips (or tips in legacy format)
+  const tipCount = task.tips?.length ?? 0;
+  if (tipCount < 2) {
+    issues.push(`Only ${tipCount} tips — minimum 2 required`);
   }
 
   // Success criteria must be concrete
-  const primary = task.successCriteria?.primary ?? '';
+  const primary = typeof task.successCriteria === 'string'
+    ? task.successCriteria
+    : (task.successCriteria as Record<string, unknown> | undefined)?.primary as string ?? '';
   if (!primary) {
     issues.push('Missing success criteria');
   } else {
@@ -548,8 +508,6 @@ function validateAndNormalize(
   const task   = (typeof parsed.task === 'object' && parsed.task !== null
     ? parsed.task : {}) as Record<string, unknown>;
 
-  const taskTitle = typeof task.title === 'string' ? task.title : 'daily practice';
-
   // Steps
   const rawSteps = Array.isArray(task.steps) ? task.steps : [];
   const steps: TaskStep[] = rawSteps.map((s: unknown, i: number) => {
@@ -558,9 +516,7 @@ function validateAndNormalize(
       stepNumber:  typeof st.stepNumber  === 'number' ? st.stepNumber : i + 1,
       instruction: typeof st.instruction === 'string' ? st.instruction : `Step ${i + 1}`,
       duration:    typeof st.duration    === 'string' ? st.duration    : '5 minutes',
-      details:     st.details ?? undefined,
-      resource:    st.resource ? sanitizeResourceObject(st.resource, taskTitle) : undefined,
-      practice:    st.practice ?? undefined,
+      details:     typeof st.tip === 'string' ? st.tip : undefined, // map tip → details
     } as TaskStep;
   });
 
@@ -568,8 +524,7 @@ function validateAndNormalize(
     steps.push({ stepNumber: 1, instruction: 'Complete today\'s practice.', duration: `${dailyTimeAvailable} minutes` });
   }
 
-  // Minimum 2-step guard — 8b model can collapse conflicting stone rules into 1 step.
-  // Split the only step into a low-friction starter + the main action.
+  // Minimum 2-step guard
   if (steps.length === 1) {
     const mainStep = steps[0];
     steps.unshift({
@@ -580,30 +535,29 @@ function validateAndNormalize(
     mainStep.stepNumber = 2;
   }
 
-  // Clamp estimatedMinutes
-  const rawMin = typeof task.estimatedMinutes === 'number' ? task.estimatedMinutes : dailyTimeAvailable;
+  // Clamp estimatedMinutes — support both old (estimatedMinutes) and new (duration) field name
+  const rawMin = typeof task.estimatedMinutes === 'number' ? task.estimatedMinutes
+    : typeof task.duration === 'number' ? task.duration
+    : dailyTimeAvailable;
   const estimatedMinutes = Math.min(rawMin, dailyTimeAvailable);
 
-  // Tips
-  const tips = Array.isArray(task.tips)
-    ? task.tips.filter((t): t is string => typeof t === 'string')
+  // coachTips (new) — fall back to tips (old) if present
+  const coachTips = Array.isArray(task.coachTips)
+    ? (task.coachTips as unknown[]).filter((t): t is string => typeof t === 'string')
+    : Array.isArray(task.tips)
+    ? (task.tips as unknown[]).filter((t): t is string => typeof t === 'string')
     : ['Focus on consistency over perfection today.'];
 
-  // Resources — sanitize placeholder URLs produced by economy model
-  const rawResources = (typeof task.resources === 'object' && task.resources !== null
-    ? task.resources : {}) as Record<string, unknown>;
-  const resources = {
-    primary:       rawResources.primary
-      ? sanitizeResourceObject(rawResources.primary, taskTitle)
-      : null,
-    supplementary: Array.isArray(rawResources.supplementary)
-      ? (rawResources.supplementary as unknown[]).map(r => sanitizeResourceObject(r, taskTitle))
-      : [],
-  };
-
-  // successCriteria
-  const sc = (typeof task.successCriteria === 'object' && task.successCriteria !== null
-    ? task.successCriteria : {}) as Record<string, unknown>;
+  // successCriteria — support both string (new) and object (old) format
+  let successCriteriaStr: string;
+  if (typeof task.successCriteria === 'string') {
+    successCriteriaStr = task.successCriteria;
+  } else if (typeof task.successCriteria === 'object' && task.successCriteria !== null) {
+    const sc = task.successCriteria as Record<string, unknown>;
+    successCriteriaStr = typeof sc.primary === 'string' ? sc.primary : 'Complete all steps.';
+  } else {
+    successCriteriaStr = 'Complete all steps.';
+  }
 
   return {
     day:   typeof parsed.day   === 'number' ? parsed.day   : dayNumber,
@@ -614,10 +568,9 @@ function validateAndNormalize(
       description:     typeof task.description === 'string' ? task.description : '',
       estimatedMinutes,
       steps,
-      tips,
+      tips: coachTips,
       successCriteria: {
-        primary: typeof sc.primary === 'string' ? sc.primary : 'Complete all steps.',
-        bonus:   typeof sc.bonus   === 'string' ? sc.bonus   : undefined,
+        primary: successCriteriaStr,
       },
       whyThisMatters:      typeof task.whyThisMatters  === 'string'   ? task.whyThisMatters as string : '',
       commonMistakes:      Array.isArray(task.commonMistakes)         ? task.commonMistakes as string[] : undefined,
@@ -625,7 +578,7 @@ function validateAndNormalize(
       nextUp:              typeof task.nextUp            === 'string'  ? task.nextUp as string : undefined,
       adaptations_applied: (typeof task.adaptations_applied === 'object' && task.adaptations_applied !== null)
         ? task.adaptations_applied as Record<string, string> : undefined,
-      resources: resources as DailyTask['task']['resources'],
+      resources: { primary: null, supplementary: [] },
     },
   };
 }
@@ -810,7 +763,7 @@ export async function generateTask(
   dailyTimeAvailable: number,
   previousTasksContext?: string,
   category?: string,
-  skillLevel?: 'beginner' | 'intermediate' | 'advanced',
+  _skillLevel?: 'beginner' | 'intermediate' | 'advanced',
   ragContext?: string,
   goalText?: string,
 ): Promise<DailyTask> {
@@ -890,8 +843,8 @@ export async function generateTask(
     }
   }
 
-  // ── Parallel: RAG fetch + Session Blueprint + Resource Lookup ──
-  // RAG is async network I/O; blueprint and resource lookup are sync CPU.
+  // ── Parallel: RAG fetch + Session Blueprint ──
+  // RAG is async network I/O; blueprint is sync CPU.
   // Run RAG in parallel with the sync work to save ~300-800ms.
 
   const ragPromise = (async () => {
@@ -926,39 +879,10 @@ export async function generateTask(
   const blueprint = planSession(dailyTimeAvailable, phaseProgress, domain, isAssessmentDay);
   const blueprintBlock = `\n${serializeBlueprint(blueprint)}\n`;
 
-  // Find the learn block's max resource minutes for duration-aware resource filtering
-  const learnBlock = blueprint.blocks.find(b => b.type === 'learn' && b.resourceSlot);
-  const maxResourceMinutes = learnBlock?.maxResourceMinutes ?? dailyTimeAvailable;
-
-  // Resource lookup (sync — runs while RAG is in-flight)
-  let curatedResourceBlock = '';
-  if (goalText) {
-    const curatedResources = getResourcesForGoal(goalText);
-    if (curatedResources.length > 0) {
-      const withDuration = curatedResources.map(r => ({
-        ...r,
-        parsedMinutes: parseDuration(r.duration),
-      }));
-      const fittingResources = withDuration
-        .filter(r => r.parsedMinutes <= maxResourceMinutes)
-        .sort((a, b) => Math.abs(b.parsedMinutes - maxResourceMinutes) - Math.abs(a.parsedMinutes - maxResourceMinutes));
-      const selectedResources = fittingResources.length > 0 ? fittingResources : withDuration;
-      const resourceLines = selectedResources.slice(0, 10).map(r =>
-        `- "${r.title}" by ${r.channel ?? 'Unknown'}: ${r.url} (${r.duration ?? '?'}, ~${r.parsedMinutes}min) — ${r.description}`
-      ).join('\n');
-      curatedResourceBlock = `\n── CURATED RESOURCE LIBRARY (USE THESE URLs) ──
-You MUST use URLs from this list for the task's resources.primary and step resources.
-Do NOT invent YouTube video IDs. Pick the most relevant video for today's task topic.
-The learn block allows max ${maxResourceMinutes} minutes of video. Pick a video that fits.
-
-${resourceLines}\n`;
-    }
-  }
-
   // Await RAG result (should already be resolved if sync work took >0ms)
   const science = await ragPromise;
 
-  const systemPrompt = buildSystemPrompt(domain, detectedStones, dailyTimeAvailable) + blueprintBlock + curatedResourceBlock;
+  const systemPrompt = buildSystemPrompt(domain, detectedStones, dailyTimeAvailable) + blueprintBlock;
   const userPrompt   = buildUserPrompt(
     dayNumber, goalLine, roadmap.roadmap.totalDays, dailyTimeAvailable,
     phase, week, dayInPhase, stoneProfile, science, previousTasksContext,
@@ -1012,26 +936,6 @@ ${resourceLines}\n`;
       }
     } catch {
       // Non-blocking — 8b result is still used
-    }
-  }
-
-  // Augment with static resource library if category provided and LLM left resources empty/null-url
-  const primaryRes = result.task.resources?.primary as Record<string, unknown> | null | undefined;
-  const hasPrimaryUrl = primaryRes && typeof primaryRes.url === 'string' && primaryRes.url;
-  if (category && !hasPrimaryUrl) {
-    try {
-      const matched = await matchTaskToResources(
-        result.task.title,
-        result.task.description,
-        category,
-        skillLevel ?? 'beginner',
-      );
-      result.task.resources = {
-        primary:       matched.primary,
-        supplementary: matched.supplementary,
-      };
-    } catch {
-      // Non-blocking — resource matching is best-effort
     }
   }
 

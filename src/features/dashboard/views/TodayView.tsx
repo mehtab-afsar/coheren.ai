@@ -16,6 +16,7 @@ import AllDoneCard from './today/AllDoneCard';
 import RestDayCard from './today/RestDayCard';
 import FocusComplete from './today/FocusComplete';
 import AssessmentCard from '../components/AssessmentCard';
+import ResourceCard from '../components/ResourceCard';
 
 export default function TodayView({
   onNavigate,
@@ -46,9 +47,6 @@ export default function TodayView({
   const [easeBackMode, setEaseBackMode] = useState(true);
   // Show all tasks below FocusCard
   const [_showAllTasks, setShowAllTasks] = useState(false);
-  // Focus Timer (count-up while focus mode is open)
-  const [focusSeconds, setFocusSeconds] = useState(0);
-  const [focusPaused, setFocusPaused] = useState(false);
   const focusIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // FocusComplete overlay
@@ -60,7 +58,20 @@ export default function TodayView({
   const [checkedSteps, setCheckedSteps] = useState<Set<number>>(new Set());
 
   // Focus task state (replaces cinema mode)
-  const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
+  const [focusTaskId, setFocusTaskId] = useState<string | null>(() => {
+    try { return sessionStorage.getItem('focus_task_id') ?? null; } catch { return null; }
+  });
+
+  // Restore elapsed seconds if resuming the same session
+  const [focusSeconds, setFocusSeconds] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('focus_elapsed');
+      return saved ? parseInt(saved, 10) : 0;
+    } catch { return 0; }
+  });
+  const [focusPaused, setFocusPaused] = useState(() => {
+    try { return sessionStorage.getItem('focus_paused') === '1'; } catch { return false; }
+  });
 
   // Count-up focus timer — runs while focus mode is open and not paused
   useEffect(() => {
@@ -72,6 +83,7 @@ export default function TodayView({
       setFocusSeconds(s => {
         const next = s + 1;
         if (next % 10 === 0) updateElapsed(next);
+        try { sessionStorage.setItem('focus_elapsed', String(next)); } catch { /* ignore */ }
         return next;
       });
     }, 1000);
@@ -140,8 +152,17 @@ export default function TodayView({
   // Open focus mode: start timer and session
   const openFocus = (taskId: string) => {
     try { localStorage.setItem('onboard_focus_done', '1'); } catch { /* ignore */ }
-    setFocusSeconds(0);
+    // Only reset elapsed if switching to a different task
+    const prevTaskId = sessionStorage.getItem('focus_task_id');
+    if (prevTaskId !== taskId) {
+      setFocusSeconds(0);
+      try { sessionStorage.setItem('focus_elapsed', '0'); } catch { /* ignore */ }
+    }
     setFocusPaused(false);
+    try {
+      sessionStorage.setItem('focus_task_id', taskId);
+      sessionStorage.setItem('focus_paused', '0');
+    } catch { /* ignore */ }
     setNoteInput('');
     setCheckedSteps(new Set());
     setFocusTaskId(taskId);
@@ -155,6 +176,11 @@ export default function TodayView({
     setFocusTaskId(null);
     setFocusSeconds(0);
     setCheckedSteps(new Set());
+    try {
+      sessionStorage.removeItem('focus_task_id');
+      sessionStorage.removeItem('focus_elapsed');
+      sessionStorage.removeItem('focus_paused');
+    } catch { /* ignore */ }
   };
 
   // Find the focus task
@@ -186,7 +212,11 @@ export default function TodayView({
               {mins}:{secs}
             </span>
             <button
-              onClick={() => setFocusPaused(p => !p)}
+              onClick={() => setFocusPaused(p => {
+                const next = !p;
+                try { sessionStorage.setItem('focus_paused', next ? '1' : '0'); } catch { /* ignore */ }
+                return next;
+              })}
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: ap.textSecondary, fontSize: 16 }}
             >
               {focusPaused ? '▶' : '⏸'}
@@ -272,8 +302,17 @@ export default function TodayView({
                 padding: '9px 12px', fontSize: 13, fontFamily: ap.font,
                 backgroundColor: ap.surface, color: ap.textPrimary,
                 resize: 'none', outline: 'none', minHeight: 64, boxSizing: 'border-box',
+                marginBottom: 12,
               }}
             />
+
+            {/* Resource (video / article) for this task */}
+            {focusTask.resources?.primary && (
+              <ResourceCard
+                primary={focusTask.resources.primary}
+                supplementary={focusTask.resources.supplementary}
+              />
+            )}
           </div>
         </div>
 

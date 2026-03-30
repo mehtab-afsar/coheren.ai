@@ -82,6 +82,16 @@ export default function FocusCard({
   const whyThisMatters = typeof taskExt.whyThisMatters === 'string' ? taskExt.whyThisMatters : null;
   const successCriteria = typeof taskExt.successCriteria === 'string' ? taskExt.successCriteria : null;
 
+  // 30-30-40 segments
+  const segments = Array.isArray(task.segments) && task.segments.length > 0 ? task.segments : null;
+
+  // Segment color palette (matches dark card background)
+  const SEG_COLORS = [
+    { border: 'rgba(14,165,233,0.25)', bg: 'rgba(14,165,233,0.06)', pill: '#0ea5e9', label: 'rgba(14,165,233,0.9)' },
+    { border: 'rgba(167,139,250,0.25)', bg: 'rgba(124,58,237,0.06)', pill: '#a78bfa', label: 'rgba(167,139,250,0.9)' },
+    { border: 'rgba(52,211,153,0.25)', bg: 'rgba(16,185,129,0.06)', pill: '#34d399', label: 'rgba(52,211,153,0.9)' },
+  ];
+
   // Structured steps — try objects first, fall back to string array
   const rawSteps = taskExt.stepsData ?? task.steps;
   const steps: { duration?: string; instruction: string }[] = Array.isArray(rawSteps)
@@ -248,8 +258,63 @@ export default function FocusCard({
         marginBottom: 28,
       }} />
 
-      {/* ── Your Flow Today (steps) ── */}
-      {steps.length > 0 && (
+      {/* ── 30-30-40 Segment blocks ── */}
+      {segments && (
+        <div style={{ marginBottom: 28 }}>
+          <p style={{
+            fontSize: 11, fontWeight: 700, letterSpacing: '0.12em',
+            textTransform: 'uppercase', color: 'rgba(167,139,250,0.6)',
+            margin: '0 0 14px',
+          }}>
+            Your Flow Today
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {segments.map((seg, i) => {
+              const c = SEG_COLORS[i % SEG_COLORS.length];
+              return (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, x: -16 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.35 + i * 0.08, duration: 0.4 }}
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 12,
+                    padding: '12px 16px', borderRadius: 14,
+                    background: c.bg, border: `1px solid ${c.border}`,
+                  }}
+                >
+                  <div style={{ flexShrink: 0, paddingTop: 1 }}>
+                    <span style={{
+                      fontSize: 10, fontWeight: 800, textTransform: 'uppercase',
+                      letterSpacing: '0.06em', color: '#12102a',
+                      background: c.pill, borderRadius: 99, padding: '2px 8px',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {seg.label}
+                    </span>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: c.label }}>{seg.duration} min</span>
+                    </div>
+                    <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', lineHeight: 1.45, margin: 0 }}>
+                      {seg.description}
+                    </p>
+                    {seg.tip && (
+                      <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', fontStyle: 'italic', margin: '4px 0 0', lineHeight: 1.4 }}>
+                        {seg.tip}
+                      </p>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Your Flow Today (steps fallback — shown when no segments) ── */}
+      {!segments && steps.length > 0 && (
         <div style={{ marginBottom: 28, position: 'relative' }}>
           <p style={{
             fontSize: 11,

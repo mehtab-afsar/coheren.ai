@@ -315,7 +315,7 @@ OUTPUT FORMAT — return ONLY valid JSON, no markdown:
   "totalWeeks": <number>,
   "totalMonths": <number>,
   "domainPedagogy": "<exact framework name>",
-  "frameworkName": "<full descriptive name e.g. 'Spaced Repetition — Ebbinghaus Method'>",
+  "frameworkName": "<UNIQUE framework name tailored to this user's specific goal and domain — must NOT be generic. Domain examples: Fitness→'Progressive Overload — SAID Principle', Music→'Deliberate Practice — Ericsson Method', Coding→'Project-Based Mastery — PRIMM Cycle', Language→'Comprehensible Input — Krashen Immersion', Engineering/Science→'First Principles Decomposition — Feynman Technique'. Generate one that fits THIS user's goal and detected stones, not a copy of any example.>",
   "frameworkReason": "<2-3 sentences: why this framework for this user's domain AND stones. Reference the stones by name.>",
   "frameworkScience": "<2-3 sentences from the research/science behind this framework>",
   "frameworkSources": [

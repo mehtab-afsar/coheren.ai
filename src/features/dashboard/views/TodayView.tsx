@@ -230,36 +230,95 @@ export default function TodayView({
 
         {/* Split layout */}
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 20 }}>
-          {/* Left: Steps checklist */}
+          {/* Left: Segments or Steps checklist */}
           <div>
-            <Label left={`Steps · ${checkedSteps.size}/${focusSteps.length}`} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
-              {focusSteps.map((step, i) => {
-                const done = checkedSteps.has(i);
-                const stepText = typeof step === 'string' ? step : (step as { instruction?: string }).instruction ?? String(step);
-                return (
-                  <div key={i}
-                    onClick={() => { const s = new Set(checkedSteps); done ? s.delete(i) : s.add(i); setCheckedSteps(s); }}
-                    style={{
-                      display: 'flex', alignItems: 'flex-start', gap: 10,
-                      padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
-                      backgroundColor: done ? ap.accentSoft : ap.surfaceAlt,
-                    }}>
-                    <div style={{
-                      width: 18, height: 18, borderRadius: 4, flexShrink: 0, marginTop: 1,
-                      backgroundColor: done ? ap.accent : 'transparent',
-                      border: `1.5px solid ${done ? ap.accent : ap.textTertiary}`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: '#fff', fontSize: 10,
-                    }}>{done ? '✓' : ''}</div>
-                    <span style={{
-                      fontSize: 13, color: done ? ap.textSecondary : ap.textPrimary,
-                      textDecoration: done ? 'line-through' : 'none', lineHeight: 1.5,
-                    }}>{stepText}</span>
+            {focusTask.segments && focusTask.segments.length > 0 ? (() => {
+              const SEG_COLORS = [
+                { border: 'rgba(14,165,233,0.2)', bg: 'rgba(14,165,233,0.06)', bgDone: 'rgba(14,165,233,0.13)', pill: '#0ea5e9' },
+                { border: 'rgba(124,58,237,0.2)', bg: ap.accentSoft, bgDone: ap.accentMid, pill: ap.accent },
+                { border: 'rgba(16,185,129,0.2)', bg: 'rgba(16,185,129,0.05)', bgDone: 'rgba(16,185,129,0.12)', pill: '#10b981' },
+              ];
+              const total = focusTask.segments!.length;
+              const done = focusTask.segments!.filter((_, i) => checkedSteps.has(i)).length;
+              return (
+                <>
+                  <Label left={`Blocks · ${done}/${total}`} />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                    {focusTask.segments!.map((seg, i) => {
+                      const isDone = checkedSteps.has(i);
+                      const c = SEG_COLORS[i % SEG_COLORS.length];
+                      return (
+                        <div key={i}
+                          onClick={() => { const s = new Set(checkedSteps); isDone ? s.delete(i) : s.add(i); setCheckedSteps(s); }}
+                          style={{
+                            display: 'flex', alignItems: 'flex-start', gap: 10,
+                            padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
+                            backgroundColor: isDone ? c.bgDone : c.bg,
+                            border: `1px solid ${c.border}`,
+                            opacity: isDone ? 0.7 : 1,
+                            transition: 'all 0.15s',
+                          }}>
+                          <div style={{
+                            width: 18, height: 18, borderRadius: 4, flexShrink: 0, marginTop: 2,
+                            backgroundColor: isDone ? c.pill : 'transparent',
+                            border: `1.5px solid ${isDone ? c.pill : ap.textTertiary}`,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: '#fff', fontSize: 10, fontWeight: 700,
+                          }}>{isDone ? '✓' : ''}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                              <span style={{
+                                fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                                letterSpacing: '0.05em', color: c.pill,
+                              }}>{seg.label}</span>
+                              <span style={{ fontSize: 11, color: ap.textTertiary }}>{seg.duration} min</span>
+                            </div>
+                            <span style={{
+                              fontSize: 13, color: isDone ? ap.textTertiary : ap.textPrimary,
+                              textDecoration: isDone ? 'line-through' : 'none', lineHeight: 1.45,
+                            }}>{seg.description}</span>
+                            {seg.tip && !isDone && (
+                              <div style={{ fontSize: 11, color: ap.textTertiary, fontStyle: 'italic', marginTop: 3 }}>{seg.tip}</div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
-            </div>
+                </>
+              );
+            })() : (
+              <>
+                <Label left={`Steps · ${checkedSteps.size}/${focusSteps.length}`} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+                  {focusSteps.map((step, i) => {
+                    const done = checkedSteps.has(i);
+                    const stepText = typeof step === 'string' ? step : (step as { instruction?: string }).instruction ?? String(step);
+                    return (
+                      <div key={i}
+                        onClick={() => { const s = new Set(checkedSteps); done ? s.delete(i) : s.add(i); setCheckedSteps(s); }}
+                        style={{
+                          display: 'flex', alignItems: 'flex-start', gap: 10,
+                          padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
+                          backgroundColor: done ? ap.accentSoft : ap.surfaceAlt,
+                        }}>
+                        <div style={{
+                          width: 18, height: 18, borderRadius: 4, flexShrink: 0, marginTop: 1,
+                          backgroundColor: done ? ap.accent : 'transparent',
+                          border: `1.5px solid ${done ? ap.accent : ap.textTertiary}`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: '#fff', fontSize: 10,
+                        }}>{done ? '✓' : ''}</div>
+                        <span style={{
+                          fontSize: 13, color: done ? ap.textSecondary : ap.textPrimary,
+                          textDecoration: done ? 'line-through' : 'none', lineHeight: 1.5,
+                        }}>{stepText}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
 
             {/* Coach Tips */}
             {coachTips.length > 0 && (

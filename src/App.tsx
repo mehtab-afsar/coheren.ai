@@ -154,6 +154,7 @@ function App() {
                 coachTips: (content.coachTips as string[]) ?? [],
                 reflection: (content.reflection as string) ?? undefined,
                 requiresPrep: (content.requiresPrep as { items: string[]; note: string }) ?? undefined,
+                resources: (content.resources as import('@core/store/useStore').Task['resources']) ?? undefined,
                 difficultyRating: t.difficulty_rating as number | undefined,
                 actualDuration: t.actual_duration as number | undefined,
               };

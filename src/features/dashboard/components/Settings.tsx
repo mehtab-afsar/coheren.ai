@@ -7,6 +7,7 @@ export default function Settings() {
 
   const [isEditingCheckIn, setIsEditingCheckIn] = useState(false);
   const [tempCheckInTime, setTempCheckInTime] = useState(checkInTime);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   const handleSaveCheckIn = () => {
     setCheckInTime(tempCheckInTime);
@@ -19,10 +20,9 @@ export default function Settings() {
   };
 
   const handleReset = () => {
-    if (confirm('Are you sure you want to start over? This will delete all your progress.')) {
-      resetOnboarding();
-      setStep(0);
-    }
+    if (!confirmReset) { setConfirmReset(true); return; }
+    resetOnboarding();
+    setStep(0);
   };
 
   return (
@@ -335,39 +335,72 @@ export default function Settings() {
             Actions
           </h2>
 
-          <button
-            onClick={handleReset}
-            style={{
-              width: '100%',
+          {confirmReset ? (
+            <div style={{
               padding: '16px',
-              backgroundColor: 'white',
-              border: '1px solid #ffebee',
+              backgroundColor: '#fff5f5',
+              border: '1px solid #ef5350',
               borderRadius: '12px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#ffebee';
-              e.currentTarget.style.borderColor = '#ef5350';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'white';
-              e.currentTarget.style.borderColor = '#ffebee';
-            }}
-          >
-            <Trash2 size={18} color="#ef5350" />
-            <div style={{ flex: 1, textAlign: 'left' }}>
-              <div style={{ fontSize: '15px', fontWeight: 300, color: '#ef5350' }}>
-                Reset Everything
-              </div>
-              <div style={{ fontSize: '12px', fontWeight: 300, color: '#999', marginTop: '2px' }}>
-                Delete all progress and start over
+            }}>
+              <p style={{ fontSize: '14px', fontWeight: 400, color: '#ef5350', marginBottom: '12px' }}>
+                This will permanently delete all your progress. Are you sure?
+              </p>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={handleReset}
+                  style={{
+                    flex: 1, padding: '10px', backgroundColor: '#ef5350', color: 'white',
+                    border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+                  }}
+                >
+                  Yes, reset everything
+                </button>
+                <button
+                  onClick={() => setConfirmReset(false)}
+                  style={{
+                    flex: 1, padding: '10px', backgroundColor: 'white', color: '#666',
+                    border: '1px solid #e0e0e0', borderRadius: '8px', fontSize: '13px', cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
               </div>
             </div>
-          </button>
+          ) : (
+            <button
+              onClick={handleReset}
+              style={{
+                width: '100%',
+                padding: '16px',
+                backgroundColor: 'white',
+                border: '1px solid #ffebee',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#ffebee';
+                e.currentTarget.style.borderColor = '#ef5350';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'white';
+                e.currentTarget.style.borderColor = '#ffebee';
+              }}
+            >
+              <Trash2 size={18} color="#ef5350" />
+              <div style={{ flex: 1, textAlign: 'left' }}>
+                <div style={{ fontSize: '15px', fontWeight: 300, color: '#ef5350' }}>
+                  Reset Everything
+                </div>
+                <div style={{ fontSize: '12px', fontWeight: 300, color: '#999', marginTop: '2px' }}>
+                  Delete all progress and start over
+                </div>
+              </div>
+            </button>
+          )}
         </div>
 
         {/* App info */}

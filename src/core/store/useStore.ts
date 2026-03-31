@@ -94,6 +94,31 @@ export interface Task {
   steps?: string[]; // step-by-step instructions
   tips?: string[]; // helpful tips
   successCriteria?: string; // what success looks like
+  resources?: {
+    primary: {
+      type: 'video' | 'article' | 'interactive' | 'image' | 'pdf' | 'tool' | 'playlist';
+      title: string;
+      url: string;
+      platform?: string;
+      channel?: string;
+      duration?: string;
+      thumbnail?: string;
+      description: string;
+      why: string;
+      timestamps?: Record<string, string>;
+      watchFrom?: string;
+      watchTo?: string;
+      watchMinutes?: number;
+    } | null;
+    supplementary?: Array<{
+      type: 'video' | 'article' | 'interactive' | 'image' | 'pdf' | 'tool' | 'playlist';
+      title: string;
+      url: string;
+      platform?: string;
+      description: string;
+      why: string;
+    }>;
+  };
   checkInTime?: string; // scheduled time
   coachTips?: string[];
   reflection?: string;

@@ -366,8 +366,9 @@ export function sanitizeResourceUrl(url: unknown, _taskTitle?: string): string |
 
   const raw = url.trim();
 
-  // Search URLs are not embeddable — drop them so the resource library can supply a real video
-  if (raw.includes('youtube.com/results?search_query=')) return null;
+  // Search URLs are not embeddable as iframes but ResourceCard renders them as a clickable
+  // "Search YouTube" card — keep them so users get a usable link
+  if (raw.includes('youtube.com/results?search_query=')) return raw;
 
   // Detect watch?v= URLs — check if the video ID is a known placeholder
   const watchMatch = raw.match(/[?&]v=([A-Za-z0-9_-]{6,12})/);

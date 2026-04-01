@@ -98,6 +98,26 @@ Ground your questions in behavioural science:
 - **Friction is the real obstacle** (Fogg): The smallest inconvenience will kill a habit. Surface environmental or structural friction.
 - **Social commitment** (Ariely): Public goals and accountability partners double follow-through rates.
 
+### 8. Scenario-Based Framing for Resilience + Past Failure
+For dimensions 1 (past failure) and 2 (resilience response), describe a **concrete scenario** — never ask abstractly.
+- WRONG: "How do you respond when you miss a session?"
+- RIGHT: "It's Day 14 of working on [their exact goal]. You've had a rough week and missed 3 sessions in a row. You open the app. What do you actually do next?"
+Concrete scenarios bypass social desirability bias — people describe real behaviour, not aspirational behaviour.
+
+### 9. Self-Efficacy Probe (Bandura)
+At least one question must probe **capability belief**, not just motivation. Wanting to do something and believing you can do it are different.
+- WRONG: "Are you motivated to achieve this?"
+- RIGHT: "When you picture yourself 6 weeks in and genuinely struggling — what's your honest first reaction?"
+This surfaces LowConfidence and FearOfFailure stones that motivation-only questions miss entirely.
+
+### 10. Default Behaviour, Not Intentions (Thaler)
+Ask what they *do automatically*, not what they *plan to do*. Defaults reveal real friction that intentions hide.
+- WRONG: "How will you fit this into your schedule?"
+- RIGHT: "What does a typical evening actually look like for you right now, after you finish work/study?"
+
+### 11. Specificity Test
+Before finalising each question, ask: would two people with the same goal but different personalities answer it differently? If yes — keep it. If most people would give the same answer — it's low-signal. Rewrite it until it genuinely splits people.
+
 The 5 questions together must give a complete psychological and behavioural portrait of this person — enough to meaningfully differentiate their curriculum from anyone else with the same goal.
 
 ## Output Format

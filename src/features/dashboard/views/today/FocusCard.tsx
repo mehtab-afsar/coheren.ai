@@ -3,6 +3,7 @@ import { Play, CheckCircle2, SkipForward, Target, BookOpen, MessageCircle, Rotat
 import { useState } from 'react';
 import type { Task } from '@core/store/useStore';
 import { useBreakpoint } from '@hooks/useBreakpoint';
+import ResourceCard from '../../components/ResourceCard';
 
 interface FocusCardProps {
   task: Task;
@@ -416,6 +417,16 @@ export default function FocusCard({
           }}>
             {successCriteria}
           </span>
+        </div>
+      )}
+
+      {/* ── Resource (video / article) ── */}
+      {task.resources?.primary && (
+        <div style={{ marginBottom: 24 }}>
+          <ResourceCard
+            primary={task.resources.primary}
+            supplementary={task.resources.supplementary}
+          />
         </div>
       )}
 

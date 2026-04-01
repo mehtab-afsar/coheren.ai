@@ -14,7 +14,7 @@ import type { GoalCategory } from '@types-app/index';
 
 
 // Import agent system
-import { runOnboardingAgents, generateCompleteRoadmap, generateTaskBatch, getCurriculumPreview, getPaceCalibration, buildLegacyAgent3Output } from '@core/agents';
+import { runOnboardingAgents, generateCompleteRoadmap, generateTaskBatch, getCurriculumPreview, getPaceCalibration, buildLegacyAgent3Output, buildClarifications } from '@core/agents';
 import type { BuildingStone, StoneAnswer, Agent1Output, DailyTask, CurriculumPreview, PaceCalibration, PaceChoice } from '@core/agents';
 import type { AgentRoadmapV2 } from '@core/store/useStore';
 import StoneQuestions from '@features/onboarding/components/StoneQuestions';
@@ -181,6 +181,9 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
 
   // Realism check state
   const [realismAcknowledged, setRealismAcknowledged] = useState(false);
+  // Agent 1 realism gate — shown when Agent 1 flags goal as Unrealistic
+  const [realismGateShown, setRealismGateShown] = useState(false);
+  const [cachedStones, setCachedStones] = useState<{ requiredStones: BuildingStone[] } | null>(null);
 
   // Stone answers + profile state
   const [round1Answers, setRound1Answers] = useState<StoneAnswer[]>([]);
@@ -380,6 +383,37 @@ Current Data Already Collected: ${JSON.stringify(collectedData)}`
       // Commit to state
       setCollectedData(mergedData);
 
+      // If Agent 1 realism gate was shown, user is now acknowledging — skip normal flow
+      if (realismGateShown && cachedStones && goalAnalysis) {
+        const convHistory = messages.map(m => ({
+          role: m.role === 'ai' ? 'assistant' as const : 'user' as const,
+          content: m.content,
+        }));
+        const { content: ackResponse = "Got it — let's build the plan around what you can realistically achieve in that window." } = await callReasoning({
+          messages: [
+            {
+              role: 'system',
+              content: `You are Coheren. The user just responded to a timeline reality check you raised. Acknowledge their response warmly in 1-2 sentences, validate their decision (whether they're adjusting or pushing forward), and let them know you're now moving on to understand them better.`,
+            },
+            ...convHistory,
+            { role: 'user', content: currentInput },
+          ],
+          temperature: 0.7,
+          max_tokens: 80,
+        });
+        setMessages(prev => [...prev, {
+          id: (Date.now() + 1).toString(),
+          role: 'ai',
+          content: ackResponse,
+          timestamp: new Date(),
+        }]);
+        await new Promise(r => setTimeout(r, 1000));
+        setStones(cachedStones.requiredStones.slice(0, 5));
+        setIsTyping(false);
+        setOnboardingPhase('stones');
+        return;
+      }
+
       // Beautiful debug table showing exactly what we have
       console.table({
         'Collected So Far': {
@@ -545,13 +579,46 @@ The system will automatically detect when the data is complete and transition to
       );
 
       setGoalAnalysis(analysis);
-      // Cap at exactly 2 stone questions
-      setStones(identifiedStones.requiredStones.slice(0, 2));
+
+      // Check if Agent 1 flagged the goal as unrealistic — surface specific data to user
+      const ag = analysis.goalAnalysis;
+      const isAgentUnrealistic =
+        ag.realismChecks.timeRealism === 'Unrealistic' ||
+        ag.realismChecks.effortRealism === 'Unrealistic';
+
+      if (isAgentUnrealistic && !realismGateShown) {
+        // Cache stones so we don't re-run the LLM after user acknowledges
+        setCachedStones(identifiedStones);
+
+        // Build a specific, data-backed realism message using Agent 1's analysis
+        const clarifications = buildClarifications(analysis);
+        const rc = clarifications.realityCheck;
+        const durationInMonths = collectedData.timeline
+          ? calculateDurationInMonths(collectedData.timeline)
+          : 3;
+        const realismMessage = rc
+          ? `Before we map your plan, I want to flag something. ${rc.headline}.\n\nFor ${ag.category}, **${rc.typicalTimeline}** is typically what's needed. You're targeting ${durationInMonths} month${durationInMonths !== 1 ? 's' : ''} — ${rc.detail}\n\n${rc.suggestedAdjustment}\n\nYou can adjust your timeline to something more realistic, or continue as an intensive sprint knowing the bar is high. What feels right to you?`
+          : `I want to flag that this goal typically needs more time than you've planned. Would you like to adjust your timeline, or push forward as-is?`;
+
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: 'ai',
+          content: realismMessage,
+          timestamp: new Date(),
+        }]);
+
+        setRealismGateShown(true);
+        setIsGeneratingPlan(false);
+        setIsTyping(false);
+        setOnboardingPhase('conversation');
+        return; // Wait for user to acknowledge before going to stones
+      }
 
       // Brief delay for the analyzing transition to be visible
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Always go straight to stone questions — realism validation already handled in chat
+      // Go straight to stone questions
+      setStones(identifiedStones.requiredStones.slice(0, 5));
       setOnboardingPhase('stones');
       setIsTyping(false);
       setIsGeneratingPlan(false);
@@ -581,6 +648,9 @@ The system will automatically detect when the data is complete and transition to
   // The "Bulletproof" Trigger (No setTimeout) - State-Driven
   // Placed here (after runAnalysisAndGetStones) to satisfy react-hooks/immutability rule
   useEffect(() => {
+    // If Agent 1 realism gate was shown, handleSend handles the transition — don't re-trigger
+    if (realismGateShown) return;
+
     const isReady = !!(
       collectedData.goal &&
       collectedData.skillLevel &&
@@ -588,7 +658,7 @@ The system will automatically detect when the data is complete and transition to
       collectedData.timeline
     );
 
-    // Block trigger if goal is unrealistic and user hasn't acknowledged yet
+    // Block trigger if local heuristic catches obviously unrealistic goals before Agent 1 runs
     const realism = validateGoalRealism(collectedData);
     const needsRealismAck = realism.issue !== null && !realismAcknowledged;
 
@@ -597,7 +667,7 @@ The system will automatically detect when the data is complete and transition to
       runAnalysisAndGetStones();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collectedData, onboardingPhase, isGeneratingPlan, realismAcknowledged]);
+  }, [collectedData, onboardingPhase, isGeneratingPlan, realismAcknowledged, realismGateShown]);
 
   // Stone questions complete → extract profile directly → show confirmation
   const handleStoneQuestionsComplete = async (answers: StoneAnswer[]) => {

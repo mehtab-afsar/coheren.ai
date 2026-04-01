@@ -39,7 +39,7 @@ export default function Settings() {
         gap: '12px'
       }}>
         <button
-          onClick={() => setStep(7)}
+          onClick={() => setStep(2)}
           style={{
             width: '32px',
             height: '32px',
@@ -406,7 +406,7 @@ export default function Settings() {
         {/* App info */}
         <div style={{ textAlign: 'center', paddingTop: '24px', borderTop: '1px solid #f0f0f0' }}>
           <p style={{ fontSize: '12px', fontWeight: 300, color: '#ccc' }}>
-            CONSIST v1.0
+            Coheren v1.0
           </p>
           <p style={{ fontSize: '11px', fontWeight: 300, color: '#e0e0e0', marginTop: '4px' }}>
             Your everyday ally for consistency

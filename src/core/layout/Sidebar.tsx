@@ -51,7 +51,7 @@ export function Sidebar({ isCollapsed, onToggle, currentSection, onNavigate }: S
               fontWeight: tokens.typography.weights.medium,
             }}
           >
-            CONSIST
+            Coheren
           </h1>
         )}
         <button

@@ -172,8 +172,8 @@ function detectEmergingStones(
     emerging.push('Overcommitment');
   }
   // Health-related stone if health skips are significant
-  if (!existingTypes.includes('ExternalObstacles') && healthSkips / total > 0.25) {
-    emerging.push('ExternalObstacles');
+  if (!existingTypes.includes('EnvironmentFriction') && healthSkips / total > 0.25) {
+    emerging.push('EnvironmentFriction');
   }
 
   return emerging;
@@ -257,7 +257,8 @@ export function updateStoneSeverities(
         severity:   'Moderate',
         riskImpact: 0.4,
         description: `Detected from sprint ${sprintNumber} behavioral patterns`,
-        // Required fields — fallback values; Agent 2 fills these properly on re-onboarding
+        category:   'Behavioural',
+        trigger:    'Sprint behavioral patterns',
         manifests:   [],
         agent3Guidance: '',
         agent5Note:  '',

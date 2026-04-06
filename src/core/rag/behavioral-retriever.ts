@@ -54,7 +54,7 @@ export async function retrieveUserHistory(
       })
       .returns<BehavioralMemoryRow[]>();
 
-    if (error || !data || data.length === 0) return '';
+    if (error || !data || !Array.isArray(data) || data.length === 0) return '';
 
     const rows = Array.isArray(data) ? (data as BehavioralMemoryRow[]) : [];
     // Filter to behavioral entries only (source=behavioral in metadata)

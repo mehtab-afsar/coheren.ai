@@ -62,8 +62,8 @@ function parseDailyTimeToMinutes(dailyTime: string | unknown): number {
 // Calculate realistic timeline based on daily minutes (baseline = 60 min/day)
 function calculateRealisticTimeline(typicalTimelineStr: string, dailyMinutes: number): string {
   let typicalMonths = 12;
-  const yearRange = typicalTimelineStr.match(/(\d+)[–\-](\d+)\s*year/i);
-  const monthRange = typicalTimelineStr.match(/(\d+)[–\-](\d+)\s*month/i);
+  const yearRange = typicalTimelineStr.match(/(\d+)[–-](\d+)\s*year/i);
+  const monthRange = typicalTimelineStr.match(/(\d+)[–-](\d+)\s*month/i);
   const singleYear = typicalTimelineStr.match(/(\d+)\s*year/i);
   const singleMonth = typicalTimelineStr.match(/(\d+)\s*month/i);
 

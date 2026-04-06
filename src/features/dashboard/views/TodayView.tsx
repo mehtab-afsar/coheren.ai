@@ -262,7 +262,7 @@ export default function TodayView({
                       const c = SEG_COLORS[i % SEG_COLORS.length];
                       return (
                         <div key={i}
-                          onClick={() => { const s = new Set(checkedSteps); isDone ? s.delete(i) : s.add(i); setCheckedSteps(s); }}
+                          onClick={() => { const s = new Set(checkedSteps); if (isDone) { s.delete(i); } else { s.add(i); } setCheckedSteps(s); }}
                           style={{
                             display: 'flex', alignItems: 'flex-start', gap: 10,
                             padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
@@ -309,7 +309,7 @@ export default function TodayView({
                     const stepText = typeof step === 'string' ? step : (step as { instruction?: string }).instruction ?? String(step);
                     return (
                       <div key={i}
-                        onClick={() => { const s = new Set(checkedSteps); done ? s.delete(i) : s.add(i); setCheckedSteps(s); }}
+                        onClick={() => { const s = new Set(checkedSteps); if (done) { s.delete(i); } else { s.add(i); } setCheckedSteps(s); }}
                         style={{
                           display: 'flex', alignItems: 'flex-start', gap: 10,
                           padding: '10px 12px', borderRadius: 10, cursor: 'pointer',

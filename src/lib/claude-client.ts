@@ -157,7 +157,7 @@ export async function callClaudeWithTools(params: ClaudeToolCallParams): Promise
   }
 
   // Fell out of loop — return whatever text we have
-  const lastAssistant = messages.findLast(m => m.role === 'assistant');
+  const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant');
   const fallback = Array.isArray(lastAssistant?.content)
     ? (lastAssistant.content as Array<{ type?: string; text?: string }>)
         .filter(b => b.type === 'text').map(b => b.text ?? '').join('')
@@ -191,7 +191,8 @@ export async function callClaudeWithThinking(
   let thinking = '';
   let output   = '';
 
-  for (const block of response.content) {
+  const responseMsg = response as { content: Array<{ type: string; thinking?: string; text?: string }> };
+  for (const block of responseMsg.content) {
     if (block.type === 'thinking') {
       thinking += (block as { type: 'thinking'; thinking: string }).thinking;
     } else if (block.type === 'text') {

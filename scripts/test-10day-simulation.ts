@@ -297,7 +297,7 @@ function deriveExpectedStatus(tasks: SimTask[]): string {
 
   const sorted = [...tasks].sort((a, b) => (a.day ?? a.dayNumber ?? 0) - (b.day ?? b.dayNumber ?? 0));
   let maxStreak = 0, cur = 0;
-  for (const t of sorted) { t.skipped ? (cur++, maxStreak = Math.max(maxStreak, cur)) : (cur = 0); }
+  for (const t of sorted) { if (t.skipped) { cur++; maxStreak = Math.max(maxStreak, cur); } else { cur = 0; } }
 
   if (healthSkips >= 3 || maxStreak >= 4)                         return 'RECOVER';
   if (rate < 60 || (avgDiff > 4 && diffSkips >= 2))               return 'SIMPLIFY';

@@ -59,7 +59,7 @@ export default function Dashboard() {
   // Auto-open Coach panel when a weekly check-in is pending
   useEffect(() => {
     if (pendingWeeklyCheckIn !== null) {
-      setCoachOpen(true);
+      setTimeout(() => setCoachOpen(true), 0);
     }
   }, [pendingWeeklyCheckIn]);
   const [unreadCount, setUnreadCount] = useState(() => getNotifications().filter(n => !n.read).length);

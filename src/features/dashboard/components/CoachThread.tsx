@@ -69,17 +69,19 @@ export default function CoachThread({ isOpen, onClose }: CoachThreadProps) {
   // Trigger check-in mode when pendingWeeklyCheckIn is set
   useEffect(() => {
     if (pendingWeeklyCheckIn !== null && !checkInMode && isOpen) {
-      setCheckInMode(true);
-      setCheckInMessages([
-        {
-          role: 'ai',
-          text: `Week ${pendingWeeklyCheckIn} is done — that takes real commitment. Let's check in before I design Week ${pendingWeeklyCheckIn + 1}.`,
-        },
-        {
-          role: 'ai',
-          text: currentQuestion?.prompt ?? '',
-        },
-      ]);
+      setTimeout(() => {
+        setCheckInMode(true);
+        setCheckInMessages([
+          {
+            role: 'ai',
+            text: `Week ${pendingWeeklyCheckIn} is done — that takes real commitment. Let's check in before I design Week ${pendingWeeklyCheckIn + 1}.`,
+          },
+          {
+            role: 'ai',
+            text: currentQuestion?.prompt ?? '',
+          },
+        ]);
+      }, 0);
     }
   }, [pendingWeeklyCheckIn, isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -87,7 +89,7 @@ export default function CoachThread({ isOpen, onClose }: CoachThreadProps) {
   useEffect(() => {
     if (!checkInMode || isComplete) return;
     if (step > 0 && currentQuestion) {
-      setCheckInMessages(prev => [...prev, { role: 'ai', text: currentQuestion.prompt }]);
+      setTimeout(() => setCheckInMessages(prev => [...prev, { role: 'ai', text: currentQuestion.prompt }]), 0);
     }
   }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -101,12 +103,12 @@ export default function CoachThread({ isOpen, onClose }: CoachThreadProps) {
       answers: checkInAnswers,
     });
 
-    setCheckInMessages(prev => [
+    setTimeout(() => setCheckInMessages(prev => [
       ...prev,
       { role: 'ai', text: `Thanks — I'm factoring this in with your Week ${pendingWeeklyCheckIn} data. Designing Week ${(pendingWeeklyCheckIn ?? 0) + 1} now...` },
-    ]);
+    ]), 0);
 
-    setIsGenerating(true);
+    setTimeout(() => setIsGenerating(true), 0);
     handleCheckpointComplete(checkInAnswers).then(() => {
       setCheckInMessages(prev => [
         ...prev,

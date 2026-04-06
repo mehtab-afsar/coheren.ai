@@ -95,7 +95,7 @@ export default function AdaptiveInterview({ onComplete }: AdaptiveInterviewProps
   const [readiness, setReadiness] = useState<Partial<ReadinessProfile>>({});
   const [direction, setDirection] = useState(1);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
-  const questionNumber = engineState.questionNumber + 1; // 1-indexed for display
+  // const _questionNumber = engineState.questionNumber + 1; // 1-indexed for display
   const MAX_QUESTIONS = 7 + (flags.USE_READINESS_RULER ? 2 : 0);
 
   // Focus textarea when question changes

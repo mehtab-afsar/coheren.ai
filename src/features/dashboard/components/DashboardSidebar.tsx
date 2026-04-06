@@ -24,7 +24,7 @@ const MICRO_LABEL: React.CSSProperties = {
 };
 
 function NavItem({
-  id,
+  id: _id,
   icon: Icon,
   label,
   badge,

@@ -28,7 +28,7 @@ const PACE_OPTIONS: { choice: PaceChoice; label: string; sub: string }[] = [
 
 export default function CurriculumPreview({ preview, onPaceSelect, revisedChoice, stoneNames }: Props) {
   const [selectedPace, setSelectedPace] = useState<PaceChoice | null>(null);
-  const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackText] = useState('');
 
   const handlePaceSelect = (choice: PaceChoice) => {
     setSelectedPace(choice);
@@ -254,7 +254,6 @@ export default function CurriculumPreview({ preview, onPaceSelect, revisedChoice
             }}>
               {PACE_OPTIONS.map(opt => {
                 const isSelected = selectedPace === opt.choice;
-                const isJustRight = opt.choice === 'just_right';
                 return (
                   <button
                     key={opt.choice}

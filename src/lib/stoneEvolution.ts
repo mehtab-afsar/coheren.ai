@@ -100,7 +100,7 @@ function computeSeverityDelta(stone: StoneType, obs: SprintObservation): number 
       return 0;
     }
 
-    case 'Procrastination': {
+    case 'ProcrastinationPattern': {
       // Severity falls with streak length; rises with low completion + no skip reason
       if (streakDays >= 7 && completionRate >= 75) return -1;
       if (consecutiveSkips >= 2 && timeSkips === 0 && difficultySkips === 0) return +1; // avoidance pattern

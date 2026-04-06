@@ -428,7 +428,7 @@ export const useStore = create<AppStore>()(
           if (feedbackTask?.variant) {
             const ctx: BanditContext = {
               domain: (feedbackState.currentGoal as { category?: string }).category ?? 'general',
-              primaryStone: feedbackState.stoneProfile?.primaryStone?.stoneType ?? 'unknown',
+              primaryStone: feedbackState.stoneProfile?.stoneProfile?.primaryStone ?? 'unknown',
               dayOfWeek: feedbackTask.scheduledFor
                 ? new Date(feedbackTask.scheduledFor + 'T00:00:00').getDay()
                 : new Date().getDay(),
@@ -736,7 +736,7 @@ export const useStore = create<AppStore>()(
                 const currentState = get();
                 const banditCtx: BanditContext = {
                   domain: (currentState.currentGoal as { category?: string }).category ?? 'general',
-                  primaryStone: currentState.stoneProfile?.primaryStone?.stoneType ?? 'unknown',
+                  primaryStone: currentState.stoneProfile?.stoneProfile?.primaryStone ?? 'unknown',
                   dayOfWeek: new Date().getDay(),
                 };
                 const autoVariant = selectVariant(currentState.banditState, banditCtx);
@@ -981,7 +981,7 @@ export const useStore = create<AppStore>()(
         if (!task?.variant) return;
         const ctx: BanditContext = {
           domain: (state.currentGoal as { category?: string }).category ?? 'general',
-          primaryStone: state.stoneProfile?.primaryStone?.stoneType ?? 'unknown',
+          primaryStone: state.stoneProfile?.stoneProfile?.primaryStone ?? 'unknown',
           dayOfWeek: task.scheduledFor
             ? new Date(task.scheduledFor + 'T00:00:00').getDay()
             : new Date().getDay(),

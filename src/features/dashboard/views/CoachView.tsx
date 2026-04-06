@@ -114,14 +114,12 @@ function MessageCard({ msg }: { msg: CoachMessage }) {
 
 export default function CoachView() {
   const { getMessages, markAllRead } = useCoachMessages();
-  const [messages, setMessages] = useState<CoachMessage[]>([]);
+  const [messages] = useState<CoachMessage[]>(() => getMessages());
 
   useEffect(() => {
-    const msgs = getMessages();
-    setMessages(msgs);
     // Mark all read when the view opens
     markAllRead();
-  }, [getMessages, markAllRead]);
+  }, [markAllRead]);
 
   const groups = groupByDate(messages);
 

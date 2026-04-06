@@ -928,7 +928,7 @@ TOOL USE INSTRUCTIONS:
       difficultySkips:     signals.difficultySkips,
       healthSkips:         signals.healthSkips,
       avgDifficulty:       signals.avgDifficulty,
-      publicArtifactsMade: completedTasks.filter(t => t.completed && (t.skipReason == null)).length,
+      publicArtifactsMade: completedTasks.filter(t => !t.skipped && (t.skipReason == null)).length,
       streakDays:          Math.max(7 - signals.consecutiveSkips, 0),
       sprintNumber:        weekNumber,
       status,

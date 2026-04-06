@@ -226,7 +226,7 @@ NOTE: Low importance (<6) suggests UnrealisticExpectations. Low self-efficacy (<
   if (flags.USE_LINGUISTIC_SIGNALS && linguisticSignals) {
     const priors = linguisticSignalsToStonePriors(linguisticSignals);
     const priorsText = Object.entries(priors)
-      .map(([stone, delta]) => `${stone}: ${delta > 0 ? '+' : ''}${(delta * 100).toFixed(0)}%`)
+      .map(([stone, delta]) => `${stone}: ${(delta ?? 0) > 0 ? '+' : ''}${((delta ?? 0) * 100).toFixed(0)}%`)
       .join(', ');
     linguisticSection = `
 ## Linguistic Signals (HOW the user answered)
@@ -524,8 +524,8 @@ export function detectChangeStage(
     .toLowerCase();
 
   const hasStarted   = /already started|been doing|currently|i do|i am doing/.test(allAnswerText);
-  const hasPlan      = /i plan|i have a plan|i know what|next week|i\'ve mapped/.test(allAnswerText);
-  const noAttempts   = /never tried|never done|don\'t know where|no idea|never started/.test(allAnswerText);
+  const hasPlan      = /i plan|i have a plan|i know what|next week|i've mapped/.test(allAnswerText);
+  const noAttempts   = /never tried|never done|don't know where|no idea|never started/.test(allAnswerText);
   const manyAttempts = /tried many|tried several|multiple times|always fail|tried before and/.test(allAnswerText);
 
   // Action: already started, asks about optimization

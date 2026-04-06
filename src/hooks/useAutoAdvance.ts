@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useStore } from '@core/store/useStore';
+import { flags } from '@config/feature-flags';
 
 function daysBetween(a: string, b: string): number {
   const msPerDay = 1000 * 60 * 60 * 24;
@@ -12,6 +13,14 @@ function daysBetween(a: string, b: string): number {
  * - If multiple days were missed, still advances and marks them as missed.
  * This removes the need to manually click "Start Day X".
  */
+function maybePregenerateNext() {
+  if (!flags.BACKGROUND_TASK_PREGENERATION && !flags.PREGENERATE_TASKS) return;
+  const store = useStore.getState();
+  const nextDay = store.currentDay + 1;
+  // Fire-and-forget — never awaited
+  store.pregenerateTasksForDay(nextDay).catch(() => { /* silent */ });
+}
+
 export function useAutoAdvance() {
   const { canAdvanceDay, advanceDay } = useStore();
 
@@ -24,6 +33,7 @@ export function useAutoAdvance() {
       const missed = daysBetween(lastActiveDate, today);
       if (missed >= 1 && canAdvanceDay()) {
         advanceDay();
+        maybePregenerateNext();
       }
     }
 
@@ -35,7 +45,10 @@ export function useAutoAdvance() {
         const nowDate = new Date().toISOString().split('T')[0];
         const stored = localStorage.getItem(STORAGE_KEY);
         if (stored && stored !== nowDate) {
-          if (canAdvanceDay()) advanceDay();
+          if (canAdvanceDay()) {
+            advanceDay();
+            maybePregenerateNext();
+          }
           localStorage.setItem(STORAGE_KEY, nowDate);
         }
       }

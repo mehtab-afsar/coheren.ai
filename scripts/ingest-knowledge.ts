@@ -51,14 +51,28 @@ const ROOT         = join(__dirname_ts, '..');
 const FRAMEWORKS   = join(ROOT, 'src/knowledge/frameworks');
 const DOMAINS      = join(ROOT, 'src/knowledge/domains');
 
+// ─── Contextual enrichment config ────────────────────────────────────────────
+// Anthropic Contextual Retrieval (2024): prepend a 50-100 token LLM-generated
+// context blurb to each chunk before embedding.
+// Research: 49% retrieval failure reduction (contextual + BM25); 67% with reranking.
+// Cost: ~$1.02 per million document tokens with prompt caching.
+//
+// Gated by env var: CONTEXTUAL_RETRIEVAL=true (or VITE_FF_USE_CONTEXTUAL_RETRIEVAL=true)
+// Requires: VITE_GROQ_API_KEY (uses Groq llama-3.1-8b-instant for low cost)
+
+const ENABLE_CONTEXTUAL = process.env.CONTEXTUAL_RETRIEVAL === 'true'
+  || process.env.VITE_FF_USE_CONTEXTUAL_RETRIEVAL === 'true';
+const GROQ_KEY = process.env.VITE_GROQ_API_KEY;
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface RawChunk {
-  chunk_id:   string;
-  content:    string;
-  source:     string;
-  categories: string[];
-  keywords:   string[];
+  chunk_id:          string;
+  content:           string;
+  source:            string;
+  categories:        string[];
+  keywords:          string[];
+  enriched_content?: string;  // Contextual blurb + original content (set during enrichment pass)
 }
 
 // ─── Static chunks (mirrored from src/core/rag/knowledge-base.ts) ────────────
@@ -434,16 +448,98 @@ async function embedBatch(texts: string[]): Promise<number[][]> {
     .map(d => d.embedding);
 }
 
+// ─── Contextual enrichment (Anthropic Contextual Retrieval, 2024) ─────────────
+//
+// For each chunk, generates a 50-100 token context blurb via Groq llama-3.1-8b-instant.
+// The blurb is prepended to the chunk content before embedding:
+//   "This chunk is from [source], discussing [topic]. It explains [key insight]."
+//
+// Research: 49% retrieval failure reduction (contextual embeddings + BM25).
+// Cost: ~$1.02 per million document tokens with prompt caching.
+// Uses llama-3.1-8b-instant for minimal cost (~$0.05 per 1M tokens).
+
+const GROQ_CHAT_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const GROQ_ECONOMY_MODEL = 'llama-3.1-8b-instant';
+
+async function generateContextualBlurb(chunk: RawChunk): Promise<string> {
+  if (!GROQ_KEY) return chunk.content;
+
+  const prompt = `You are a knowledge indexing assistant. Generate a single sentence (max 80 tokens) that describes this chunk's context: which source it is from, what topic it covers, and what specific insight it provides. This sentence will be prepended to the chunk before embedding to improve retrieval.
+
+Source: ${chunk.source}
+Categories: ${chunk.categories.join(', ')}
+
+Chunk content:
+${chunk.content.slice(0, 800)}
+
+Respond with ONLY the context sentence. No quotes, no labels, no explanation.`;
+
+  try {
+    const res = await fetch(GROQ_CHAT_URL, {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${GROQ_KEY}`,
+      },
+      body: JSON.stringify({
+        model:       GROQ_ECONOMY_MODEL,
+        messages:    [{ role: 'user', content: prompt }],
+        temperature: 0.1,
+        max_tokens:  100,
+      }),
+    });
+
+    if (!res.ok) return chunk.content;
+
+    const data = await res.json() as { choices: Array<{ message: { content: string } }> };
+    const blurb = data.choices[0]?.message?.content?.trim();
+    if (!blurb) return chunk.content;
+
+    return `${blurb}\n\n${chunk.content}`;
+  } catch {
+    return chunk.content;
+  }
+}
+
+/**
+ * Run contextual enrichment pass on all chunks.
+ * Adds enriched_content to each chunk (blurb + original content).
+ * Falls back gracefully: if Groq is unavailable, enriched_content = original content.
+ */
+async function enrichChunks(chunks: RawChunk[]): Promise<void> {
+  if (!ENABLE_CONTEXTUAL) return;
+
+  console.log('\n  🧠  Contextual enrichment pass (Anthropic method)...');
+  if (!GROQ_KEY) {
+    console.warn('  ⚠   VITE_GROQ_API_KEY not set — skipping contextual enrichment.');
+    console.warn('      Set CONTEXTUAL_RETRIEVAL=true and VITE_GROQ_API_KEY to enable.\n');
+    return;
+  }
+
+  let enriched = 0;
+  for (let i = 0; i < chunks.length; i++) {
+    chunks[i].enriched_content = await generateContextualBlurb(chunks[i]);
+    enriched++;
+    if (i % 10 === 9 || i === chunks.length - 1) {
+      process.stdout.write(`\r  Enriched ${String(enriched).padStart(3)} / ${chunks.length}`);
+    }
+    // Polite pause to respect Groq rate limits (400 RPM on free tier)
+    if (i < chunks.length - 1) await new Promise(r => setTimeout(r, 160));
+  }
+  console.log(`\n  ✓   ${enriched} chunks enriched with contextual blurbs.\n`);
+}
+
 // ─── Supabase upsert ──────────────────────────────────────────────────────────
 
 async function upsertChunks(chunks: Array<RawChunk & { embedding: number[] }>) {
   const rows = chunks.map(c => ({
-    chunk_id:   c.chunk_id,
-    content:    c.content,
-    source:     c.source,
-    categories: c.categories,
-    keywords:   c.keywords,
-    embedding:  c.embedding as unknown as string, // supabase-js passes as JSON array; pgvector casts it
+    chunk_id:          c.chunk_id,
+    content:           c.content,
+    enriched_content:  c.enriched_content ?? null,  // null if enrichment was skipped
+    source:            c.source,
+    categories:        c.categories,
+    keywords:          c.keywords,
+    embedding:         c.embedding as unknown as string, // supabase-js passes as JSON array; pgvector casts it
   }));
 
   const { error } = await supabase
@@ -504,7 +600,12 @@ async function main() {
 
   console.log(`\n  → ${unique.length} unique chunks to embed\n`);
 
-  // 4. Embed in batches
+  // 4. Contextual enrichment pass (USE_CONTEXTUAL_RETRIEVAL)
+  //    Prepends a 50-100 token LLM-generated context blurb to each chunk.
+  //    Must run BEFORE embedding so enriched text gets embedded, not raw text.
+  await enrichChunks(unique);
+
+  // 5. Embed in batches — use enriched_content when available, fall back to content
   const embedded: Array<RawChunk & { embedding: number[] }> = [];
   let totalTokens = 0;
 
@@ -514,7 +615,8 @@ async function main() {
 
     process.stdout.write(`  Embedding ${String(i + 1).padStart(3)}–${String(end).padStart(3)} / ${unique.length} ... `);
 
-    const embeddings = await embedBatch(batch.map(c => c.content));
+    // Embed enriched_content if available (contextual retrieval) else raw content
+    const embeddings = await embedBatch(batch.map(c => c.enriched_content ?? c.content));
     batch.forEach((chunk, j) => {
       embedded.push({ ...chunk, embedding: embeddings[j] });
       totalTokens += Math.ceil(chunk.content.length / 4); // rough estimate
@@ -530,7 +632,7 @@ async function main() {
 
   console.log(`\n  ~${totalTokens.toLocaleString()} tokens estimated (Jina free: 1M/month)\n`);
 
-  // 5. Upsert to Supabase in pages of 20
+  // 6. Upsert to Supabase in pages of 20
   const PAGE = 20;
   for (let i = 0; i < embedded.length; i += PAGE) {
     const batch = embedded.slice(i, i + PAGE);

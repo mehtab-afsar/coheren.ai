@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&display=swap');
 
 @keyframes dashFadeIn {
   from { opacity: 0; transform: translateY(6px); }
@@ -26,6 +26,7 @@
   }
 
   :root {
+    /* ── Tailwind / shadcn ── */
     --brand: 27 96% 61%;
     --brand-foreground: 31 97% 72%;
     --background: 0 0% 100%;
@@ -45,6 +46,75 @@
     --card-foreground: 222 47% 11%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
+
+    /* ── Coheren Design System ── */
+
+    /* Surfaces */
+    --c-surface-bg:      #ffffff;
+    --c-surface-elevated: #fafafa;
+    --c-surface-card:    #f5f5f5;
+    --c-surface-overlay: rgba(255, 255, 255, 0.95);
+
+    /* Borders */
+    --c-border-subtle: rgba(0, 0, 0, 0.07);
+    --c-border-medium: rgba(0, 0, 0, 0.12);
+
+    /* Text */
+    --c-text-primary:   #111111;
+    --c-text-secondary: #444444;
+    --c-text-tertiary:  #888888;
+    --c-text-quaternary: #bbbbbb;
+    --c-text-accent:    #667eea;
+
+    /* Accent palette */
+    --c-accent-purple:      #667eea;
+    --c-accent-purple-soft: rgba(102, 126, 234, 0.10);
+    --c-accent-purple-border: rgba(102, 126, 234, 0.25);
+    --c-accent-blue:   #4a90e2;
+    --c-accent-green:  #22c55e;
+    --c-accent-amber:  #f59e0b;
+    --c-accent-red:    #ef4444;
+
+    /* Gradients */
+    --c-gradient-purple: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --c-gradient-blue:   linear-gradient(135deg, #4a90e2 0%, #667eea 100%);
+    --c-gradient-green:  linear-gradient(135deg, #22c55e 0%, #4a90e2 100%);
+    --c-gradient-soft:   linear-gradient(180deg, rgba(102, 126, 234, 0.02) 0%, rgba(255, 255, 255, 0) 100%);
+
+    /* Shadows — more opinionated */
+    --c-shadow-xs:    0 1px 2px rgba(0, 0, 0, 0.04);
+    --c-shadow-sm:    0 1px 3px rgba(0, 0, 0, 0.06);
+    --c-shadow-card:  0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.06);
+    --c-shadow-md:    0 4px 16px rgba(0, 0, 0, 0.08);
+    --c-shadow-raised: 0 4px 12px rgba(0, 0, 0, 0.08), 0 16px 40px rgba(0, 0, 0, 0.10);
+    --c-shadow-lg:    0 12px 40px rgba(0, 0, 0, 0.12);
+    --c-shadow-focus: 0 0 0 3px rgba(102, 126, 234, 0.20);
+
+    /* Spacing */
+    --c-space-xs:  4px;
+    --c-space-sm:  8px;
+    --c-space-md:  16px;
+    --c-space-lg:  24px;
+    --c-space-xl:  32px;
+    --c-space-2xl: 48px;
+    --c-space-3xl: 64px;
+    --c-space-4xl: 96px;
+
+    /* Border radius */
+    --c-radius-xs:   4px;
+    --c-radius-sm:   8px;
+    --c-radius-md:   12px;
+    --c-radius-lg:   20px;
+    --c-radius-xl:   28px;
+    --c-radius-full: 9999px;
+
+    /* Typography */
+    --c-font-display: 'Fraunces', Georgia, serif;
+    --c-font-body:    'Inter', system-ui, sans-serif;
+
+    /* Easing */
+    --c-ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+    --c-ease-ui:     cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
 

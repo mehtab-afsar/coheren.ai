@@ -9,58 +9,30 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, BookOpen, Dumbbell, Brain, Zap, RotateCcw } from 'lucide-react';
 import type { CurriculumPreview as CurriculumPreviewType, PaceChoice } from '@types-app/agents';
 
 interface Props {
   preview: CurriculumPreviewType;
   onPaceSelect: (choice: PaceChoice, feedback?: string) => void;
   revisedChoice?: PaceChoice | null;
+  stoneNames?: string[];
 }
 
-const TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string; bg: string; label: string }> = {
-  learning:   { icon: <BookOpen size={13} strokeWidth={2} />,  color: '#2563eb', bg: 'rgba(37,99,235,0.08)',  label: 'Learn' },
-  practice:   { icon: <Dumbbell size={13} strokeWidth={2} />,  color: '#7c3aed', bg: 'rgba(124,58,237,0.08)', label: 'Practice' },
-  reflection: { icon: <Brain size={13} strokeWidth={2} />,     color: '#059669', bg: 'rgba(5,150,105,0.08)',  label: 'Reflect' },
-  challenge:  { icon: <Zap size={13} strokeWidth={2} />,       color: '#dc2626', bg: 'rgba(220,38,38,0.08)',  label: 'Challenge' },
-  retrieval:  { icon: <RotateCcw size={13} strokeWidth={2} />, color: '#d97706', bg: 'rgba(217,119,6,0.08)',  label: 'Recall' },
-};
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-const PACE_OPTIONS: { choice: PaceChoice; label: string; sub: string; emoji: string; border: string; bg: string }[] = [
-  {
-    choice: 'too_easy',
-    label: 'Too Easy',
-    sub: 'More challenge please',
-    emoji: '🚀',
-    border: '#a78bfa',
-    bg: 'rgba(124,58,237,0.04)',
-  },
-  {
-    choice: 'just_right',
-    label: 'Just Right',
-    sub: 'This pace works for me',
-    emoji: '✓',
-    border: '#34d399',
-    bg: 'rgba(5,150,105,0.04)',
-  },
-  {
-    choice: 'too_intense',
-    label: 'Too Intense',
-    sub: 'Dial it back a bit',
-    emoji: '😅',
-    border: '#fca5a5',
-    bg: 'rgba(220,38,38,0.04)',
-  },
+const PACE_OPTIONS: { choice: PaceChoice; label: string; sub: string }[] = [
+  { choice: 'too_easy',    label: 'Too Easy',    sub: 'More challenge' },
+  { choice: 'just_right',  label: 'Just Right',  sub: 'This pace works' },
+  { choice: 'too_intense', label: 'Too Intense', sub: 'Dial back a bit' },
 ];
 
-export default function CurriculumPreview({ preview, onPaceSelect, revisedChoice }: Props) {
-  const [showPacePicker, setShowPacePicker] = useState(false);
+export default function CurriculumPreview({ preview, onPaceSelect, revisedChoice, stoneNames }: Props) {
   const [selectedPace, setSelectedPace] = useState<PaceChoice | null>(null);
   const [feedbackText, setFeedbackText] = useState('');
 
   const handlePaceSelect = (choice: PaceChoice) => {
     setSelectedPace(choice);
-    setTimeout(() => onPaceSelect(choice, feedbackText || undefined), 400);
+    setTimeout(() => onPaceSelect(choice, feedbackText || undefined), 300);
   };
 
   const REVISED_LABEL: Record<string, string> = {
@@ -69,274 +41,280 @@ export default function CurriculumPreview({ preview, onPaceSelect, revisedChoice
   };
 
   return (
-    <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 20px' }}>
+    <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 24px' }}>
+
       {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: 24 }}>
-        <p style={{
-          fontSize: 11,
-          fontWeight: 700,
-          color: '#7c3aed',
-          letterSpacing: '0.08em',
-          textTransform: 'uppercase',
-          margin: '0 0 8px',
-        }}>
-          Your first week
-        </p>
-        <h2 style={{
-          fontSize: 20,
-          fontWeight: 700,
-          color: '#1a1a2e',
-          margin: '0 0 6px',
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        style={{ marginBottom: 32 }}
+      >
+        <h1 style={{
+          fontFamily: 'var(--c-font-display)',
+          fontSize: 'clamp(28px, 6vw, 40px)',
+          fontWeight: 500,
+          color: 'var(--c-text-primary)',
           letterSpacing: '-0.02em',
+          lineHeight: 1.2,
+          margin: '0 0 10px',
         }}>
-          {preview.weekTheme}
-        </h2>
-        <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>
-          By Day 7: {preview.endOfWeekOutcome}
+          Your 90-day plan
+          <br />is ready.
+        </h1>
+        {stoneNames && stoneNames.length > 0 && (
+          <p style={{
+            fontSize: 15,
+            color: 'var(--c-text-tertiary)',
+            margin: '0 0 4px',
+            lineHeight: 1.5,
+            fontFamily: 'var(--c-font-body)',
+          }}>
+            Adapted for {stoneNames.join(' and ')}.
+          </p>
+        )}
+        <p style={{
+          fontSize: 13,
+          color: 'var(--c-text-quaternary)',
+          margin: 0,
+          fontFamily: 'var(--c-font-body)',
+        }}>
+          Week 1 · {preview.weekTheme}
         </p>
-      </div>
+      </motion.div>
 
       {/* 7-day task list */}
-      <div style={{
-        background: '#fff',
-        borderRadius: 20,
-        boxShadow: '0 4px 24px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03)',
-        overflow: 'hidden',
-        marginBottom: 20,
-      }}>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+        style={{
+          backgroundColor: '#ffffff',
+          border: '1px solid var(--c-border-subtle)',
+          borderRadius: 12,
+          overflow: 'hidden',
+          boxShadow: 'var(--c-shadow-card)',
+          marginBottom: 28,
+        }}
+      >
         {preview.tasks.map((task, idx) => {
-          const typeConf = TYPE_CONFIG[task.type] ?? TYPE_CONFIG['practice'];
           const isLast = idx === preview.tasks.length - 1;
+          const dayName = DAY_NAMES[idx] ?? `Day ${task.day}`;
+          const isRest = (task.type as string) === 'rest' || task.title?.toLowerCase().includes('rest');
           return (
-            <motion.div
+            <div
               key={task.day}
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.2, delay: idx * 0.04 }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 14,
-                padding: '14px 18px',
-                minHeight: 64,
-                borderBottom: isLast ? 'none' : '1px solid #f9fafb',
+                gap: 12,
+                padding: '11px 16px',
+                borderBottom: isLast ? 'none' : '1px solid var(--c-border-subtle)',
               }}
             >
-              {/* Day number */}
+              {/* Day dot */}
               <div style={{
-                width: 32,
-                height: 32,
-                borderRadius: 10,
-                background: idx === 0 ? 'linear-gradient(135deg, #7c3aed, #a78bfa)' : '#f3f4f6',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                backgroundColor: idx === 0 ? 'var(--c-accent-purple)' : 'var(--c-border-medium)',
                 flexShrink: 0,
-                fontSize: 12,
-                fontWeight: 700,
-                color: idx === 0 ? '#fff' : '#6b7280',
-                fontFamily: 'monospace',
+              }} />
+
+              {/* Day name */}
+              <span style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'var(--c-text-quaternary)',
+                width: 28,
+                flexShrink: 0,
+                fontFamily: 'var(--c-font-body)',
               }}>
-                {String(task.day).padStart(2, '0')}
-              </div>
+                {dayName}
+              </span>
 
-              {/* Content */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                  {/* Type pill */}
-                  <span style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 3,
-                    padding: '2px 7px',
-                    borderRadius: 99,
-                    background: typeConf.bg,
-                    color: typeConf.color,
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: '0.04em',
-                    textTransform: 'uppercase',
-                  }}>
-                    {typeConf.icon}
-                    {typeConf.label}
-                  </span>
+              {/* Task title */}
+              <span style={{
+                fontSize: 13,
+                color: isRest ? 'var(--c-text-quaternary)' : 'var(--c-text-primary)',
+                fontFamily: 'var(--c-font-body)',
+                flex: 1,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                fontStyle: isRest ? 'italic' : 'normal',
+              }}>
+                {isRest ? 'Rest' : task.title}
+              </span>
 
-                  {/* Duration */}
-                  <span style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 3,
-                    fontSize: 11,
-                    color: '#9ca3af',
-                  }}>
-                    <Clock size={10} strokeWidth={2} />
-                    {task.estimatedMinutes} min
-                  </span>
-                </div>
-
-                <p style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: '#1a1a2e',
-                  margin: '0 0 2px',
-                  lineHeight: 1.3,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
+              {/* Duration */}
+              {!isRest && task.estimatedMinutes && (
+                <span style={{
+                  fontSize: 11,
+                  color: 'var(--c-text-quaternary)',
+                  flexShrink: 0,
+                  fontFamily: 'var(--c-font-body)',
                 }}>
-                  {task.title}
-                </p>
-                <p style={{
-                  fontSize: 12,
-                  color: '#9ca3af',
-                  margin: 0,
-                  lineHeight: 1.4,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}>
-                  {task.summary}
-                </p>
-              </div>
-            </motion.div>
+                  {task.estimatedMinutes}m
+                </span>
+              )}
+            </div>
           );
         })}
-      </div>
+      </motion.div>
 
-      {/* Bottom CTA — revised confirm OR initial pace picker */}
+      {/* Locked phase 2+ teaser */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.4, delay: 0.2 }}
+        style={{
+          padding: '10px 14px',
+          backgroundColor: 'var(--c-surface-elevated)',
+          border: '1px solid var(--c-border-subtle)',
+          borderRadius: 10,
+          marginBottom: 28,
+        }}
+      >
+        <span style={{
+          fontSize: 12,
+          color: 'var(--c-text-quaternary)',
+          fontStyle: 'italic',
+          fontFamily: 'var(--c-font-body)',
+        }}>
+          Phase 2 & 3 unlock after Phase 1 completes — designed around your progress.
+        </span>
+      </motion.div>
+
+      {/* Pace selector + CTA */}
       <AnimatePresence mode="wait">
-
-        {/* ── Revised plan: show confirm button ── */}
         {revisedChoice ? (
           <motion.div
             key="revised"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
+            style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
           >
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              marginBottom: 14,
+            <p style={{
+              fontSize: 13, color: 'var(--c-text-tertiary)', margin: '0 0 4px',
+              fontFamily: 'var(--c-font-body)',
             }}>
               <span style={{
-                fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em',
-                color: '#7c3aed', background: 'rgba(124,58,237,0.08)',
-                padding: '3px 10px', borderRadius: 99,
-              }}>
-                {REVISED_LABEL[revisedChoice] ?? 'Revised'} ✓
-              </span>
-              <span style={{ fontSize: 13, color: '#6b7280' }}>Plan updated — does this feel right?</span>
-            </div>
+                color: 'var(--c-accent-purple)',
+                fontWeight: 600,
+              }}>{REVISED_LABEL[revisedChoice] ?? 'Revised'}</span> — does this feel right?
+            </p>
             <button
               onClick={() => onPaceSelect(revisedChoice, feedbackText || undefined)}
               style={{
-                width: '100%',
-                padding: '15px',
-                borderRadius: 14,
-                background: 'linear-gradient(135deg, #7c3aed, #a78bfa)',
-                color: '#fff',
-                border: 'none',
-                fontSize: 15,
-                fontWeight: 700,
-                cursor: 'pointer',
-                boxShadow: '0 4px 14px rgba(124,58,237,0.3)',
+                width: '100%', padding: '15px',
+                borderRadius: 12, background: 'var(--c-accent-purple)',
+                color: '#fff', border: 'none', fontSize: 15, fontWeight: 600,
+                cursor: 'pointer', fontFamily: 'var(--c-font-body)',
+                letterSpacing: '-0.01em',
               }}
             >
-              Start with this plan →
+              Start Day 1 →
             </button>
             <button
               onClick={() => onPaceSelect('just_right')}
               style={{
-                width: '100%', marginTop: 10, padding: '12px',
-                borderRadius: 14, background: 'transparent',
-                color: '#9ca3af', border: '1.5px solid #f3f4f6',
-                fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: 13, color: 'var(--c-text-quaternary)', padding: '8px 0',
+                fontFamily: 'var(--c-font-body)',
               }}
             >
-              Actually, original pace was fine
-            </button>
-          </motion.div>
-
-        ) : !showPacePicker ? (
-          <motion.div
-            key="cta"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <p style={{ textAlign: 'center', fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 14 }}>
-              How does this pace feel?
-            </p>
-            <button
-              onClick={() => setShowPacePicker(true)}
-              style={{
-                width: '100%', padding: '15px', borderRadius: 14,
-                background: 'linear-gradient(135deg, #7c3aed, #a78bfa)',
-                color: '#fff', border: 'none', fontSize: 15, fontWeight: 700,
-                cursor: 'pointer', boxShadow: '0 4px 14px rgba(124,58,237,0.3)',
-              }}
-            >
-              Rate the difficulty →
+              Original pace was fine
             </button>
           </motion.div>
         ) : (
           <motion.div
-            key="picker"
-            initial={{ opacity: 0, y: 10 }}
+            key="pace"
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
           >
-            <p style={{ textAlign: 'center', fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 14 }}>
+            {/* Pace label */}
+            <p style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--c-text-secondary)',
+              margin: '0 0 12px',
+              fontFamily: 'var(--c-font-body)',
+            }}>
               How does this pace feel?
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+            {/* 3-pill inline selector */}
+            <div style={{
+              display: 'flex',
+              gap: 8,
+              marginBottom: 24,
+            }}>
               {PACE_OPTIONS.map(opt => {
                 const isSelected = selectedPace === opt.choice;
+                const isJustRight = opt.choice === 'just_right';
                 return (
-                  <motion.button
+                  <button
                     key={opt.choice}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handlePaceSelect(opt.choice)}
+                    onClick={() => setSelectedPace(opt.choice)}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 14,
-                      padding: '14px 18px', minHeight: 72, borderRadius: 14,
-                      border: isSelected ? `2px solid ${opt.border}` : '2px solid #f3f4f6',
-                      background: isSelected ? opt.bg : '#fafafa',
-                      cursor: 'pointer', transition: 'all 0.15s', outline: 'none', textAlign: 'left',
+                      flex: 1,
+                      padding: '10px 8px',
+                      borderRadius: 10,
+                      border: isSelected
+                        ? `2px solid var(--c-accent-purple)`
+                        : '1.5px solid var(--c-border-subtle)',
+                      background: isSelected
+                        ? 'var(--c-accent-purple-soft)'
+                        : 'transparent',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                      outline: 'none',
+                      textAlign: 'center',
                     }}
                   >
-                    <span style={{ fontSize: 20, flexShrink: 0, lineHeight: 1 }}>{opt.emoji}</span>
-                    <div>
-                      <p style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e', margin: '0 0 2px' }}>
-                        {opt.label}
-                      </p>
-                      <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>{opt.sub}</p>
+                    <div style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: isSelected ? 'var(--c-accent-purple)' : 'var(--c-text-primary)',
+                      fontFamily: 'var(--c-font-body)',
+                      marginBottom: 2,
+                    }}>
+                      {opt.label}
                     </div>
-                  </motion.button>
+                    <div style={{
+                      fontSize: 10,
+                      color: 'var(--c-text-quaternary)',
+                      fontFamily: 'var(--c-font-body)',
+                    }}>
+                      {opt.sub}
+                    </div>
+                  </button>
                 );
               })}
             </div>
 
-            {/* Optional feedback */}
-            <div style={{ marginTop: 16 }}>
-              <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 8px' }}>
-                Anything else we should know? <span style={{ fontStyle: 'italic' }}>(optional)</span>
-              </p>
-              <textarea
-                value={feedbackText}
-                onChange={e => setFeedbackText(e.target.value)}
-                placeholder="e.g. I travel for work, recovering from injury..."
-                rows={2}
-                style={{
-                  width: '100%', borderRadius: 12, border: '1.5px solid #e5e7eb',
-                  padding: '10px 14px', fontSize: 13, resize: 'none', outline: 'none',
-                  fontFamily: 'inherit', color: '#1a1a2e', lineHeight: 1.6,
-                  boxSizing: 'border-box', transition: 'border-color 0.15s',
-                }}
-                onFocus={e => { e.currentTarget.style.borderColor = '#c4b5fd'; }}
-                onBlur={e => { e.currentTarget.style.borderColor = '#e5e7eb'; }}
-              />
-            </div>
+            {/* Single CTA */}
+            <button
+              onClick={() => selectedPace ? handlePaceSelect(selectedPace) : handlePaceSelect('just_right')}
+              style={{
+                width: '100%',
+                padding: '15px',
+                borderRadius: 12,
+                background: 'var(--c-accent-purple)',
+                color: '#fff',
+                border: 'none',
+                fontSize: 15,
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: 'var(--c-font-body)',
+                letterSpacing: '-0.01em',
+              }}
+            >
+              Start Day 1 →
+            </button>
           </motion.div>
         )}
       </AnimatePresence>

@@ -8,6 +8,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@lib/supabase';
 import { useStore } from '@core/store/useStore';
+import { flags } from '@config/feature-flags';
+import { runShadowPipeline, diffRoadmaps } from '@core/agents/shadowOrchestrator';
+import type { DiffReport } from '@core/agents/shadowOrchestrator';
 
 interface AgentLogRow {
   id: string;
@@ -92,12 +95,21 @@ function computeStats(logs: AgentLogRow[]): AgentStats[] {
 
 export default function AgentHealthDashboard() {
   const user = useStore(s => s.user);
+  const roadmap = useStore(s => s.roadmap);
+  const agentRoadmap = useStore(s => s.agentRoadmap);
+  const currentGoal = useStore(s => s.currentGoal) as { specificGoal?: string; category?: string } | null;
+
   const [logs, setLogs] = useState<AgentLogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d'>('7d');
   const [refreshKey, setRefreshKey] = useState(0);
   const fetchCountRef = useRef(0);
+
+  // Shadow pipeline state
+  const [shadowRunning, setShadowRunning] = useState(false);
+  const [shadowError, setShadowError] = useState<string | null>(null);
+  const [diffReport, setDiffReport] = useState<DiffReport | null>(null);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -127,6 +139,41 @@ export default function AgentHealthDashboard() {
   }, [user?.id, timeRange, refreshKey]);
 
   const fetchLogs = () => setRefreshKey(k => k + 1);
+
+  const handleRunShadow = async () => {
+    if (!flags.SHADOW_PIPELINE) return;
+    const goal = currentGoal?.specificGoal ?? roadmap?.title ?? '';
+    if (!goal) { setShadowError('No active goal to shadow-test'); return; }
+
+    setShadowRunning(true);
+    setShadowError(null);
+    setDiffReport(null);
+    try {
+      const timeline = roadmap ? Math.round((roadmap as unknown as { duration?: number }).duration ?? 90) : 90;
+      const dailyTime = parseInt((roadmap?.dailyTime ?? '30'), 10) || 30;
+      const result = await runShadowPipeline({
+        input: {
+          goal,
+          timeline,
+          dailyTime,
+          stoneAnswers: [],
+          category: currentGoal?.category,
+        },
+      });
+
+      // Build live AgentRoadmapV2 from store
+      const liveRoadmapV2 = (agentRoadmap as unknown as import('@core/store/useStore').AgentRoadmapV2 | null);
+      if (liveRoadmapV2 && Array.isArray(liveRoadmapV2.months)) {
+        setDiffReport(diffRoadmaps(liveRoadmapV2, result.roadmap));
+      } else {
+        setDiffReport({ totalDays: { live: 0, shadow: result.roadmap.totalDays ?? 0 }, phaseCountDiff: 0, stoneModificationsDiff: [], frameworkChanged: false, weekTitleChanges: 0, summary: 'No live roadmap to compare against' });
+      }
+    } catch (err) {
+      setShadowError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setShadowRunning(false);
+    }
+  };
 
   const stats = computeStats(logs);
   const totalRuns = logs.length;
@@ -264,6 +311,55 @@ export default function AgentHealthDashboard() {
           </div>
         </>
       )}
+
+      {/* Shadow Pipeline (5.5) — only shown when SHADOW_PIPELINE flag is on */}
+      {flags.SHADOW_PIPELINE && (
+        <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 600, color: '#7c3aed', margin: 0 }}>Shadow Pipeline</h3>
+            <button
+              onClick={handleRunShadow}
+              disabled={shadowRunning}
+              style={{
+                padding: '6px 16px', borderRadius: 8, border: 'none',
+                background: shadowRunning ? '#e2e8f0' : '#7c3aed', color: 'white',
+                fontSize: 13, fontWeight: 600, cursor: shadowRunning ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {shadowRunning ? 'Running...' : 'Run Shadow Pipeline'}
+            </button>
+          </div>
+          {shadowError && (
+            <div style={{ padding: 10, background: '#fef2f2', borderRadius: 8, border: '1px solid #fecaca', color: '#dc2626', fontSize: 13, marginBottom: 12 }}>
+              {shadowError}
+            </div>
+          )}
+          {diffReport && (
+            <div style={{ padding: 16, background: '#f5f3ff', borderRadius: 10, border: '1px solid #c4b5fd' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#1a1a2e', marginBottom: 8 }}>Diff Report</div>
+              <div style={{ fontSize: 13, color: '#4c1d95', fontFamily: 'monospace', marginBottom: 8 }}>{diffReport.summary}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12, color: '#64748b' }}>
+                <div>Live days: {diffReport.totalDays.live} → Shadow days: {diffReport.totalDays.shadow}</div>
+                <div>Phase count diff: {diffReport.phaseCountDiff > 0 ? `+${diffReport.phaseCountDiff}` : diffReport.phaseCountDiff}</div>
+                <div>Framework changed: {diffReport.frameworkChanged ? 'Yes' : 'No'}</div>
+                <div>Week title changes: {diffReport.weekTitleChanges}</div>
+                {diffReport.stoneModificationsDiff.length > 0 && (
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    Stone focus diff: {diffReport.stoneModificationsDiff.join(', ')}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => setDiffReport(null)}
+                style={{ marginTop: 8, padding: '3px 10px', borderRadius: 6, border: '1px solid #c4b5fd', background: 'white', color: '#7c3aed', fontSize: 11, cursor: 'pointer' }}
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
+

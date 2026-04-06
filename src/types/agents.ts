@@ -4,6 +4,35 @@
 // AGENT 1: GOAL ANALYZER TYPES
 // ============================================
 
+// ============================================
+// SPRINT 1: NEW RESEARCH-BACKED TYPES
+// ============================================
+
+/** Prochaska TTM stage — determines curriculum type (Contemplation = motivation activation, not skills) */
+export type ChangeStage = 'precontemplation' | 'contemplation' | 'preparation' | 'action' | 'maintenance';
+
+/** Goal classification — drives BCT decomposition vs domain pedagogy branching in Agent 3 */
+export type GoalType = 'skill_based' | 'behavior_based' | 'outcome_based' | 'hybrid';
+
+/** Miller & Rollnick readiness ruler — two primary drivers of motivational readiness */
+export interface ReadinessProfile {
+  importance: number;    // 1–10: how important is achieving this to the user right now
+  selfEfficacy: number;  // 1–10: how confident are they that they could actually succeed
+}
+
+/** Linguistic signal analysis — HOW the user answers, not just WHAT they say */
+export interface LinguisticSignals {
+  hedgeDensity: number;              // fraction of hedged phrases ("maybe", "sort of", "I guess")
+  changeVsSustainRatio: number;      // ratio of change-talk to sustain-talk markers (>1 = change orientation)
+  passiveVoiceCount: number;         // external locus of control signal
+  conditionalLanguage: boolean;      // "if I could", "when I have time" → barrier-framing
+  certaintyMarkers: string[];        // "definitely", "absolutely" → high confidence areas
+  answerLength: 'minimal' | 'normal' | 'elaborate'; // minimal = avoidance signal
+  topicAvoidanceDetected: boolean;   // very short answer to emotionally loaded question
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+
 export type GoalDomain =
   | 'Cognitive'
   | 'Kinesthetic'
@@ -72,6 +101,9 @@ export interface GoalAnalysis {
   successCriteria: string[];
   prerequisites: string[];
   commonObstacles: string[];
+
+  /** Goal classification for Agent 3 branching. skill_based=domain pedagogy; behavior_based=BCT decomposition */
+  goalType?: GoalType;
 }
 
 export interface Agent1Output {
@@ -122,6 +154,12 @@ export interface StoneProfile {
   agent3Guidance: string[];            // Instructions for curriculum builder
   agent5Note: string;                  // Prediction for recalibrator (e.g. "expect dip at day 12")
   confidence: number;                  // 0–1
+  /** Miller & Rollnick readiness ruler — populated when USE_READINESS_RULER is on */
+  readinessProfile?: ReadinessProfile;
+  /** Prochaska TTM stage — drives Agent 3 curriculum type decision */
+  changeStage?: ChangeStage;
+  /** Linguistic signals from the interview — populated when USE_LINGUISTIC_SIGNALS is on */
+  linguisticSignals?: LinguisticSignals;
 }
 
 // --- Question Phase (MODE 1 output — rendered in UI) ---
@@ -178,6 +216,10 @@ export interface DaySkeleton {
   taskType: 'practice' | 'learning' | 'reflection' | 'challenge' | 'retrieval' | 'rest';
   intensity: number;               // 0.0–1.0 relative intensity
   focusArea: string;               // Which focusArea key this day targets
+  /** Spaced repetition: populated when USE_SPACED_REPETITION_SCHEDULE is on */
+  isSpacedReview?: boolean;        // true = this day is a review session (not new content)
+  reviewOf?: number[];             // Which prior absolute day numbers this day reviews
+  spacingInterval?: number;        // Days since original encoding of the reviewed content
 }
 
 export interface Phase {
@@ -277,12 +319,88 @@ export interface Roadmap {
   reviewMoments: ReviewMoment[];
   restDays: RestDays;
   modifiers_from_stones: Record<string, CurriculumModifiers>;
+  /** Estimated day when primary habit reaches automaticity (Lally UCL 2010, avg 66 days). Populated when USE_TIMELINE_SCALING is on. */
+  habitAutomaticityDay?: number;
+  /** Timeline adjusted for daily time budget using sqrt scaling formula. Populated when USE_TIMELINE_SCALING is on. */
+  adjustedTimeline?: number;
+  /** If adjustedTimeline > requested timeline, this warning is surfaced to the user. */
+  timelineMismatchWarning?: string;
 }
 
 export interface Agent3Output {
   roadmap: Roadmap;
   domainPedagogy: string;        // The specific pedagogical framework applied (e.g. "Sports Periodization")
   stoneModificationSummary: string; // How the stone profile changed the curriculum
+}
+
+// ── Rolling Curriculum — Sprint 4 ──────────────────────────────────────────
+
+/** Competency gate that must be met before graduating to the next phase. */
+export interface CompetencyGate {
+  /** Human-readable description of what mastery looks like at this gate */
+  description: string;
+  /** Minimum completion rate over 5 consecutive days (0–100) */
+  minCompletionRate: number;
+  /** Maximum average difficulty rating acceptable for graduation (1–5; lower = less struggle) */
+  maxAvgDifficulty: number;
+  /** Optional: specific skills/behaviors that must be demonstrated */
+  requiredBehaviors?: string[];
+}
+
+/** Milestone at a percentage point of the total timeline */
+export interface CurriculumMilestone {
+  percentComplete: number;  // 30 | 60 | 90
+  day: number;              // Absolute day number
+  competencyDescription: string;
+  graduationGate: CompetencyGate;
+}
+
+/**
+ * CurriculumSkeleton — produced by Agent 3 when USE_ROLLING_CURRICULUM is on.
+ *
+ * Replaces the full AgentRoadmapV2 as the onboarding output. Contains:
+ *   - Phase structure with Dreyfus-based splits
+ *   - Competency gates for phase graduation
+ *   - Milestones at 30/60/90% of timeline
+ *   - Week 1 fully planned (7 days with spaced repetition pattern)
+ *   - goalType branching metadata for downstream agents
+ *
+ * Weeks 2+ are generated on demand by recalibrateWeek() using the skeleton
+ * as the planning context — this is the "rolling window" model.
+ */
+export interface CurriculumSkeleton {
+  totalDays: number;
+  adjustedTimeline?: number;
+  habitAutomaticityDay?: number;
+  goalType: GoalType;
+
+  phases: Array<{
+    phaseNumber: number;
+    phaseName: 'Foundation' | 'Development' | 'Mastery' | 'Phase0_Motivation';
+    startDay: number;
+    endDay: number;
+    dreyfusStage: 'novice' | 'advanced_beginner' | 'competent' | 'proficient';
+    primaryGoals: string[];
+    graduationGate: CompetencyGate;
+    /** BCT primitives for behavior_based goals — sequenced by Fogg Tiny Habits principle */
+    bctPrimitives?: Array<{
+      name: string;
+      cue: string;
+      behavior: string;
+      installByDay: number;
+    }>;
+  }>;
+
+  milestones: CurriculumMilestone[];
+
+  /** Week 1 fully planned — all 7 days with spaced repetition pattern */
+  week1Days: import('../core/store/useStore').WeekDay[];
+
+  /** Stone-driven modifications applied to this skeleton */
+  stoneModifications: string[];
+
+  /** For BCT goals: ordered behavioral primitives to install phase-by-phase */
+  behavioralPrimitives?: string[];
 }
 
 // ============================================
@@ -449,6 +567,8 @@ export interface AgentContext {
   energyPattern?: string;   // e.g. 'morning', 'evening', 'afternoon', 'night'
   name?: string;
   category?: string;
+  /** Where the user practices/works on their goal — e.g. 'gym', 'home', 'office', 'outdoor', 'online' */
+  practiceEnvironment?: string;
 }
 
 export interface AgentPipeline {

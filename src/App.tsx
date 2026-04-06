@@ -9,6 +9,7 @@ import ErrorBoundary from '@shared/components/ErrorBoundary';
 import { onAuthStateChange, supabase } from '@lib/supabase';
 import { getTasksByRoadmapId, calculateStreak } from '@lib/database';
 import { identifyUser, resetAnalyticsUser } from '@lib/analytics';
+import { expireStaleCheckpoints } from '@lib/checkpointHelpers';
 
 function App() {
   const step = useStore((state) => state.step);
@@ -27,6 +28,9 @@ function App() {
       console.warn('Auth check timed out, continuing without auth');
       setAuthInitialized(true);
     }, 5000); // 5 second timeout (increased from 3s)
+
+    // Purge any stale pipeline checkpoints from previous sessions
+    expireStaleCheckpoints();
 
     checkAuth()
       .then(() => {

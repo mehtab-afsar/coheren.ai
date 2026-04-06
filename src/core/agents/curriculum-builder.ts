@@ -30,12 +30,15 @@ import type {
   ReviewMoment,
   CurriculumPreview,
   CurriculumPreviewTask,
+  CurriculumSkeleton,
+  CompetencyGate,
   PaceCalibration,
   PaceChoice,
 } from '@types-app/agents';
 import type { AgentRoadmapV2, WeekPlan, WeekDay, MonthPlan } from '@core/store/useStore';
-import { callPremium as callReasoning } from '@lib/ai-router'; // Sonnet for curriculum quality
+import { callPremium as callReasoning, callStrategicWithThinking, callStrategicWithTools } from '@lib/ai-router';
 import { retrieveKnowledgeSemantic } from '@core/rag/semantic-retriever';
+import { flags } from '@config/feature-flags';
 
 // Agent3Output now returns AgentRoadmapV2 for the new hierarchical roadmap
 export type Agent3OutputV2 = AgentRoadmapV2;
@@ -381,11 +384,14 @@ OUTPUT FORMAT — return ONLY valid JSON, no markdown:
 // ─── User Prompt ─────────────────────────────────────────────────────────────
 
 function buildUserPrompt(
-  context: AgentContext,
-  goalAnalysis: Agent1Output,
-  stoneProfile: Agent2ProfileOutput,
-  ragContext: string,
-  monthCount: number,
+  context:             AgentContext,
+  goalAnalysis:        Agent1Output,
+  stoneProfile:        Agent2ProfileOutput,
+  ragContext:          string,
+  monthCount:          number,
+  adjustedTimeline?:   number,
+  habitAutomaticity?:  number,
+  mismatchWarning?:    string,
 ): string {
   const g = goalAnalysis.goalAnalysis;
   const sp = stoneProfile.stoneProfile;
@@ -418,7 +424,47 @@ function buildUserPrompt(
 
   const totalWeeks = Math.ceil(context.timeline / 7);
 
-  return `Build a ${context.timeline}-day month/week/day curriculum roadmap with ${monthCount} months.
+  // ── Sprint 1: Science-backed context blocks ───────────────────────────────
+  const effectiveDays = adjustedTimeline ?? context.timeline;
+  const timelineBlock = adjustedTimeline && adjustedTimeline !== context.timeline
+    ? `Requested Timeline: ${context.timeline} days
+Adjusted Timeline (time-budget scaled): ${adjustedTimeline} days
+${mismatchWarning ? `⚠️ TIMELINE MISMATCH: ${mismatchWarning}` : ''}`
+    : `Timeline: ${context.timeline} days`;
+
+  const habitBlock = habitAutomaticity
+    ? `\nHabit Automaticity Target: Day ${habitAutomaticity} (Lally UCL 2010 — average 66 days, NOT 21). Plan for the "valley of low motivation" at Days 10–21 (hardest period). Do NOT promise habit formation before Day 45.`
+    : '';
+
+  const dreyfusBlock = flags.USE_TIMELINE_SCALING ? `
+## Dreyfus Phase Split Guidance (use as default, adjust for stones)
+Foundation: ~${Math.round(effectiveDays * 0.32)} days (30–35% of timeline)
+Development: ~${Math.round(effectiveDays * 0.42)} days (40–45% of timeline)
+Mastery:     ~${Math.round(effectiveDays * 0.26)} days (20–30% of timeline)
+Stone adjustments: SkillGap(High) → extend Foundation +20%; FearOfFailure → extend Foundation +10%;
+Overcommitment → compress Development −10%; selfEfficacy≥8 → compress Foundation −15%;
+ChangeStage=contemplation → add Phase 0 (7–14 days) for motivation activation before Foundation.` : '';
+
+  const bctBlock = flags.USE_BCT_DECOMPOSITION && g.goalType === 'behavior_based' ? `
+## BCT DECOMPOSITION REQUIRED (behavior-based goal, no pre-built curriculum)
+This goal has no standard curriculum. Use Behavior Change Technique (BCT) framework to decompose it:
+Step 1: Identify 3–5 Behavioral Primitives (specific cue → behavior chains)
+Step 2: Sequence primitives from smallest to largest (Fogg Tiny Habits: never stack until current ≥85% completion for 5 days)
+Step 3: Phase 1 = install Primitive 1 only. Phase 2 = Primitive 1 consolidated + introduce Primitive 2. Etc.
+Do NOT design a skills curriculum for this goal — it needs behavioral sequencing, not knowledge transfer.` : '';
+
+  const spacedRepBlock = flags.USE_SPACED_REPETITION_SCHEDULE ? `
+## Spaced Repetition Week 1 Pattern (Cepeda et al. 2008 — mandatory)
+Day 1: New concept (encoding session)
+Day 2: 24-hour review of Day 1 (MOST IMPORTANT — first review within 24 hrs)
+Day 3: New concept
+Day 4: Interleaved review of Days 1 + 3 (3-day spacing for Day 1 concept)
+Day 5: Deliberate practice / application
+Day 6: Full week review — all concepts interleaved (7-day spacing for Day 1)
+Day 7: Rest (hippocampal consolidation — mandatory, never skip)
+Mark Day 2/4/6 days as type "retrieval" not "learning".` : '';
+
+  return `Build a ${effectiveDays}-day month/week/day curriculum roadmap with ${monthCount} months.
 
 ## Goal Intelligence (from Agent 1)
 Goal: "${g.goal}"
@@ -426,13 +472,13 @@ Domain: ${g.domain}${g.subDomains.length ? ` + [${g.subDomains.join(', ')}]` : '
 Complexity: ${g.complexity}
 Horizon: ${g.horizon}
 Daily Time Available: ${context.dailyTimeAvailable} minutes
-Total Days: ${context.timeline}
+${timelineBlock}
 Total Weeks: ${totalWeeks}
 Constraints: ${g.constraintsDetected.join(', ') || 'None'}
 Risks: ${g.risksDetected.join(', ') || 'None'}
 Typical Realistic Timeline: ${g.typicalTimeline.realistic}
 Key Milestones Agent 1 Identified: ${g.keyMilestones.join(' | ')}
-Common Obstacles: ${g.commonObstacles.join(' | ')}
+Common Obstacles: ${g.commonObstacles.join(' | ')}${habitBlock}${dreyfusBlock}${bctBlock}${spacedRepBlock}
 
 ## Behavioral Signals (from Shadow Extractor)
 ${context.behavioralFlags && context.behavioralFlags.length > 0
@@ -499,6 +545,132 @@ export function computePhaseCount(timeline: number, horizon: string): number {
   return 3; // Mid-term default
 }
 
+// ─── Sprint 1: Research-Backed Helpers ───────────────────────────────────────
+
+/**
+ * Adjust the requested timeline based on daily time budget.
+ * Formula (sqrt scaling): adjustedTimeline = raw × (60 / dailyMinutes)^0.5
+ * Research: square root scaling because doubling time doesn't double learning rate.
+ *
+ * Examples:
+ *   15 min/day for 90-day goal  → 90 × √(60/15) = 90 × 2 = 180 days
+ *   30 min/day                  → 90 × √(60/30) = 90 × 1.41 = 127 days
+ *   60 min/day (baseline)       → 90 days
+ *   120 min/day                 → 90 × √(60/120) = 90 × 0.71 = 64 days
+ *
+ * Only runs when USE_TIMELINE_SCALING flag is on.
+ */
+export function computeAdjustedTimeline(
+  rawTimeline:  number,
+  dailyMinutes: number,
+  primaryStone?: string,
+  changeStage?:  string,
+): { adjustedTimeline: number; mismatchWarning: string | undefined } {
+  if (!flags.USE_TIMELINE_SCALING || dailyMinutes <= 0) {
+    return { adjustedTimeline: rawTimeline, mismatchWarning: undefined };
+  }
+
+  const baseline       = 60; // minutes
+  const scalingFactor  = Math.sqrt(baseline / Math.max(dailyMinutes, 5));
+  let   adjusted       = Math.round(rawTimeline * scalingFactor);
+
+  // Stone adjustments
+  if (primaryStone === 'Inconsistency' || primaryStone === 'ProcrastinationPattern') {
+    adjusted = Math.round(adjusted * 1.1); // +10%: these users need more buffer
+  }
+  if (changeStage === 'contemplation') {
+    adjusted = Math.round(adjusted * 1.15); // +15%: motivation activation phase needed
+  }
+
+  let mismatchWarning: string | undefined;
+  if (adjusted > rawTimeline * 1.1) {
+    const extraDays = adjusted - rawTimeline;
+    mismatchWarning = `Your current daily time budget (${dailyMinutes} min/day) means this goal realistically needs about ${adjusted} days, not ${rawTimeline}. That's ${extraDays} extra days. You can either extend your timeline, increase daily time, or narrow your goal scope.`;
+  }
+
+  return { adjustedTimeline: adjusted, mismatchWarning };
+}
+
+/**
+ * Estimate the day when the primary habit will reach automaticity.
+ * Research: Lally et al., UCL 2010 — average 66 days (range 18–254).
+ * The 21-day myth is not supported by research.
+ *
+ * Adjustments:
+ *   - Kinesthetic habits → 45–80 days (physical conditioning adds time)
+ *   - Cognitive habits   → 30–66 days (mental habits automate slightly faster)
+ *   - Inconsistency stone → push to 90+ days
+ *   - 15 min/day sessions → faster automaticity (shorter, more frequent = stronger context cue)
+ */
+export function computeHabitAutomaticityDay(
+  domain:        string,
+  primaryStone?: string,
+  dailyMinutes?: number,
+): number {
+  let base = 66; // Lally UCL 2010 average
+
+  if (domain === 'Kinesthetic' || domain === 'Health') base = 72;
+  if (domain === 'Cognitive')   base = 55;
+  if (domain === 'Lifestyle')   base = 60;
+
+  if (primaryStone === 'Inconsistency')        base = Math.round(base * 1.35); // +35%
+  if (primaryStone === 'ProcrastinationPattern') base = Math.round(base * 1.2);  // +20%
+  if (primaryStone === 'LowConfidence')        base = Math.round(base * 1.1);
+
+  // Short sessions → stronger context-dependence → slightly faster automaticity
+  if (dailyMinutes && dailyMinutes <= 15) base = Math.round(base * 0.9);
+
+  return Math.max(18, Math.min(base, 120));
+}
+
+/**
+ * Generate science-backed Week 1 day skeletons using spaced repetition.
+ * Research: Cepeda et al. (2008) — first review within 24 hours of encoding
+ * is the single most impactful spacing rule.
+ *
+ * Pattern (Mon–Sun):
+ *   1 = learning (new concept)
+ *   2 = retrieval (24-hr review of Day 1)
+ *   3 = learning (new concept)
+ *   4 = retrieval (mixed review of Days 1+3)
+ *   5 = practice (application / deliberate practice)
+ *   6 = reflection (week review — all concepts at Day 1+5 spacing)
+ *   7 = rest (hippocampal consolidation)
+ *
+ * Only fires when USE_SPACED_REPETITION_SCHEDULE is on.
+ */
+export function buildSpacedRepetitionWeek1(
+  startDay: number = 1
+): import('@core/store/useStore').WeekDay[] {
+  type DayType = import('@core/store/useStore').WeekDay['type'];
+
+  const plan: Array<{ type: DayType; title: string; theme: string; intensity: number; focusArea: string; isSpacedReview?: boolean; reviewOf?: number[]; spacingInterval?: number }> = [
+    { type: 'learning',   title: 'Day 1 — New Concept',          theme: 'Introduction & encoding',         intensity: 0.35, focusArea: 'foundation',    isSpacedReview: false },
+    { type: 'retrieval',  title: 'Day 2 — 24hr Review',          theme: '24-hour spaced review of Day 1',  intensity: 0.30, focusArea: 'consolidation', isSpacedReview: true, reviewOf: [1], spacingInterval: 1 },
+    { type: 'learning',   title: 'Day 3 — New Concept',          theme: 'Second concept introduction',     intensity: 0.40, focusArea: 'foundation',    isSpacedReview: false },
+    { type: 'retrieval',  title: 'Day 4 — Mixed Review',         theme: 'Interleaved review: Days 1 & 3', intensity: 0.35, focusArea: 'consolidation', isSpacedReview: true, reviewOf: [1, 3], spacingInterval: 3 },
+    { type: 'practice',   title: 'Day 5 — Deliberate Practice',  theme: 'Application of both concepts',   intensity: 0.50, focusArea: 'application',   isSpacedReview: false },
+    { type: 'reflection', title: 'Day 6 — Week Review',          theme: 'Full week review (7-day spacing)', intensity: 0.30, focusArea: 'consolidation', isSpacedReview: true, reviewOf: [1, 2, 3, 4, 5], spacingInterval: 5 },
+    { type: 'rest',       title: 'Day 7 — Rest & Consolidation', theme: 'Active rest — hippocampal consolidation', intensity: 0.10, focusArea: 'recovery', isSpacedReview: false },
+  ];
+
+  return plan.map((d, i) => ({
+    day:       startDay + i,
+    weekDay:   i + 1,
+    type:      d.type,
+    title:     d.title,
+    theme:     d.theme,
+    intensity: d.intensity,
+    focusArea: d.focusArea,
+    // Extended fields (stored but not required by WeekDay base type)
+    ...(d.isSpacedReview !== undefined && { isSpacedReview: d.isSpacedReview }),
+    ...(d.reviewOf && { reviewOf: d.reviewOf.map(r => startDay + r - 1) }),
+    ...(d.spacingInterval !== undefined && { spacingInterval: d.spacingInterval }),
+  }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 // ─── Validate + Normalize V2 ─────────────────────────────────────────────────
 
 function validateAndNormalizeV2(raw: unknown, context: AgentContext): AgentRoadmapV2 {
@@ -558,18 +730,22 @@ function validateAndNormalizeV2(raw: unknown, context: AgentContext): AgentRoadm
           days[6] = { ...days[6], type: 'rest', intensity: Math.min(days[6].intensity, 0.2) };
         }
       } else if (isFirstWeek) {
-        // Generate basic Week 1 days if LLM didn't provide them
+        // Generate Week 1 days — use spaced repetition pattern if flag is on
         const startDay = typeof week.startDay === 'number' ? week.startDay : 1;
-        const weekTypes: WeekDay['type'][] = ['learning', 'practice', 'practice', 'reflection', 'practice', 'challenge', 'rest'];
-        days = weekTypes.map((type, di) => ({
-          day: startDay + di,
-          weekDay: di + 1,
-          type,
-          title: type === 'rest' ? 'Rest & Consolidation' : `Day ${di + 1} — ${type}`,
-          theme: type === 'rest' ? 'Active rest' : '',
-          intensity: type === 'rest' ? 0.1 : 0.3 + di * 0.03,
-          focusArea: type === 'rest' ? 'recovery' : 'general',
-        }));
+        if (flags.USE_SPACED_REPETITION_SCHEDULE) {
+          days = buildSpacedRepetitionWeek1(startDay);
+        } else {
+          const weekTypes: WeekDay['type'][] = ['learning', 'practice', 'practice', 'reflection', 'practice', 'challenge', 'rest'];
+          days = weekTypes.map((type, di) => ({
+            day: startDay + di,
+            weekDay: di + 1,
+            type,
+            title: type === 'rest' ? 'Rest & Consolidation' : `Day ${di + 1} — ${type}`,
+            theme: type === 'rest' ? 'Active rest' : '',
+            intensity: type === 'rest' ? 0.1 : 0.3 + di * 0.03,
+            focusArea: type === 'rest' ? 'recovery' : 'general',
+          }));
+        }
       }
 
       return {
@@ -628,6 +804,11 @@ function validateAndNormalizeV2(raw: unknown, context: AgentContext): AgentRoadm
  * Populates daySkeleton from the pre-planned Week 1 days.
  */
 export function buildLegacyAgent3Output(v2: AgentRoadmapV2): Agent3Output {
+  // Read Sprint 1 metadata attached by buildCurriculum (if present)
+  const meta = v2 as AgentRoadmapV2 & { _habitAutomaticityDay?: number; _adjustedTimeline?: number; _mismatchWarning?: string };
+  const habitAutomaticityDay   = meta._habitAutomaticityDay;
+  const adjustedTimeline       = meta._adjustedTimeline;
+  const timelineMismatchWarning = meta._mismatchWarning;
   const phases: Phase[] = v2.months.map((month, idx) => {
     // Build daySkeleton from week days that are populated
     const daySkeleton = month.weeks
@@ -662,6 +843,9 @@ export function buildLegacyAgent3Output(v2: AgentRoadmapV2): Agent3Output {
       reviewMoments: [] as ReviewMoment[],
       restDays: { pattern: 'weekly', customDays: [6, 0], restType: 'active_recovery' as const },
       modifiers_from_stones: {} as Roadmap['modifiers_from_stones'],
+      habitAutomaticityDay,
+      adjustedTimeline,
+      timelineMismatchWarning,
     },
     domainPedagogy: v2.domainPedagogy,
     stoneModificationSummary: v2.stoneModificationSummary,
@@ -681,12 +865,28 @@ export async function buildCurriculum(
   // Derive month count from timeline/horizon (never from LLM)
   const phaseCount = computePhaseCount(context.timeline, g.horizon);
 
+  // ── Sprint 1: Research-backed timeline + habit science computations ────────
+  const primaryStone = stoneProfile.stoneProfile.primaryStone;
+  const changeStage  = stoneProfile.stoneProfile.changeStage;
+  const { adjustedTimeline, mismatchWarning } = computeAdjustedTimeline(
+    context.timeline,
+    context.dailyTimeAvailable,
+    primaryStone,
+    changeStage,
+  );
+  const habitAutomaticityDay = computeHabitAutomaticityDay(
+    g.domain,
+    primaryStone,
+    context.dailyTimeAvailable,
+  );
+
   // Fetch RAG context if not provided by caller — multi-query for richer context
   let science = ragContext ?? '';
-  if (!science) {
-    const primaryStone = stoneProfile.stoneProfile.primaryStone;
-    const stoneTypes = stoneProfile.stoneProfile.stones.map(s => s.type);
-    science = await retrieveKnowledgeSemantic({
+  let behavioralContext = '';
+  const stoneTypes   = stoneProfile.stoneProfile.stones.map(s => s.type);
+
+  await Promise.all([
+    (!science ? retrieveKnowledgeSemantic({
       query: `${g.domain} ${g.goal} skill progression phases milestones daily activities specific`,
       additionalQueries: [
         `${primaryStone} ${g.domain} intervention curriculum modification coaching`,
@@ -695,22 +895,302 @@ export async function buildCurriculum(
       boostCategories: [g.domain.toLowerCase(), ...stoneTypes.map(s => s.toLowerCase())],
       boostKeywords: [g.domain.toLowerCase(), primaryStone.toLowerCase()],
       matchCount: 6,
-    });
-  }
+    }).then(s => { science = s; }).catch(() => {}) : Promise.resolve()),
+    (flags.USE_BEHAVIORAL_RAG ? (async () => {
+      try {
+        const { retrieveBehavioralPatterns } = await import('@core/rag');
+        behavioralContext = await retrieveBehavioralPatterns({
+          query:        `${g.domain} ${primaryStone} curriculum learning pattern success`,
+          stoneProfile,
+          domain:       g.domain,
+          matchCount:   2,
+        });
+      } catch { /* non-fatal */ }
+    })() : Promise.resolve()),
+  ]);
 
-  const { content } = await callReasoning({
-    messages: [
-      { role: 'system', content: buildSystemPrompt(g.domain) },
-      { role: 'user',   content: buildUserPrompt(context, goalAnalysis, stoneProfile, science, phaseCount) },
-    ],
-    temperature: 0.3,
-    max_tokens:  6000,
-    response_format: { type: 'json_object' },
-  });
+  const behavioralBlock = behavioralContext
+    ? `\n## Prior Behavioral Context\n${behavioralContext}\n`
+    : '';
+
+  const userPrompt = buildUserPrompt(
+    context, goalAnalysis, stoneProfile, science + behavioralBlock, phaseCount,
+    adjustedTimeline, habitAutomaticityDay, mismatchWarning,
+  );
+
+  const callMessages = [
+    { role: 'system' as const, content: buildSystemPrompt(g.domain) },
+    { role: 'user'   as const, content: userPrompt },
+  ];
+
+  let content: string;
+  if (flags.USE_AGENT_TOOL_CALLING && flags.USE_CLAUDE_FOR_CURRICULUM) {
+    // Tool-use + extended thinking: Agent 3 queries pedagogy + stone tools then generates
+    const { makeCurriculumToolHandler, CURRICULUM_TOOL_SCHEMAS } = await import('@lib/agentTools');
+    const toolHandler = makeCurriculumToolHandler(
+      async (query) => {
+        const { retrieveKnowledgeHybrid, retrieveKnowledgeSemantic: ragSem } = await import('@core/rag/semantic-retriever');
+        return flags.USE_HYBRID_RAG
+          ? retrieveKnowledgeHybrid({ query, matchCount: 3 })
+          : ragSem({ query, matchCount: 3 });
+      },
+    );
+    const systemWithToolInstructions = buildSystemPrompt(g.domain) + `
+
+TOOL USE INSTRUCTIONS:
+1. Call get_pedagogy_framework for the "${g.domain}" domain.
+2. Call get_stone_interventions for each detected stone.
+3. Optionally call search_behavioral_knowledge for additional science.
+4. Use all retrieved context to build the curriculum JSON.`;
+
+    const result = await callStrategicWithTools({
+      messages:     [{ role: 'user', content: userPrompt }],
+      systemPrompt: systemWithToolInstructions,
+      tools:        CURRICULUM_TOOL_SCHEMAS,
+      toolHandler,
+      temperature:  0.3,
+      max_tokens:   12000,
+    });
+    content = result.finalText;
+    if (result.toolCalls.length > 0) {
+      console.debug(`[Agent 3 tools] ${result.toolCalls.map(t => t.name).join(', ')}`);
+    }
+  } else if (flags.USE_CLAUDE_FOR_CURRICULUM) {
+    const result = await callStrategicWithThinking({
+      messages:     callMessages,
+      budgetTokens: 8000,
+      max_tokens:   12000,
+    });
+    content = result.content;
+    if (result.thinking) {
+      console.debug('[Agent 3 thinking]', result.thinking.slice(0, 200) + '…');
+    }
+  } else {
+    const result = await callReasoning({
+      messages:        callMessages,
+      temperature:     0.3,
+      max_tokens:      6000,
+      response_format: { type: 'json_object' },
+    });
+    content = result.content;
+  }
   if (!content) throw new Error('Agent 3: No response received from model');
 
   const raw = JSON.parse(repairJSON(content)) as unknown;
-  return validateAndNormalizeV2(raw, context);
+  const v2  = validateAndNormalizeV2(raw, context);
+
+  // Attach Sprint 1 metadata so buildLegacyAgent3Output can propagate them to Roadmap
+  (v2 as AgentRoadmapV2 & { _habitAutomaticityDay?: number; _adjustedTimeline?: number; _mismatchWarning?: string })
+    ._habitAutomaticityDay = habitAutomaticityDay;
+  (v2 as AgentRoadmapV2 & { _adjustedTimeline?: number })
+    ._adjustedTimeline = adjustedTimeline !== context.timeline ? adjustedTimeline : undefined;
+  if (mismatchWarning) {
+    (v2 as AgentRoadmapV2 & { _mismatchWarning?: string })._mismatchWarning = mismatchWarning;
+  }
+
+  return v2;
+}
+
+// ============================================
+// ROLLING CURRICULUM SKELETON (USE_ROLLING_CURRICULUM)
+// ============================================
+
+/**
+ * Derive Dreyfus-based phase splits for any timeline.
+ * Returns [foundationEnd, developmentEnd, masteryEnd] as day numbers.
+ */
+function computePhaseSplits(
+  totalDays: number,
+  primaryStone: string,
+  changeStage?: string,
+): { foundationEnd: number; developmentEnd: number; masteryEnd: number } {
+  // Base Dreyfus splits: Foundation 33%, Development 42%, Mastery 25%
+  let foundationRatio  = 0.33;
+  let developmentRatio = 0.42;
+
+  // Stone adjustments
+  if (primaryStone === 'SkillGap')         foundationRatio += 0.07;  // more Foundation
+  if (primaryStone === 'FearOfFailure')    foundationRatio += 0.04;
+  if (primaryStone === 'Overcommitment')   developmentRatio -= 0.05;
+  if (primaryStone === 'LowConfidence')    foundationRatio += 0.04;
+
+  // High self-efficacy signal: compress Foundation slightly (handled upstream via readiness)
+  if (changeStage === 'action')            foundationRatio -= 0.08;  // already started
+  if (changeStage === 'contemplation')     foundationRatio += 0.05;  // needs motivation phase
+
+  // Clamp ratios
+  foundationRatio  = Math.min(0.45, Math.max(0.20, foundationRatio));
+  developmentRatio = Math.min(0.50, Math.max(0.30, developmentRatio));
+
+  const foundationEnd  = Math.round(totalDays * foundationRatio);
+  const developmentEnd = Math.round(totalDays * (foundationRatio + developmentRatio));
+  const masteryEnd     = totalDays;
+
+  return { foundationEnd, developmentEnd, masteryEnd };
+}
+
+function buildCompetencyGate(phase: string, difficulty: number): CompetencyGate {
+  const gatesByPhase: Record<string, CompetencyGate> = {
+    Foundation: {
+      description:        'Demonstrates consistent execution of core fundamentals without prompting',
+      minCompletionRate:  80,
+      maxAvgDifficulty:   3.0,
+      requiredBehaviors:  ['Completes daily task without skipping for 5 consecutive days'],
+    },
+    Development: {
+      description:        'Applies skills in varied contexts with increasing autonomy',
+      minCompletionRate:  75,
+      maxAvgDifficulty:   3.5,
+      requiredBehaviors:  ['Handles a deliberate practice challenge with minimal scaffolding'],
+    },
+    Mastery: {
+      description:        'Executes skills fluently; proactively manages obstacles',
+      minCompletionRate:  85,
+      maxAvgDifficulty:   2.5,
+    },
+  };
+  const base = gatesByPhase[phase] ?? gatesByPhase['Foundation'];
+  // Adjust gate thresholds for very hard goals (difficulty > 3 means raise bar slightly)
+  if (difficulty > 3) base.minCompletionRate = Math.max(65, base.minCompletionRate - 10);
+  return base;
+}
+
+/**
+ * Build a CurriculumSkeleton — phase structure + competency gates + Week 1 + milestones.
+ * No LLM call — fully deterministic from Agent 1 + Agent 2 outputs.
+ *
+ * Used when USE_ROLLING_CURRICULUM is on. Agent 4 generates each subsequent week
+ * against the phase skeleton rather than a pre-planned roadmap.
+ */
+export function buildCurriculumSkeleton(
+  context:      AgentContext,
+  goalAnalysis: Agent1Output,
+  stoneProfile: Agent2ProfileOutput,
+  adjustedTimeline?: number,
+  habitAutomaticityDay?: number,
+): CurriculumSkeleton {
+  const g          = goalAnalysis.goalAnalysis;
+  const sp         = stoneProfile.stoneProfile;
+  const totalDays  = adjustedTimeline ?? context.timeline;
+  const primaryStone = sp.primaryStone;
+  const changeStage  = sp.changeStage;
+
+  const { foundationEnd, developmentEnd, masteryEnd } = computePhaseSplits(
+    totalDays, primaryStone, changeStage,
+  );
+
+  // Add Phase 0 for contemplation-stage users (7–14 days motivation activation)
+  const phase0Days = changeStage === 'contemplation' ? Math.min(14, Math.round(totalDays * 0.08)) : 0;
+  const phase0End  = phase0Days;
+
+  const phases: CurriculumSkeleton['phases'] = [];
+
+  if (phase0Days > 0) {
+    phases.push({
+      phaseNumber:   0,
+      phaseName:     'Phase0_Motivation',
+      startDay:      1,
+      endDay:        phase0End,
+      dreyfusStage:  'novice',
+      primaryGoals:  [
+        'Clarify personal "why" behind the goal',
+        'Build the minimum viable daily behavior (2 minutes)',
+        'Establish anchor habit and context',
+      ],
+      graduationGate: {
+        description:       'Completes the tiny starter behavior for 5 consecutive days',
+        minCompletionRate: 70,
+        maxAvgDifficulty:  2.0,
+      },
+    });
+  }
+
+  const baseOffset = phase0Days;
+
+  phases.push({
+    phaseNumber:  1,
+    phaseName:    'Foundation',
+    startDay:     baseOffset + 1,
+    endDay:       baseOffset + foundationEnd,
+    dreyfusStage: 'novice',
+    primaryGoals: [
+      `Build the core ${g.domain.toLowerCase()} habit with consistent execution`,
+      'Establish reliable trigger → behavior → reward loop',
+      'Reach 80%+ completion rate before advancing',
+    ],
+    graduationGate: buildCompetencyGate('Foundation', g.complexity === 'advanced' ? 4 : 2),
+    bctPrimitives:  g.goalType === 'behavior_based' ? [
+      { name: 'Morning trigger', cue: 'Wake + first routine action', behavior: 'Complete 2-min starter behavior', installByDay: baseOffset + 7 },
+      { name: 'Task initiation', cue: 'Sit at workspace', behavior: 'Open the primary task immediately', installByDay: baseOffset + 14 },
+    ] : undefined,
+  });
+
+  phases.push({
+    phaseNumber:  2,
+    phaseName:    'Development',
+    startDay:     baseOffset + foundationEnd + 1,
+    endDay:       baseOffset + developmentEnd,
+    dreyfusStage: 'competent',
+    primaryGoals: [
+      'Apply skills in progressively varied contexts',
+      'Handle setbacks and recover without losing streak',
+      'Begin deliberate practice at the performance boundary',
+    ],
+    graduationGate: buildCompetencyGate('Development', g.complexity === 'advanced' ? 4 : 2),
+    bctPrimitives:  g.goalType === 'behavior_based' ? [
+      { name: 'Distraction blocking', cue: 'Task initiation cue fires', behavior: 'Single-task for full session', installByDay: baseOffset + foundationEnd + 14 },
+      { name: 'Evening review', cue: 'Post-dinner', behavior: '5-min log of what was done', installByDay: baseOffset + foundationEnd + 21 },
+    ] : undefined,
+  });
+
+  phases.push({
+    phaseNumber:  3,
+    phaseName:    'Mastery',
+    startDay:     baseOffset + developmentEnd + 1,
+    endDay:       masteryEnd,
+    dreyfusStage: 'proficient',
+    primaryGoals: [
+      'Achieve fluent autonomous execution without deliberate effort',
+      'Maintain performance under stress and context disruption',
+      'Establish relapse recovery protocol',
+    ],
+    graduationGate: buildCompetencyGate('Mastery', g.complexity === 'advanced' ? 4 : 2),
+  });
+
+  // Milestones at 30%, 60%, 90%
+  const milestones: CurriculumSkeleton['milestones'] = [30, 60, 90].map(pct => ({
+    percentComplete:          pct,
+    day:                      Math.round(totalDays * pct / 100),
+    competencyDescription:    pct === 30
+      ? `Foundation behaviors consistent; ready for Development phase challenges`
+      : pct === 60
+        ? `Core skills applied autonomously; difficulty perception normalized`
+        : `Near-automaticity; resilient to context disruption`,
+    graduationGate: buildCompetencyGate(
+      pct <= 30 ? 'Foundation' : pct <= 60 ? 'Development' : 'Mastery',
+      2,
+    ),
+  }));
+
+  // Week 1 — spaced repetition pattern (Cepeda et al. 2008)
+  const week1Days = buildSpacedRepetitionWeek1(1);
+
+  // Stone modification summary
+  const stoneModifications = sp.agent3Guidance ?? [];
+
+  return {
+    totalDays,
+    adjustedTimeline:     adjustedTimeline !== context.timeline ? adjustedTimeline : undefined,
+    habitAutomaticityDay,
+    goalType:             g.goalType ?? 'skill_based',
+    phases,
+    milestones,
+    week1Days,
+    stoneModifications,
+    behavioralPrimitives: g.goalType === 'behavior_based'
+      ? phases.flatMap(p => p.bctPrimitives?.map(b => b.name) ?? [])
+      : undefined,
+  };
 }
 
 // ============================================

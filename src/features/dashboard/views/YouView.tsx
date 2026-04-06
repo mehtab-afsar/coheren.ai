@@ -1,29 +1,113 @@
 import { useState } from 'react';
-import { User, Clock, Bell, Trash2, Sunrise, Target, Moon, Sun, Brain } from 'lucide-react';
+import { User, Clock, Sunrise, Target, Moon, Sun, Trash2, ChevronDown } from 'lucide-react';
 import { useStore } from '@core/store/useStore';
-import { tokens, text, card } from '@core/design-system';
-import { useBreakpoint } from '@hooks/useBreakpoint';
 import { updateProfile } from '@lib/database';
-import { ap } from '@core/design-system/appleTokens';
 
-type YouTab = 'you' | 'settings';
+// ── Stone label map ───────────────────────────────────────────────────────────
 
-// Maps stone type → { observation, aiAction }
-const STONE_PATTERNS: Record<string, { observation: string; aiAction: string }> = {
-  TimeConstraint:         { observation: "You have limited time each day",                         aiAction: "I keep tasks short and respect your daily time budget" },
-  ResourceGap:            { observation: "You sometimes lack access to resources",                 aiAction: "I prioritise tasks using only what you already have" },
-  EnvironmentFriction:    { observation: "Your environment can get in the way",                    aiAction: "I schedule tasks that work in your actual setting" },
-  Inconsistency:          { observation: "You tend to have uneven consistency",                    aiAction: "I use micro-tasks to keep momentum on off days" },
-  FearOfFailure:          { observation: "You tend to avoid starting when success is uncertain",   aiAction: "I build in low-stakes practice before any public step" },
-  Perfectionism:          { observation: "You sometimes delay finishing while refining",           aiAction: "I set explicit 'ship-it' milestones to break the loop" },
-  LowConfidence:          { observation: "Your confidence dips when progress slows",              aiAction: "I sequence wins early so momentum builds from day one" },
-  UnrealisticExpectations:{ observation: "You expect fast results and get discouraged",           aiAction: "I show compound progress charts, not just daily output" },
-  FocusFragility:         { observation: "Your attention scatters when tasks are vague",          aiAction: "I write single, concrete instructions for every task" },
-  CognitiveFatigue:       { observation: "You fade mentally toward the end of the day",           aiAction: "I put demanding tasks in your peak-energy window" },
-  SkillGap:               { observation: "You're still building foundational skills",             aiAction: "I scaffold each step on the last — no jumps" },
-  ProcrastinationPattern: { observation: "Starting is harder than continuing for you",            aiAction: "I open every task with a 2-minute action step" },
-  Overcommitment:         { observation: "You take on more than your schedule can hold",          aiAction: "I cap your daily load and protect rest days" },
+const STONE_LABELS: Record<string, string> = {
+  TimeConstraint:          'Time Constraint',
+  ResourceGap:             'Resource Gap',
+  EnvironmentFriction:     'Environment Friction',
+  Inconsistency:           'Inconsistency',
+  FearOfFailure:           'Fear of Failure',
+  Perfectionism:           'Perfectionism',
+  LowConfidence:           'Low Confidence',
+  UnrealisticExpectations: 'Unrealistic Expectations',
+  FocusFragility:          'Focus Fragility',
+  CognitiveFatigue:        'Cognitive Fatigue',
+  SkillGap:                'Skill Gap',
+  ProcrastinationPattern:  'Procrastination Pattern',
+  Overcommitment:          'Overcommitment',
 };
+
+const STONE_AI_ACTION: Record<string, string> = {
+  TimeConstraint:          'Tasks capped at your daily budget. Micro-session fallback on every task.',
+  ResourceGap:             'Tasks use only tools you already have. No new purchases required.',
+  EnvironmentFriction:     'Sessions scheduled to fit your actual setting and context.',
+  Inconsistency:           'Never Miss Twice rule active. Micro-tasks on off days.',
+  FearOfFailure:           'Low-stakes practice before any visible or public step.',
+  Perfectionism:           'Explicit ship-it milestones to break the refinement loop.',
+  LowConfidence:           'Early wins sequenced first so momentum builds from Day 1.',
+  UnrealisticExpectations: 'Compound progress shown, not just daily output.',
+  FocusFragility:          'Single, concrete instruction per task. No vague goals.',
+  CognitiveFatigue:        'Demanding tasks placed in your peak-energy window.',
+  SkillGap:                'Each step scaffolded on the last — no skipped prerequisites.',
+  ProcrastinationPattern:  'Every task opens with a 2-minute action step.',
+  Overcommitment:          'Daily load capped. Rest days protected.',
+};
+
+const SEVERITY_COLORS: Record<string, { bg: string; border: string; text: string }> = {
+  Low:      { bg: 'rgba(34,197,94,0.06)',   border: 'rgba(34,197,94,0.25)',   text: '#16a34a' },
+  Moderate: { bg: 'rgba(245,158,11,0.06)',  border: 'rgba(245,158,11,0.25)',  text: '#d97706' },
+  High:     { bg: 'rgba(239,68,68,0.06)',   border: 'rgba(239,68,68,0.25)',   text: '#dc2626' },
+  Critical: { bg: 'rgba(124,58,237,0.06)',  border: 'rgba(124,58,237,0.25)', text: '#7c3aed' },
+};
+
+// ── Inline preference row ─────────────────────────────────────────────────────
+
+function PrefRow({
+  icon,
+  label,
+  value,
+  isEditing,
+  onEdit,
+  children,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  isEditing: boolean;
+  onEdit: () => void;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div
+      onClick={() => !isEditing && children && onEdit()}
+      style={{
+        display: 'flex',
+        alignItems: isEditing ? 'flex-start' : 'center',
+        gap: 14,
+        padding: '14px 16px',
+        cursor: !isEditing && children ? 'pointer' : 'default',
+        borderBottom: '1px solid var(--c-border-subtle)',
+      }}
+      onMouseEnter={e => { if (!isEditing && children) e.currentTarget.style.backgroundColor = 'var(--c-surface-elevated)'; }}
+      onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+    >
+      <div style={{ color: 'var(--c-text-quaternary)', flexShrink: 0, marginTop: isEditing ? 2 : 0 }}>
+        {icon}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: 11, fontWeight: 600, letterSpacing: '0.05em',
+          textTransform: 'uppercase', color: 'var(--c-text-quaternary)',
+          marginBottom: 3, fontFamily: 'var(--c-font-body)',
+        }}>
+          {label}
+        </div>
+        {isEditing ? (
+          <div onClick={e => e.stopPropagation()}>
+            {children}
+          </div>
+        ) : (
+          <div style={{
+            fontSize: 14, fontWeight: 500,
+            color: 'var(--c-text-primary)',
+            fontFamily: 'var(--c-font-body)',
+          }}>
+            {value}
+          </div>
+        )}
+      </div>
+      {!isEditing && children && (
+        <span style={{ fontSize: 13, color: 'var(--c-text-quaternary)', flexShrink: 0 }}>›</span>
+      )}
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 export default function YouView() {
   const {
@@ -38,36 +122,35 @@ export default function YouView() {
     resetOnboarding,
     stoneProfile,
   } = useStore();
-  const user = useStore((state) => state.user);
-  const { isMobile } = useBreakpoint();
+  const user = useStore(s => s.user);
 
-  const [activeTab, setActiveTab] = useState<YouTab>('you');
-  const [editingCard, setEditingCard] = useState<string | null>(null);
-  const [tempName, setTempName] = useState(universalProfile.name || '');
-  const [tempCheckInTime, setTempCheckInTime] = useState(checkInTime);
+  const [editingPref, setEditingPref]       = useState<string | null>(null);
+  const [tempName, setTempName]             = useState(universalProfile.name || '');
+  const [tempCheckIn, setTempCheckIn]       = useState(checkInTime);
+  const [expandedStone, setExpandedStone]   = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
-  const handleSaveCard = (cardType: string) => {
-    if (cardType === 'name') {
+  const handleSavePref = (pref: string) => {
+    if (pref === 'name') {
       const trimmed = tempName.trim();
       if (trimmed) {
         updateUniversalProfile({ name: trimmed });
         if (user?.id) {
-          updateProfile(user.id, { full_name: trimmed }).catch((err) =>
+          updateProfile(user.id, { full_name: trimmed }).catch(err =>
             console.warn('Could not sync name to DB:', err)
           );
         }
       }
-    } else if (cardType === 'checkin') {
-      setCheckInTime(tempCheckInTime);
+    } else if (pref === 'checkin') {
+      setCheckInTime(tempCheckIn);
     }
-    setEditingCard(null);
+    setEditingPref(null);
   };
 
-  const handleCancelEdit = () => {
+  const handleCancelPref = () => {
     setTempName(universalProfile.name || '');
-    setTempCheckInTime(checkInTime);
-    setEditingCard(null);
+    setTempCheckIn(checkInTime);
+    setEditingPref(null);
   };
 
   const handleReset = () => {
@@ -83,351 +166,369 @@ export default function YouView() {
     .toUpperCase();
 
   const goalTitle = currentGoal.specificGoal || roadmap?.title || 'Your Goal';
-
   const stones = stoneProfile?.stoneProfile?.stones || [];
+  const dailyMinutes = roadmap?.dailyTime || `${((currentGoal as Record<string, unknown>)?.timeline as Record<string, unknown>)?.dailyTimeCommitment_minutes ?? 30} min`;
 
-
-  // Your Setup key-value rows
-  const setupRows = [
-    { label: 'Goal',        value: goalTitle },
-    { label: 'Daily time',  value: roadmap?.dailyTime || `${((currentGoal as Record<string, unknown>)?.timeline as Record<string, unknown>)?.dailyTimeCommitment_minutes ?? 30} min` },
-    { label: 'Focus time',  value: universalProfile.energyPattern ? `${universalProfile.energyPattern.charAt(0).toUpperCase()}${universalProfile.energyPattern.slice(1)}` : 'Not set' },
-    { label: 'Wake-up',     value: universalProfile.dailyRoutine?.wakeTime || 'Not set' },
-    { label: 'Weekends',    value: (universalProfile as Record<string, unknown>).weekendAvailability ? String((universalProfile as Record<string, unknown>).weekendAvailability).charAt(0).toUpperCase() + String((universalProfile as Record<string, unknown>).weekendAvailability).slice(1) : 'Not set' },
-  ];
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    fontSize: 14,
+    padding: '8px 0',
+    border: 'none',
+    borderBottom: '1.5px solid var(--c-accent-purple)',
+    background: 'transparent',
+    color: 'var(--c-text-primary)',
+    outline: 'none',
+    marginBottom: 10,
+    fontFamily: 'var(--c-font-body)',
+    boxSizing: 'border-box',
+  };
 
   return (
-    <div style={{ fontFamily: ap.font }}>
-      {/* ── Header ── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <h1 style={{
-          fontSize: 26,
-          fontWeight: 700,
-          color: ap.textPrimary,
-          letterSpacing: '-0.03em',
-          margin: 0,
+    <div style={{ fontFamily: 'var(--c-font-body)', paddingBottom: 80 }}>
+
+      {/* ── Identity header ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32 }}>
+        {/* Initials circle */}
+        <div style={{
+          width: 52, height: 52, borderRadius: '50%', flexShrink: 0,
+          backgroundColor: 'var(--c-accent-purple)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 18, fontWeight: 700, color: '#fff', letterSpacing: '-0.02em',
         }}>
-          You
-        </h1>
-        <span style={{
-          display: 'inline-flex', alignItems: 'center',
-          padding: '3px 9px', borderRadius: 6,
-          fontSize: 11, fontWeight: 600,
-          color: ap.textSecondary, backgroundColor: ap.surfaceAlt,
-          fontFamily: ap.font,
-        }}>
-          Day {currentDay}
-        </span>
+          {initials}
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h1 style={{
+            fontFamily: 'var(--c-font-display)',
+            fontSize: 26,
+            fontWeight: 500,
+            letterSpacing: '-0.02em',
+            color: 'var(--c-text-primary)',
+            margin: '0 0 2px',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {universalProfile.name || 'Welcome'}
+          </h1>
+          <p style={{
+            fontSize: 13,
+            color: 'var(--c-text-tertiary)',
+            margin: 0,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            Day {currentDay} · {streak > 0 ? `${streak}-day streak` : goalTitle}
+          </p>
+        </div>
       </div>
 
-      {/* ── Identity Hero Card ── */}
-      <div style={{
-        backgroundColor: ap.surface,
-        borderRadius: 14,
-        border: `1px solid ${ap.border}`,
-        boxShadow: ap.shadow,
-        padding: '18px 20px',
-        marginBottom: 20,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+      {/* ── Your Stones ── */}
+      {stones.length > 0 && (
+        <div style={{ marginBottom: 32 }}>
           <div style={{
-            width: 46, height: 46, borderRadius: 12, flexShrink: 0,
-            background: `linear-gradient(135deg, ${ap.accent}, #8B7CF6)`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 16, fontWeight: 700, color: '#fff',
+            fontSize: 10, fontWeight: 600, letterSpacing: '0.08em',
+            textTransform: 'uppercase', color: 'var(--c-text-quaternary)',
+            marginBottom: 12,
           }}>
-            {initials}
+            Your Patterns
           </div>
 
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{
-              fontSize: 16, fontWeight: 700, color: ap.textPrimary,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
-            }}>
-              {universalProfile.name || 'Welcome'}
+          <div style={{
+            backgroundColor: '#ffffff',
+            border: '1px solid var(--c-border-subtle)',
+            borderRadius: 12,
+            overflow: 'hidden',
+            boxShadow: 'var(--c-shadow-card)',
+          }}>
+            {stones.map((stone, idx) => {
+              const sev = stone.severity ?? 'Low';
+              const colors = SEVERITY_COLORS[sev] ?? SEVERITY_COLORS.Low;
+              const isExpanded = expandedStone === stone.type;
+              const barWidth = Math.max(8, Math.round((stone.riskImpact ?? 0.5) * 100));
+
+              return (
+                <div key={stone.type} style={{
+                  borderTop: idx > 0 ? '1px solid var(--c-border-subtle)' : 'none',
+                }}>
+                  {/* Stone row */}
+                  <div
+                    onClick={() => setExpandedStone(isExpanded ? null : stone.type)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      padding: '13px 16px',
+                      cursor: 'pointer',
+                      backgroundColor: isExpanded ? 'var(--c-surface-elevated)' : 'transparent',
+                    }}
+                  >
+                    {/* Name */}
+                    <span style={{
+                      fontSize: 13, fontWeight: 500,
+                      color: 'var(--c-text-primary)', flex: 1,
+                    }}>
+                      {STONE_LABELS[stone.type] ?? stone.type}
+                    </span>
+
+                    {/* Impact bar */}
+                    <div style={{
+                      width: 80, height: 4,
+                      backgroundColor: 'var(--c-surface-elevated)',
+                      borderRadius: 9999, overflow: 'hidden', flexShrink: 0,
+                    }}>
+                      <div style={{
+                        height: '100%',
+                        width: `${barWidth}%`,
+                        backgroundColor: colors.text,
+                        borderRadius: 9999,
+                      }} />
+                    </div>
+
+                    {/* Severity chip */}
+                    <span style={{
+                      fontSize: 10, fontWeight: 600,
+                      color: colors.text,
+                      backgroundColor: colors.bg,
+                      border: `1px solid ${colors.border}`,
+                      padding: '2px 7px', borderRadius: 9999,
+                      flexShrink: 0,
+                    }}>
+                      {sev}
+                    </span>
+
+                    {/* Chevron */}
+                    <ChevronDown
+                      size={13}
+                      color="var(--c-text-quaternary)"
+                      strokeWidth={2}
+                      style={{
+                        flexShrink: 0,
+                        transform: isExpanded ? 'rotate(180deg)' : 'none',
+                        transition: 'transform 0.2s ease',
+                      }}
+                    />
+                  </div>
+
+                  {/* Expanded detail */}
+                  {isExpanded && (
+                    <div style={{
+                      padding: '0 16px 14px 16px',
+                      borderTop: '1px solid var(--c-border-subtle)',
+                      backgroundColor: 'var(--c-surface-elevated)',
+                    }}>
+                      <p style={{
+                        fontSize: 12,
+                        color: 'var(--c-text-tertiary)',
+                        margin: '12px 0 8px',
+                        lineHeight: 1.55,
+                      }}>
+                        {stone.trigger}
+                      </p>
+                      <p style={{
+                        fontSize: 12,
+                        color: 'var(--c-accent-purple)',
+                        margin: 0,
+                        lineHeight: 1.55,
+                      }}>
+                        → {STONE_AI_ACTION[stone.type] ?? 'Your plan has been adapted for this pattern.'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Preferences ── */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{
+          fontSize: 10, fontWeight: 600, letterSpacing: '0.08em',
+          textTransform: 'uppercase', color: 'var(--c-text-quaternary)',
+          marginBottom: 12,
+        }}>
+          Preferences
+        </div>
+
+        <div style={{
+          backgroundColor: '#ffffff',
+          border: '1px solid var(--c-border-subtle)',
+          borderRadius: 12,
+          overflow: 'hidden',
+          boxShadow: 'var(--c-shadow-card)',
+        }}>
+          {/* Name */}
+          <PrefRow
+            icon={<User size={14} strokeWidth={1.8} />}
+            label="Your Name"
+            value={universalProfile.name || 'Tap to set'}
+            isEditing={editingPref === 'name'}
+            onEdit={() => { setTempName(universalProfile.name || ''); setEditingPref('name'); }}
+          >
+            <>
+              <input
+                autoFocus
+                type="text"
+                value={tempName}
+                onChange={e => setTempName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSavePref('name'); if (e.key === 'Escape') handleCancelPref(); }}
+                style={inputStyle}
+                placeholder="Your name"
+              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => handleSavePref('name')} style={{
+                  flex: 1, padding: '7px 0', fontSize: 12, fontWeight: 600,
+                  background: 'var(--c-accent-purple)', color: '#fff', border: 'none',
+                  borderRadius: 8, cursor: 'pointer', fontFamily: 'var(--c-font-body)',
+                }}>Save</button>
+                <button onClick={handleCancelPref} style={{
+                  flex: 1, padding: '7px 0', fontSize: 12,
+                  background: 'transparent', color: 'var(--c-text-tertiary)',
+                  border: '1px solid var(--c-border-subtle)', borderRadius: 8,
+                  cursor: 'pointer', fontFamily: 'var(--c-font-body)',
+                }}>Cancel</button>
+              </div>
+            </>
+          </PrefRow>
+
+          {/* Check-in time */}
+          <PrefRow
+            icon={<Clock size={14} strokeWidth={1.8} />}
+            label="Daily Check-in"
+            value={checkInTime}
+            isEditing={editingPref === 'checkin'}
+            onEdit={() => { setTempCheckIn(checkInTime); setEditingPref('checkin'); }}
+          >
+            <>
+              <input
+                autoFocus
+                type="time"
+                value={tempCheckIn}
+                onChange={e => setTempCheckIn(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSavePref('checkin'); if (e.key === 'Escape') handleCancelPref(); }}
+                style={inputStyle}
+              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => handleSavePref('checkin')} style={{
+                  flex: 1, padding: '7px 0', fontSize: 12, fontWeight: 600,
+                  background: 'var(--c-accent-purple)', color: '#fff', border: 'none',
+                  borderRadius: 8, cursor: 'pointer', fontFamily: 'var(--c-font-body)',
+                }}>Save</button>
+                <button onClick={handleCancelPref} style={{
+                  flex: 1, padding: '7px 0', fontSize: 12,
+                  background: 'transparent', color: 'var(--c-text-tertiary)',
+                  border: '1px solid var(--c-border-subtle)', borderRadius: 8,
+                  cursor: 'pointer', fontFamily: 'var(--c-font-body)',
+                }}>Cancel</button>
+              </div>
+            </>
+          </PrefRow>
+
+          {/* Energy pattern — read-only */}
+          <PrefRow
+            icon={
+              universalProfile.energyPattern === 'morning' ? <Sunrise size={14} strokeWidth={1.8} /> :
+              universalProfile.energyPattern === 'evening' ? <Moon size={14} strokeWidth={1.8} /> :
+              <Sun size={14} strokeWidth={1.8} />
+            }
+            label="Energy Peak"
+            value={universalProfile.energyPattern
+              ? universalProfile.energyPattern.charAt(0).toUpperCase() + universalProfile.energyPattern.slice(1)
+              : 'Not set'}
+            isEditing={false}
+            onEdit={() => {}}
+          />
+
+          {/* Daily commitment — read-only, no border on last item */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 14,
+            padding: '14px 16px',
+          }}>
+            <div style={{ color: 'var(--c-text-quaternary)', flexShrink: 0 }}>
+              <Target size={14} strokeWidth={1.8} />
             </div>
-            <div style={{ fontSize: 12, color: ap.textTertiary, marginTop: 2 }}>
-              Day {currentDay} · {goalTitle}
-            </div>
-            <div style={{ marginTop: 6 }}>
-              <span style={{
-                display: 'inline-flex', alignItems: 'center',
-                padding: '3px 9px', borderRadius: 6,
-                fontSize: 11, fontWeight: 600,
-                color: ap.streak, backgroundColor: ap.streakSoft,
-                fontFamily: ap.font,
+            <div style={{ flex: 1 }}>
+              <div style={{
+                fontSize: 11, fontWeight: 600, letterSpacing: '0.05em',
+                textTransform: 'uppercase', color: 'var(--c-text-quaternary)',
+                marginBottom: 3,
               }}>
-                🔥 {streak} days
-              </span>
+                Daily Commitment
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--c-text-primary)' }}>
+                {dailyMinutes}
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Segmented Control */}
-      <div style={{
-        display: 'flex', padding: 2, borderRadius: 9,
-        backgroundColor: ap.surfaceAlt, marginBottom: 20,
-      }}>
-        {([['you', 'Profile'], ['settings', 'Settings']] as [YouTab, string][]).map(([tab, label]) => (
-          <button key={tab} onClick={() => setActiveTab(tab)}
-            style={{
-              flex: 1, padding: '7px 0', borderRadius: 7, border: 'none', cursor: 'pointer',
-              fontSize: 13, fontWeight: 600, fontFamily: ap.font,
-              backgroundColor: activeTab === tab ? ap.surface : 'transparent',
-              color: activeTab === tab ? ap.textPrimary : ap.textTertiary,
-              boxShadow: activeTab === tab ? '0 1px 3px rgba(0,0,0,.08)' : 'none',
-            }}>
-            {label}
-          </button>
-        ))}
+      {/* ── Danger zone ── */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{
+          fontSize: 10, fontWeight: 600, letterSpacing: '0.08em',
+          textTransform: 'uppercase', color: 'var(--c-text-quaternary)',
+          marginBottom: 12,
+        }}>
+          Account
+        </div>
+
+        <div style={{
+          backgroundColor: '#ffffff',
+          border: '1px solid var(--c-border-subtle)',
+          borderRadius: 12,
+          overflow: 'hidden',
+          boxShadow: 'var(--c-shadow-card)',
+        }}>
+          {!showResetConfirm ? (
+            <button
+              onClick={() => setShowResetConfirm(true)}
+              style={{
+                width: '100%', padding: '14px 16px',
+                background: 'none', border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 10,
+                textAlign: 'left',
+              }}
+            >
+              <Trash2 size={14} strokeWidth={1.8} color="#ef4444" />
+              <span style={{ fontSize: 14, color: '#ef4444', fontFamily: 'var(--c-font-body)' }}>
+                Reset all progress
+              </span>
+            </button>
+          ) : (
+            <div style={{ padding: '16px' }}>
+              <p style={{
+                fontSize: 13, color: 'var(--c-text-secondary)',
+                margin: '0 0 14px', lineHeight: 1.5,
+                fontFamily: 'var(--c-font-body)',
+              }}>
+                This permanently deletes all your progress, tasks, and goals. Cannot be undone.
+              </p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={handleReset}
+                  style={{
+                    flex: 1, padding: '8px 0', fontSize: 13, fontWeight: 600,
+                    background: '#ef4444', color: '#fff', border: 'none',
+                    borderRadius: 8, cursor: 'pointer', fontFamily: 'var(--c-font-body)',
+                  }}
+                >
+                  Yes, reset everything
+                </button>
+                <button
+                  onClick={() => setShowResetConfirm(false)}
+                  style={{
+                    flex: 1, padding: '8px 0', fontSize: 13,
+                    background: 'transparent', color: 'var(--c-text-tertiary)',
+                    border: '1px solid var(--c-border-subtle)', borderRadius: 8,
+                    cursor: 'pointer', fontFamily: 'var(--c-font-body)',
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-
-      {/* ── YOU TAB ── */}
-      {activeTab === 'you' && (
-        <>
-          {/* Your Setup — horizontal scroll */}
-          <div style={{ marginBottom: tokens.spacing.xl }}>
-            <h3 style={{ ...text.h3, marginBottom: tokens.spacing.md }}>Your Setup</h3>
-            <div style={{
-              display: 'flex',
-              gap: 8,
-              overflowX: 'auto',
-              WebkitOverflowScrolling: 'touch',
-              paddingBottom: 4,
-              scrollbarWidth: 'none',
-            }}>
-              {setupRows.map(({ label, value }) => (
-                <div key={label} style={{
-                  minWidth: 110,
-                  padding: '12px 14px',
-                  background: '#f9fafb',
-                  borderRadius: 14,
-                  border: '1px solid #f3f4f6',
-                  flexShrink: 0,
-                }}>
-                  <p style={{
-                    fontSize: 10,
-                    fontWeight: 600,
-                    color: '#9ca3af',
-                    letterSpacing: '0.06em',
-                    textTransform: 'uppercase' as const,
-                    margin: '0 0 4px',
-                  }}>
-                    {label}
-                  </p>
-                  <p style={{
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: tokens.colors.text.primary,
-                    margin: 0,
-                    lineHeight: 1.3,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap' as const,
-                  }}>
-                    {value}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Your Patterns */}
-          {stones.length > 0 && (
-            <div style={{ ...card.standard, marginBottom: tokens.spacing.xl }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.lg }}>
-                <Brain size={16} strokeWidth={1.5} color="#7c3aed" />
-                <h3 style={{ ...text.h3, margin: 0 }}>Your Patterns</h3>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacing.lg }}>
-                {stones.map((stone, idx) => {
-                  const pattern = STONE_PATTERNS[stone.type] ?? {
-                    observation: `You have a pattern around ${stone.type.toLowerCase().replace(/([A-Z])/g, ' $1').trim()}`,
-                    aiAction: "I've adjusted your plan to work with this pattern",
-                  };
-                  return (
-                    <div key={idx} style={{
-                      padding: '12px 14px',
-                      background: '#f9fafb',
-                      borderRadius: 12,
-                      borderLeft: '3px solid #ede9fe',
-                    }}>
-                      <p style={{ fontSize: 13, color: '#374151', margin: '0 0 6px', lineHeight: 1.4, fontWeight: 500 }}>
-                        {pattern.observation}
-                      </p>
-                      <p style={{ fontSize: 12, color: '#7c3aed', margin: 0, lineHeight: 1.4 }}>
-                        → {pattern.aiAction}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Commitment */}
-          {goalTitle && goalTitle !== 'Your Goal' && (
-            <div style={{
-              background: 'linear-gradient(135deg, rgba(124,58,237,0.06) 0%, rgba(109,40,217,0.03) 100%)',
-              border: '1px solid rgba(124,58,237,0.15)',
-              borderRadius: tokens.borderRadius.lg,
-              padding: tokens.spacing.xl,
-            }}>
-              <p style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(124,58,237,0.6)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, margin: '0 0 8px' }}>
-                My Commitment
-              </p>
-              <p style={{ ...text.body, margin: 0, fontStyle: 'italic', color: tokens.colors.text.primary, lineHeight: 1.5 }}>
-                "{goalTitle}"
-              </p>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* ── SETTINGS TAB ── */}
-      {activeTab === 'settings' && (
-        <>
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)', gap: tokens.spacing.lg, marginBottom: tokens.spacing['3xl'] }}>
-            {/* Name */}
-            <div
-              style={{ ...card.standard, backgroundColor: tokens.colors.surface, padding: tokens.spacing.lg, transition: tokens.transitions.all, cursor: editingCard ? 'default' : 'pointer' }}
-              onClick={() => !editingCard && setEditingCard('name')}
-              onMouseEnter={(e) => { if (!editingCard) { e.currentTarget.style.borderColor = tokens.colors.primary; e.currentTarget.style.transform = 'translateY(-2px)'; } }}
-              onMouseLeave={(e) => { if (!editingCard) { e.currentTarget.style.borderColor = tokens.colors.borderLight; e.currentTarget.style.transform = 'translateY(0)'; } }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.md }}>
-                <User size={18} strokeWidth={1.5} color={tokens.colors.text.secondary} />
-                <span style={{ ...text.caption, color: tokens.colors.text.secondary, fontWeight: tokens.typography.weights.regular }}>Your Name</span>
-              </div>
-              {editingCard === 'name' ? (
-                <div onClick={(e) => e.stopPropagation()}>
-                  <input autoFocus type="text" value={tempName} onChange={(e) => setTempName(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveCard('name'); if (e.key === 'Escape') handleCancelEdit(); }}
-                    style={{ width: '100%', fontSize: tokens.typography.sizes.lg, fontWeight: tokens.typography.weights.regular, padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`, border: `1px solid ${tokens.colors.primary}`, borderRadius: tokens.borderRadius.sm, backgroundColor: tokens.colors.surface, marginBottom: tokens.spacing.sm }}
-                    placeholder="Enter your name"
-                  />
-                  <div style={{ display: 'flex', gap: tokens.spacing.xs }}>
-                    <button onClick={() => handleSaveCard('name')} style={{ flex: 1, padding: tokens.spacing.xs, fontSize: tokens.typography.sizes.sm, backgroundColor: tokens.colors.primary, color: tokens.colors.text.inverse, border: 'none', borderRadius: tokens.borderRadius.sm, cursor: 'pointer' }}>Save</button>
-                    <button onClick={handleCancelEdit} style={{ flex: 1, padding: tokens.spacing.xs, fontSize: tokens.typography.sizes.sm, backgroundColor: 'transparent', color: tokens.colors.text.secondary, border: `1px solid ${tokens.colors.borderLight}`, borderRadius: tokens.borderRadius.sm, cursor: 'pointer' }}>Cancel</button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div style={{ fontSize: tokens.typography.sizes.lg, fontWeight: tokens.typography.weights.regular, color: tokens.colors.text.primary, marginBottom: tokens.spacing.xs, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{universalProfile.name || 'Click to set'}</div>
-                  <div style={{ ...text.caption, fontSize: tokens.typography.sizes.sm, color: tokens.colors.text.tertiary }}>click to edit</div>
-                </>
-              )}
-            </div>
-
-            {/* Check-in Time */}
-            <div
-              style={{ ...card.standard, backgroundColor: tokens.colors.surface, padding: tokens.spacing.lg, transition: tokens.transitions.all, cursor: editingCard ? 'default' : 'pointer' }}
-              onClick={() => !editingCard && setEditingCard('checkin')}
-              onMouseEnter={(e) => { if (!editingCard) { e.currentTarget.style.borderColor = tokens.colors.primary; e.currentTarget.style.transform = 'translateY(-2px)'; } }}
-              onMouseLeave={(e) => { if (!editingCard) { e.currentTarget.style.borderColor = tokens.colors.borderLight; e.currentTarget.style.transform = 'translateY(0)'; } }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.md }}>
-                <Clock size={18} strokeWidth={1.5} color={tokens.colors.text.secondary} />
-                <span style={{ ...text.caption, color: tokens.colors.text.secondary, fontWeight: tokens.typography.weights.regular }}>Daily Check-in</span>
-              </div>
-              {editingCard === 'checkin' ? (
-                <div onClick={(e) => e.stopPropagation()}>
-                  <input autoFocus type="time" value={tempCheckInTime} onChange={(e) => setTempCheckInTime(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveCard('checkin'); if (e.key === 'Escape') handleCancelEdit(); }}
-                    style={{ width: '100%', fontSize: tokens.typography.sizes.lg, padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`, border: `1px solid ${tokens.colors.primary}`, borderRadius: tokens.borderRadius.sm, backgroundColor: tokens.colors.surface, marginBottom: tokens.spacing.sm }}
-                  />
-                  <div style={{ display: 'flex', gap: tokens.spacing.xs }}>
-                    <button onClick={() => handleSaveCard('checkin')} style={{ flex: 1, padding: tokens.spacing.xs, fontSize: tokens.typography.sizes.sm, backgroundColor: tokens.colors.primary, color: tokens.colors.text.inverse, border: 'none', borderRadius: tokens.borderRadius.sm, cursor: 'pointer' }}>Save</button>
-                    <button onClick={handleCancelEdit} style={{ flex: 1, padding: tokens.spacing.xs, fontSize: tokens.typography.sizes.sm, backgroundColor: 'transparent', color: tokens.colors.text.secondary, border: `1px solid ${tokens.colors.borderLight}`, borderRadius: tokens.borderRadius.sm, cursor: 'pointer' }}>Cancel</button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div style={{ fontSize: tokens.typography.sizes.lg, fontWeight: tokens.typography.weights.regular, color: tokens.colors.text.primary, marginBottom: tokens.spacing.xs }}>{checkInTime}</div>
-                  <div style={{ ...text.caption, fontSize: tokens.typography.sizes.sm, color: tokens.colors.text.tertiary }}>click to edit</div>
-                </>
-              )}
-            </div>
-
-            {/* Energy Pattern */}
-            <div style={{ ...card.standard, backgroundColor: tokens.colors.surface, padding: tokens.spacing.lg }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.md }}>
-                {universalProfile.energyPattern === 'morning' ? <Sunrise size={18} strokeWidth={1.5} color={tokens.colors.text.secondary} /> : universalProfile.energyPattern === 'evening' ? <Moon size={18} strokeWidth={1.5} color={tokens.colors.text.secondary} /> : <Sun size={18} strokeWidth={1.5} color={tokens.colors.text.secondary} />}
-                <span style={{ ...text.caption, color: tokens.colors.text.secondary, fontWeight: tokens.typography.weights.regular }}>Energy Pattern</span>
-              </div>
-              <div style={{ fontSize: tokens.typography.sizes.lg, fontWeight: tokens.typography.weights.regular, color: tokens.colors.text.primary, marginBottom: tokens.spacing.xs, textTransform: 'capitalize' }}>{universalProfile.energyPattern || 'Not set'}</div>
-              <div style={{ ...text.caption, fontSize: tokens.typography.sizes.sm, color: tokens.colors.text.tertiary }}>peak time</div>
-            </div>
-
-            {/* Daily Commitment */}
-            <div style={{ ...card.standard, backgroundColor: tokens.colors.surface, padding: tokens.spacing.lg }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.md }}>
-                <Target size={18} strokeWidth={1.5} color={tokens.colors.text.secondary} />
-                <span style={{ ...text.caption, color: tokens.colors.text.secondary, fontWeight: tokens.typography.weights.regular }}>Daily Commitment</span>
-              </div>
-              <div style={{ fontSize: tokens.typography.sizes.lg, fontWeight: tokens.typography.weights.regular, color: tokens.colors.text.primary, marginBottom: tokens.spacing.xs }}>{roadmap?.dailyTime || 'Not set'}</div>
-              <div style={{ ...text.caption, fontSize: tokens.typography.sizes.sm, color: tokens.colors.text.tertiary }}>commitment</div>
-            </div>
-
-            {/* Notifications */}
-            <div style={{ ...card.standard, backgroundColor: tokens.colors.surface, padding: tokens.spacing.lg }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: tokens.spacing.md }}>
-                <Bell size={18} strokeWidth={1.5} color={tokens.colors.text.secondary} />
-                <span style={{ ...text.caption, color: tokens.colors.text.secondary, fontWeight: tokens.typography.weights.regular }}>Notifications</span>
-              </div>
-              <div style={{ fontSize: tokens.typography.sizes.sm, fontWeight: tokens.typography.weights.light, color: tokens.colors.text.secondary, lineHeight: tokens.typography.lineHeights.relaxed }}>
-                Enable in browser settings for daily reminders
-              </div>
-            </div>
-
-          </div>
-
-          {/* Profile Details */}
-          <div style={{ ...card.standard, marginBottom: tokens.spacing.xl }}>
-            <h2 style={{ ...text.h3, marginBottom: tokens.spacing.lg }}>Profile Details</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: tokens.spacing.xl }}>
-              {[
-                { label: 'Wake Time', value: universalProfile.dailyRoutine?.wakeTime || 'Not set' },
-                { label: 'Weekend Availability', value: (universalProfile as Record<string, unknown>).weekendAvailability as string || 'Not set', capitalize: true },
-              ].map(({ label, value, capitalize }) => (
-                <div key={label}>
-                  <label style={{ ...text.caption, color: tokens.colors.text.secondary, display: 'block', marginBottom: tokens.spacing.sm }}>{label}</label>
-                  <p style={{ ...text.body, padding: tokens.spacing.md, backgroundColor: tokens.colors.gray[50], borderRadius: tokens.borderRadius.md, margin: 0, color: tokens.colors.text.tertiary, textTransform: capitalize ? 'capitalize' : 'none' }}>{value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Danger zone */}
-          <div style={{ ...card.standard, borderColor: tokens.colors.error, borderWidth: '1px', borderStyle: 'solid' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.md, marginBottom: tokens.spacing.lg }}>
-              <Trash2 size={22} color={tokens.colors.error} />
-              <h2 style={{ ...text.h3, color: tokens.colors.error, margin: 0 }}>Danger Zone</h2>
-            </div>
-            <p style={{ ...text.bodySmall, color: tokens.colors.text.secondary, marginBottom: tokens.spacing.lg }}>
-              Reset all your progress, tasks, and goals. This cannot be undone.
-            </p>
-            {showResetConfirm ? (
-              <div style={{ padding: tokens.spacing.lg, backgroundColor: '#FEF2F2', borderRadius: tokens.borderRadius.md, border: `1px solid ${tokens.colors.error}` }}>
-                <p style={{ ...text.body, color: tokens.colors.error, marginBottom: tokens.spacing.md }}>Are you sure? This permanently deletes all your data.</p>
-                <div style={{ display: 'flex', gap: tokens.spacing.md }}>
-                  <button onClick={handleReset} style={{ padding: `${tokens.spacing.sm} ${tokens.spacing.lg}`, backgroundColor: tokens.colors.error, color: tokens.colors.text.inverse, border: 'none', borderRadius: tokens.borderRadius.md, fontSize: tokens.typography.sizes.md, cursor: 'pointer' }}>Yes, Reset Everything</button>
-                  <button onClick={() => setShowResetConfirm(false)} style={{ padding: `${tokens.spacing.sm} ${tokens.spacing.lg}`, backgroundColor: 'transparent', color: tokens.colors.text.secondary, border: `1px solid ${tokens.colors.borderLight}`, borderRadius: tokens.borderRadius.md, fontSize: tokens.typography.sizes.md, cursor: 'pointer' }}>Cancel</button>
-                </div>
-              </div>
-            ) : (
-              <button onClick={() => setShowResetConfirm(true)}
-                style={{ padding: `${tokens.spacing.md} ${tokens.spacing.xl}`, backgroundColor: 'transparent', color: tokens.colors.error, border: `1px solid ${tokens.colors.error}`, borderRadius: tokens.borderRadius.md, fontSize: tokens.typography.sizes.base, cursor: 'pointer', transition: tokens.transitions.all }}
-                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#FEF2F2'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-              >
-                Reset All Progress
-              </button>
-            )}
-          </div>
-        </>
-      )}
     </div>
   );
 }

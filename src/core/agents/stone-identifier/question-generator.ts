@@ -62,6 +62,20 @@ Each question must probe exactly ONE stone. Don't stack multiple unknowns in one
 - Use yes_no for true binary gates (e.g., "Have you tried this before?")
 - Use scale for intensity/frequency ratings
 
+### 4b. ENVIRONMENT QUESTION RULE (Critical — read before writing dimension 4)
+The environment friction question MUST be appropriate for WHERE this person actually practices.
+- If practice_environment is "gym", "studio", "outdoor", "court", "pool", or any external venue:
+  → Do NOT ask about organizing or cleaning up the space (they don't own it)
+  → ASK ABOUT: schedule reliability (does gym access depend on membership, opening hours?), commute friction (how far, how tired are they when they get there?), peak-hour crowding, equipment availability
+  → Example wrong question: "Is your training space comfortable or does it need work?"
+  → Example right question: "When you plan to train, what usually gets in the way of actually going?"
+- If practice_environment is "home" or "office":
+  → Ask about space quality, distractions, noise, dedicated vs shared space
+- If practice_environment is "online":
+  → Ask about device/internet reliability, distraction apps, notification discipline
+- If practice_environment is unknown or "multiple":
+  → Ask about which environment creates the most friction and why
+
 ### 5. Impact Specificity
 Every option must explain exactly how it changes the curriculum:
 - Not: "affects plan"
@@ -161,6 +175,7 @@ function buildUserPrompt(context: AgentContext, goalAnalysis: Agent1Output): str
     context.skillLevel  ? `Skill level: ${context.skillLevel}`  : null,
     context.energyPattern ? `Peak energy: ${context.energyPattern}` : null,
     context.name        ? `Name: ${context.name}` : null,
+    context.practiceEnvironment ? `Practice environment (where they do the goal): ${context.practiceEnvironment}` : null,
     g.constraintsDetected.length > 0
       ? `Constraints already surfaced in chat: ${g.constraintsDetected.join(', ')}`
       : null,

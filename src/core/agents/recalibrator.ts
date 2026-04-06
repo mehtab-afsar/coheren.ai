@@ -10,8 +10,11 @@
  * Status enum: ACCELERATE | MAINTAIN | SIMPLIFY | RECOVER
  */
 
-import { callReasoning } from '@lib/ai-router';
-import { retrieveKnowledgeSemantic } from '@core/rag';
+import { callReasoning, callStrategic, callStrategicWithTools } from '@lib/ai-router';
+import { retrieveKnowledgeSemantic, retrieveKnowledgeHybrid } from '@core/rag';
+import { flags } from '@config/feature-flags';
+import { compress } from '@lib/sprintCompressor';
+import { retrieveSprintMemories } from '@lib/sprintMemory';
 import type {
   StoneType,
   CompletedTaskFeedback,
@@ -39,6 +42,8 @@ export interface RecalibratedWeek {
 export interface Agent5WeeklyOutput {
   checkpointAnalysis: CheckpointAnalysis;
   recalibratedWeek: RecalibratedWeek;
+  /** Updated stone profile with Bayesian severity adjustments. Only present when DYNAMIC_STONE_EVOLUTION is on. */
+  evolvedStoneProfile?: import('@types-app/agents').Agent2ProfileOutput;
 }
 
 // Extended input for weekly cycle
@@ -55,6 +60,8 @@ export interface Agent5WeeklyInput {
     taskTypesFeedback: string;
     raw: string[];
   };
+  /** Per-user adaptive thresholds — from roadmaps.config. Defaults applied inside recalibrateWeek. */
+  thresholds?: ThresholdAdjustments;
 }
 // Minimal interface to avoid circular import with @core/store/useStore
 interface Task {
@@ -197,9 +204,65 @@ interface PerformanceSignals {
   status: RecalibrationStatus;
 }
 
+// ─── Adaptive threshold types (Item 6) ───────────────────────────────────────
+
+export interface ThresholdAdjustments {
+  simplify_completion_rate:   number; // default 60
+  accelerate_completion_rate: number; // default 80
+  accelerate_avg_difficulty:  number; // default 2.5
+  recover_consecutive_skips:  number; // default 4
+  recover_health_skips:       number; // default 3
+}
+
+export const DEFAULT_THRESHOLDS: ThresholdAdjustments = {
+  simplify_completion_rate:   60,
+  accelerate_completion_rate: 80,
+  accelerate_avg_difficulty:  2.5,
+  recover_consecutive_skips:  4,
+  recover_health_skips:       3,
+};
+
+function clamp(val: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, val));
+}
+
+/**
+ * After each sprint, compare the previous STATUS with the current sprint's
+ * outcome and nudge thresholds to reduce systematic misfires.
+ * Pure function — no side effects.
+ */
+export function adaptThresholds(
+  prevStatus: RecalibrationStatus,
+  current: PerformanceSignals,
+  existing: ThresholdAdjustments,
+): ThresholdAdjustments {
+  const adj = { ...existing };
+
+  if (prevStatus === 'SIMPLIFY') {
+    if (current.completionRate >= 75) {
+      // Fast recovery → SIMPLIFY was too aggressive, lower the trigger threshold
+      adj.simplify_completion_rate = clamp(adj.simplify_completion_rate - 3, 45, 70);
+    } else if (current.completionRate < 60) {
+      // Still struggling → threshold may need to be more sensitive
+      adj.simplify_completion_rate = clamp(adj.simplify_completion_rate + 2, 45, 70);
+    }
+  } else if (prevStatus === 'ACCELERATE') {
+    if (current.completionRate < 65) {
+      // Crashed after acceleration → threshold was too loose, raise it
+      adj.accelerate_completion_rate = clamp(adj.accelerate_completion_rate + 3, 70, 90);
+    } else if (current.completionRate >= 80) {
+      // Validated → ease back slightly to reward sustained excellence
+      adj.accelerate_completion_rate = clamp(adj.accelerate_completion_rate - 2, 70, 90);
+    }
+  }
+
+  return adj;
+}
+
 export function computeSignals(
   tasks: CompletedTaskFeedback[],
-  dailyBudget: number
+  dailyBudget: number,
+  thresholds: ThresholdAdjustments = DEFAULT_THRESHOLDS,
 ): PerformanceSignals {
   if (tasks.length === 0) {
     return {
@@ -239,14 +302,14 @@ export function computeSignals(
   const strugglingAreas = completed.filter(t => t.difficultyRating >= 4).map(t => t.title);
   const masteringAreas = completed.filter(t => t.difficultyRating <= 2).map(t => t.title);
 
-  // STATUS logic matrix
+  // STATUS logic matrix — uses per-user adaptive thresholds when provided
   let status: RecalibrationStatus;
 
-  if (healthSkips >= 3 || maxStreak >= 4) {
+  if (healthSkips >= thresholds.recover_health_skips || maxStreak >= thresholds.recover_consecutive_skips) {
     status = 'RECOVER';
-  } else if (completionRate < 60 || (avgDifficulty > 4 && difficultySkips >= 2)) {
+  } else if (completionRate < thresholds.simplify_completion_rate || (avgDifficulty > 4 && difficultySkips >= 2)) {
     status = 'SIMPLIFY';
-  } else if (completionRate >= 80 && avgDifficulty <= 2.5) {
+  } else if (completionRate >= thresholds.accelerate_completion_rate && avgDifficulty <= thresholds.accelerate_avg_difficulty) {
     status = 'ACCELERATE';
   } else {
     status = 'MAINTAIN';
@@ -337,8 +400,11 @@ export async function recalibrateCurriculum(
 ): Promise<Agent5Output> {
   const { context, roadmap, stoneProfile, completedTasks, currentDay } = input;
 
-  // --- Pre-compute signals ---
-  const signals = computeSignals(completedTasks, context.dailyTimeAvailable);
+  // --- Compress sprint history (no-op when < 28 tasks) ---
+  const { recentTasks, snapshot } = await compress(completedTasks, stoneProfile);
+
+  // --- Pre-compute signals (on recent tasks only after compression) ---
+  const signals = computeSignals(recentTasks, context.dailyTimeAvailable);
   const { status } = signals;
 
   // --- Stone directive ---
@@ -353,7 +419,8 @@ export async function recalibrateCurriculum(
       const query = status === 'RECOVER'
         ? `burnout recovery habit formation ${context.goal}`
         : `learning plateau difficulty reduction scaffolding ${context.goal}`;
-      const ragString = await retrieveKnowledgeSemantic({ query, matchCount: 3 });
+      const ragFn = flags.USE_HYBRID_RAG ? retrieveKnowledgeHybrid : retrieveKnowledgeSemantic;
+      const ragString = await ragFn({ query, matchCount: 3 });
       ragContext = ragString ? `\n## Recovery Science (RAG)\n${ragString}` : '';
     } catch {
       // RAG failure is non-fatal
@@ -370,8 +437,12 @@ export async function recalibrateCurriculum(
   const nextStart = currentDay + 1;
   const nextEnd = Math.min(currentDay + 14, roadmap.totalDays);
 
-  const userPrompt = `## Recalibration Request — Sprint ${sprintNumber + 1}
+  const historicalContext = snapshot
+    ? `\n## Historical Context (compressed — ${snapshot.totalSprints} total sprints)\n${snapshot.summaryNarrative}\nPeak phase: ${snapshot.peakPerformancePhase} | Drop-off triggers: ${snapshot.knownDropoffTriggers.join(', ') || 'none'}\n`
+    : '';
 
+  const userPrompt = `## Recalibration Request — Sprint ${sprintNumber + 1}
+${historicalContext}
 ### Learner
 - Goal: ${context.goal}
 - Day: ${currentDay} of ${context.timeline}
@@ -526,10 +597,10 @@ Your job: analyse a pre-computed performance snapshot and weekly check-in answer
 8. Return ONLY valid JSON. No markdown, no code blocks.`;
 
 export async function recalibrateWeek(input: Agent5WeeklyInput): Promise<Agent5WeeklyOutput> {
-  const { context, roadmap, stoneProfile, completedTasks, currentDay, weekNumber, weeklyCheckInAnswers } = input;
+  const { context, roadmap, stoneProfile, completedTasks, currentDay, weekNumber, weeklyCheckInAnswers, thresholds = DEFAULT_THRESHOLDS } = input;
 
-  // Pre-compute signals
-  const signals = computeSignals(completedTasks, context.dailyMinutes);
+  // Pre-compute signals using per-user adaptive thresholds
+  const signals = computeSignals(completedTasks, context.dailyMinutes, thresholds);
   const { status } = signals;
 
   // Stone directive
@@ -544,12 +615,41 @@ export async function recalibrateWeek(input: Agent5WeeklyInput): Promise<Agent5W
       const query = status === 'RECOVER'
         ? `burnout recovery habit formation ${context.goal}`
         : `learning plateau difficulty reduction scaffolding ${context.goal}`;
-      const ragString = await retrieveKnowledgeSemantic({ query, matchCount: 3 });
+      const ragFn = flags.USE_HYBRID_RAG ? retrieveKnowledgeHybrid : retrieveKnowledgeSemantic;
+      const ragString = await ragFn({ query, matchCount: 3 });
       ragContext = ragString ? `\n## Recovery Science (RAG)\n${ragString}` : '';
     } catch {
       // non-fatal
     }
   }
+
+  // Sprint memory injection (Agent Memory RAG) + Behavioral RAG (Change 1)
+  let historicalSection = '';
+  let behavioralSection = '';
+  await Promise.all([
+    // Existing: longitudinal sprint narratives
+    (async () => {
+      if (!flags.USE_AGENT_MEMORY) return;
+      try {
+        const memQuery = `performance history ${context.goal} ${primaryStone} sprint recalibration`;
+        const memories = await retrieveSprintMemories(memQuery);
+        historicalSection = memories ? `\n## Historical Sprint Memory\n${memories}\n` : '';
+      } catch { /* non-fatal */ }
+    })(),
+    // New: behavioral patterns (Change 1)
+    (async () => {
+      if (!flags.USE_BEHAVIORAL_RAG) return;
+      try {
+        const { retrieveBehavioralPatterns } = await import('@core/rag');
+        const patterns = await retrieveBehavioralPatterns({
+          query:        `${status} recalibration ${primaryStone} ${context.goal}`,
+          stoneProfile,
+          matchCount:   2,
+        });
+        behavioralSection = patterns ? `\n## Behavioral Patterns (What Worked)\n${patterns}\n` : '';
+      } catch { /* non-fatal */ }
+    })(),
+  ]);
 
   // Roadmap summary
   const roadmapSummary = roadmap.months.map(m =>
@@ -599,6 +699,8 @@ ${roadmapSummary}
 ### Stone Directive for ${status}
 ${stoneDirective}
 ${ragContext}
+${historicalSection}
+${behavioralSection}
 ${checkInSection}
 
 ### Task
@@ -640,16 +742,117 @@ OUTPUT FORMAT — return ONLY valid JSON:
   }
 }`;
 
-  const { content: response } = await callReasoning({
-    messages: [
+  let response: string;
+  if (flags.USE_AGENT_TOOL_CALLING) {
+    // Tool-use loop — Agent 5 reasons via tools, then produces JSON
+    const { makeRecalibratorToolHandler, RECALIBRATOR_TOOL_SCHEMAS } = await import('@lib/agentTools');
+    const toolHandler = makeRecalibratorToolHandler(completedTasks, context.dailyMinutes);
+    const systemWithInstructions = AGENT5_WEEKLY_SYSTEM_PROMPT + `
+
+TOOL USE INSTRUCTIONS:
+1. Call compute_performance_signals first to get deterministic performance metrics.
+2. Call get_stone_recalibration_directives for the primary stone + derived status.
+3. If USE_BEHAVIORAL_RAG is available, call retrieve_behavioral_context.
+4. Synthesize all tool outputs, then produce the JSON recalibration plan.`;
+
+    const toolMessages = [
+      { role: 'user' as const, content: userPrompt },
+    ];
+
+    let toolResult: { finalText: string };
+    if (flags.USE_CLAUDE_FOR_RECALIBRATION) {
+      toolResult = await callStrategicWithTools({
+        messages:      toolMessages,
+        systemPrompt:  systemWithInstructions,
+        tools:         RECALIBRATOR_TOOL_SCHEMAS,
+        toolHandler,
+        temperature:   0.3,
+        max_tokens:    4000,
+      });
+    } else {
+      // Groq tool-use — single-shot function calling (no multi-turn)
+      const { callWithTools } = await import('@lib/ai-router');
+      const { toGroqTools } = await import('@lib/agentTools');
+      const groqTools = toGroqTools(RECALIBRATOR_TOOL_SCHEMAS);
+      // Run compute_performance_signals deterministically and inject result
+      const sigJson = await toolHandler('compute_performance_signals', { tasks: completedTasks, dailyBudget: context.dailyMinutes });
+      const sigNote = `\n\nPERFORMANCE SIGNALS (pre-computed):\n${sigJson}\n\nProceed to generate the recalibration JSON.`;
+      const args = await callWithTools({
+        messages:  [
+          { role: 'system', content: AGENT5_WEEKLY_SYSTEM_PROMPT },
+          { role: 'user',   content: userPrompt + sigNote },
+        ],
+        tools:     groqTools,
+        tool_name: 'generate_recalibration_plan',
+        temperature: 0.3,
+        max_tokens:  4000,
+      }, 'reasoning');
+      toolResult = { finalText: args };
+    }
+
+    if (!toolResult.finalText) throw new Error('Agent 5 Weekly (tool-use): returned no response');
+    response = toolResult.finalText;
+  } else if (flags.USE_AGENT5_COT) {
+    // Pass 1 — chain-of-thought reasoning (no JSON output)
+    let cotText = '';
+    try {
+      const { content: cotContent } = await callReasoning({
+        messages: [
+          { role: 'system', content: AGENT5_WEEKLY_SYSTEM_PROMPT },
+          { role: 'user', content: userPrompt + '\n\nThink step-by-step about what adjustments are needed. Analyse the signals, stone directives, and check-in answers carefully. Do NOT output JSON yet.' },
+        ],
+        temperature: 0.6,
+        max_tokens: 800,
+      });
+      cotText = cotContent ?? '';
+    } catch {
+      // CoT failed — fall through to single-pass below
+    }
+
+    // Pass 2 — produce JSON with CoT as assistant context
+    const pass2Messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
       { role: 'system', content: AGENT5_WEEKLY_SYSTEM_PROMPT },
-      { role: 'user', content: userPrompt }
-    ],
-    temperature: 0.3,
-    max_tokens: 4000,
-    response_format: { type: 'json_object' }
-  });
-  if (!response) throw new Error('Agent 5 Weekly: returned no response');
+      { role: 'user', content: userPrompt },
+      ...(cotText
+        ? [
+            { role: 'assistant' as const, content: cotText },
+            { role: 'user' as const, content: 'Based on your analysis, generate the recalibration plan as valid JSON.' },
+          ]
+        : []),
+    ];
+    const { content: jsonContent } = await callReasoning({
+      messages: pass2Messages,
+      temperature: 0.2,
+      max_tokens: 4000,
+      response_format: { type: 'json_object' },
+    });
+    if (!jsonContent) throw new Error('Agent 5 Weekly: returned no response');
+    response = jsonContent;
+  } else if (flags.USE_CLAUDE_FOR_RECALIBRATION) {
+    // Claude strategic call — better reasoning on complex recalibration
+    const { content: claudeResponse } = await callStrategic({
+      messages: [
+        { role: 'system', content: AGENT5_WEEKLY_SYSTEM_PROMPT },
+        { role: 'user',   content: userPrompt },
+      ],
+      temperature: 0.3,
+      max_tokens:  4000,
+    });
+    if (!claudeResponse) throw new Error('Agent 5 Weekly (Claude): returned no response');
+    response = claudeResponse;
+  } else {
+    const { content: singleResponse } = await callReasoning({
+      messages: [
+        { role: 'system', content: AGENT5_WEEKLY_SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 4000,
+      response_format: { type: 'json_object' }
+    });
+    if (!singleResponse) throw new Error('Agent 5 Weekly: returned no response');
+    response = singleResponse;
+  }
 
   const parsed = JSON.parse(response) as Record<string, unknown>;
 
@@ -714,5 +917,24 @@ OUTPUT FORMAT — return ONLY valid JSON:
     days,
   };
 
-  return { checkpointAnalysis, recalibratedWeek };
+  // ── Stone Evolution (DYNAMIC_STONE_EVOLUTION) ─────────────────────────────
+  let evolvedStoneProfile: import('@types-app/agents').Agent2ProfileOutput | undefined;
+  if (flags.DYNAMIC_STONE_EVOLUTION) {
+    const { evolveStoneProfile, buildSprintObservation } = await import('@lib/stoneEvolution');
+    const obs = buildSprintObservation({
+      completionRate:      signals.completionRate,
+      consecutiveSkips:    signals.consecutiveSkips,
+      timeSkips:           signals.timeSkips,
+      difficultySkips:     signals.difficultySkips,
+      healthSkips:         signals.healthSkips,
+      avgDifficulty:       signals.avgDifficulty,
+      publicArtifactsMade: completedTasks.filter(t => t.completed && (t.skipReason == null)).length,
+      streakDays:          Math.max(7 - signals.consecutiveSkips, 0),
+      sprintNumber:        weekNumber,
+      status,
+    });
+    evolvedStoneProfile = evolveStoneProfile(stoneProfile, obs);
+  }
+
+  return { checkpointAnalysis, recalibratedWeek, evolvedStoneProfile };
 }

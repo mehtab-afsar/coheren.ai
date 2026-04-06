@@ -1,147 +1,280 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useStore } from '@core/store/useStore';
-import { ap } from '@core/design-system/appleTokens';
-import { Chip, Label, Tile, Divider } from '@core/design-system/AppleUI';
+
+// Severity color map for stone cards
+const SEVERITY_COLORS: Record<string, { bg: string; border: string; text: string }> = {
+  Low:      { bg: 'rgba(34,197,94,0.06)',   border: 'rgba(34,197,94,0.20)',   text: '#16a34a' },
+  Moderate: { bg: 'rgba(245,158,11,0.06)',  border: 'rgba(245,158,11,0.20)',  text: '#d97706' },
+  High:     { bg: 'rgba(239,68,68,0.06)',   border: 'rgba(239,68,68,0.20)',   text: '#dc2626' },
+  Critical: { bg: 'rgba(124,58,237,0.06)',  border: 'rgba(124,58,237,0.20)', text: '#7c3aed' },
+};
 
 export default function LibraryView() {
   const agentRoadmapV2 = useStore(s => s.agentRoadmapV2);
+  const stoneProfile = useStore(s => s.stoneProfile);
   const [sourcesExpanded, setSourcesExpanded] = useState(false);
 
-  // Empty state — no roadmap yet
+  const stones = stoneProfile?.stoneProfile?.stones ?? [];
+  const modifiers = agentRoadmapV2?.modifiers_from_stones ?? {};
+
+  // Empty state
   if (!agentRoadmapV2) {
     return (
-      <div style={{ fontFamily: ap.font }}>
-        <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.03em', color: ap.textPrimary, margin: '0 0 24px' }}>Library</h1>
-        <Tile>
-          <div style={{ padding: '32px 24px', textAlign: 'center' }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>📚</div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: ap.textPrimary, marginBottom: 8 }}>No framework yet</div>
-            <div style={{ fontSize: 13, color: ap.textSecondary }}>Complete onboarding to see which framework was selected for your goal.</div>
-          </div>
-        </Tile>
+      <div style={{ fontFamily: 'var(--c-font-body)' }}>
+        <h1 style={{
+          fontFamily: 'var(--c-font-display)',
+          fontSize: 28, fontWeight: 500, letterSpacing: '-0.02em',
+          color: 'var(--c-text-primary)', margin: '0 0 24px',
+        }}>
+          Library
+        </h1>
+        <div style={{
+          padding: '40px 24px', textAlign: 'center',
+          backgroundColor: '#ffffff',
+          border: '1px solid var(--c-border-subtle)',
+          borderRadius: 12,
+        }}>
+          <p style={{ fontSize: 15, color: 'var(--c-text-tertiary)', margin: 0 }}>
+            Complete onboarding to see which framework was selected for your goal.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ fontFamily: ap.font }}>
-      <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.03em', color: ap.textPrimary, margin: '0 0 24px' }}>Library</h1>
+    <div style={{ fontFamily: 'var(--c-font-body)', paddingBottom: 80 }}>
 
-      {/* Section 1: Your Framework */}
-      <div style={{ marginBottom: 24 }}>
-        <Label left="Your Framework" />
-        <Tile>
-          <div style={{ padding: '20px 22px' }}>
-            {/* Framework name */}
-            <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: ap.accent, marginBottom: 12 }}>
-              {agentRoadmapV2.frameworkName}
-            </div>
+      {/* Section: Your Framework */}
+      <div style={{ marginBottom: 32 }}>
 
-            {/* Why chosen */}
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: ap.textTertiary, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-                Why this was chosen for you
-              </div>
-              <div style={{ fontSize: 14, color: ap.textSecondary, lineHeight: 1.6 }}>
-                {agentRoadmapV2.frameworkReason}
-              </div>
-            </div>
+        {/* Micro caps label */}
+        <div style={{
+          fontSize: 10, fontWeight: 600, letterSpacing: '0.08em',
+          textTransform: 'uppercase', color: 'var(--c-text-quaternary)',
+          marginBottom: 16,
+        }}>
+          Your Learning Framework
+        </div>
 
-            <Divider />
+        {/* Framework name — H1 Fraunces */}
+        <h1 style={{
+          fontFamily: 'var(--c-font-display)',
+          fontSize: 32, fontWeight: 500,
+          letterSpacing: '-0.02em',
+          color: 'var(--c-text-primary)',
+          margin: '0 0 4px',
+        }}>
+          {agentRoadmapV2.frameworkName}
+        </h1>
+        <p style={{
+          fontSize: 13, color: 'var(--c-text-tertiary)',
+          margin: '0 0 20px',
+        }}>
+          {agentRoadmapV2.frameworkReason}
+        </p>
 
-            {/* The science */}
-            <div style={{ paddingTop: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: ap.textTertiary, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-                The science
-              </div>
-              <div style={{ fontSize: 13.5, color: ap.textSecondary, lineHeight: 1.6, fontStyle: 'italic' }}>
-                "{agentRoadmapV2.frameworkScience}"
-              </div>
-            </div>
+        {/* Science quote — Fraunces italic */}
+        {agentRoadmapV2.frameworkScience && (
+          <div style={{
+            padding: '18px 20px',
+            backgroundColor: 'var(--c-accent-purple-soft)',
+            border: '1px solid var(--c-accent-purple-border)',
+            borderRadius: 10,
+            marginBottom: 20,
+          }}>
+            <p style={{
+              fontFamily: 'var(--c-font-display)',
+              fontStyle: 'italic',
+              fontSize: 16,
+              color: 'var(--c-text-primary)',
+              lineHeight: 1.65,
+              margin: 0,
+            }}>
+              "{agentRoadmapV2.frameworkScience}"
+            </p>
           </div>
-        </Tile>
+        )}
+
+        {/* How it shapes your plan — phase table */}
+        {agentRoadmapV2.months.length > 0 && (
+          <div style={{
+            backgroundColor: '#ffffff',
+            border: '1px solid var(--c-border-subtle)',
+            borderRadius: 10,
+            overflow: 'hidden',
+            boxShadow: 'var(--c-shadow-card)',
+          }}>
+            <div style={{
+              padding: '12px 16px 8px',
+              borderBottom: '1px solid var(--c-border-subtle)',
+            }}>
+              <span style={{
+                fontSize: 10, fontWeight: 600, letterSpacing: '0.08em',
+                textTransform: 'uppercase', color: 'var(--c-text-quaternary)',
+              }}>
+                How It Shapes Your Plan
+              </span>
+            </div>
+            {agentRoadmapV2.months.map((month, idx) => (
+              <div key={month.month} style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 12,
+                padding: '12px 16px',
+                borderTop: idx > 0 ? '1px solid var(--c-border-subtle)' : 'none',
+              }}>
+                <span style={{
+                  fontSize: 11, fontWeight: 600,
+                  color: 'var(--c-text-quaternary)',
+                  minWidth: 80, paddingTop: 1,
+                }}>
+                  {month.title?.split(' · ')[0] ?? `Phase ${idx + 1}`}
+                </span>
+                <span style={{
+                  fontSize: 13,
+                  color: 'var(--c-text-secondary)',
+                  lineHeight: 1.5,
+                  flex: 1,
+                }}>
+                  {month.scienceRationale ?? month.phaseName ?? ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Section 2: How It Applies to Your Curriculum */}
-      <div style={{ marginBottom: 24 }}>
-        <Label left="How It Applies to Your Curriculum" />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {agentRoadmapV2.months.map(month => {
-            const stoneAdjustments = Object.entries(agentRoadmapV2.modifiers_from_stones ?? {});
-            return (
-              <Tile key={month.month}>
-                <div style={{ padding: '16px 18px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                    <Chip label={`Month ${month.month}`} color={ap.textSecondary} bg={ap.surfaceAlt} />
-                    <span style={{ fontSize: 15, fontWeight: 650 as React.CSSProperties['fontWeight'], color: ap.textPrimary }}>{month.title}</span>
-                  </div>
+      {/* Section: Your Personal Adjustments */}
+      {(stones.length > 0 || Object.keys(modifiers).length > 0) && (
+        <div style={{ marginBottom: 32 }}>
+          <div style={{
+            fontSize: 10, fontWeight: 600, letterSpacing: '0.08em',
+            textTransform: 'uppercase', color: 'var(--c-text-quaternary)',
+            marginBottom: 12,
+          }}>
+            Your Personal Adjustments
+          </div>
 
-                  <div style={{ fontSize: 13, color: ap.textSecondary, lineHeight: 1.55, marginBottom: month.scienceRationale ? 12 : 0 }}>
-                    {month.scienceRationale}
-                  </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {stones.map(stone => {
+              const sev = stone.severity ?? 'Low';
+              const colors = SEVERITY_COLORS[sev] ?? SEVERITY_COLORS.Low;
+              const mod = modifiers[stone.type];
+              const description = mod?.added?.[0] ?? mod?.modified?.[0] ?? stone.trigger ?? '';
 
-                  {/* Stone adjustments for this phase — only on month 1 */}
-                  {stoneAdjustments.length > 0 && month.month === 1 && (
-                    <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {stoneAdjustments.map(([stone, mods]) => (
-                        <div key={stone} style={{
-                          backgroundColor: ap.amberSoft, border: `1px solid rgba(212,136,15,.15)`,
-                          borderRadius: 8, padding: '8px 12px',
-                        }}>
-                          <span style={{ fontSize: 11, fontWeight: 650 as React.CSSProperties['fontWeight'], color: ap.amber }}>{stone} adjustment: </span>
-                          <span style={{ fontSize: 12, color: ap.textSecondary }}>
-                            {mods.added.length > 0 ? mods.added[0] : mods.modified.length > 0 ? mods.modified[0] : ''}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+              return (
+                <div key={stone.type} style={{
+                  padding: '14px 16px',
+                  backgroundColor: colors.bg,
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: 10,
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    marginBottom: description ? 6 : 0,
+                  }}>
+                    <span style={{
+                      fontSize: 13, fontWeight: 600,
+                      color: 'var(--c-text-primary)',
+                    }}>
+                      {stone.type}
+                    </span>
+                    <span style={{
+                      fontSize: 10, fontWeight: 600,
+                      color: colors.text,
+                      backgroundColor: `${colors.border}`,
+                      padding: '1px 6px',
+                      borderRadius: 9999,
+                    }}>
+                      {sev}
+                    </span>
+                  </div>
+                  {description && (
+                    <p style={{
+                      fontSize: 12,
+                      color: 'var(--c-text-secondary)',
+                      margin: 0,
+                      lineHeight: 1.5,
+                    }}>
+                      {description}
+                    </p>
                   )}
                 </div>
-              </Tile>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Section 3: What Informed This (expandable) */}
+      {/* Section: Research Sources */}
       {agentRoadmapV2.frameworkSources && agentRoadmapV2.frameworkSources.length > 0 && (
         <div>
-          <Tile style={{ overflow: 'hidden' }}>
-            <div
+          <div style={{
+            fontSize: 10, fontWeight: 600, letterSpacing: '0.08em',
+            textTransform: 'uppercase', color: 'var(--c-text-quaternary)',
+            marginBottom: 12,
+          }}>
+            Research Sources
+          </div>
+
+          <div style={{
+            backgroundColor: '#ffffff',
+            border: '1px solid var(--c-border-subtle)',
+            borderRadius: 10,
+            overflow: 'hidden',
+            boxShadow: 'var(--c-shadow-card)',
+          }}>
+            <button
               onClick={() => setSourcesExpanded(!sourcesExpanded)}
               style={{
-                padding: '14px 18px', display: 'flex', alignItems: 'center',
-                justifyContent: 'space-between', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                width: '100%', padding: '14px 16px',
+                background: 'none', border: 'none', cursor: 'pointer',
+                textAlign: 'left',
               }}
             >
-              <span style={{ fontSize: 14, fontWeight: 600, color: ap.textPrimary }}>
-                What Informed This
+              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-text-secondary)' }}>
+                {agentRoadmapV2.frameworkSources.length} sources
               </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 12, color: ap.textTertiary }}>
-                  {agentRoadmapV2.frameworkSources.length} sources
-                </span>
-                <span style={{ color: ap.textTertiary, fontSize: 12, transform: sourcesExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}>›</span>
-              </div>
-            </div>
+              <span style={{
+                color: 'var(--c-text-quaternary)',
+                fontSize: 14,
+                transform: sourcesExpanded ? 'rotate(90deg)' : 'none',
+                transition: 'transform 0.2s ease',
+              }}>
+                ›
+              </span>
+            </button>
+
             {sourcesExpanded && (
-              <>
-                <Divider />
-                <div style={{ padding: '0 18px 16px' }}>
-                  {agentRoadmapV2.frameworkSources.map((src, i) => (
-                    <div key={i} style={{ paddingTop: 12 }}>
-                      {i > 0 && <Divider />}
-                      <div style={{ paddingTop: i > 0 ? 12 : 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: ap.textPrimary }}>{src.title}</div>
-                        <div style={{ fontSize: 12, color: ap.textTertiary, marginTop: 2 }}>{src.author}</div>
-                        <div style={{ fontSize: 12, color: ap.textSecondary, marginTop: 4, lineHeight: 1.5 }}>{src.note}</div>
-                      </div>
+              <div style={{ borderTop: '1px solid var(--c-border-subtle)', padding: '8px 0' }}>
+                {agentRoadmapV2.frameworkSources.map((src, i) => (
+                  <div key={i} style={{
+                    padding: '10px 16px',
+                    borderTop: i > 0 ? '1px solid var(--c-border-subtle)' : 'none',
+                  }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-text-primary)' }}>
+                      {src.title}
                     </div>
-                  ))}
-                </div>
-              </>
+                    <div style={{ fontSize: 11, color: 'var(--c-text-tertiary)', marginTop: 2 }}>
+                      {src.author}
+                    </div>
+                    {src.note && (
+                      <div style={{
+                        fontSize: 12, color: 'var(--c-text-secondary)',
+                        marginTop: 4, lineHeight: 1.5,
+                      }}>
+                        {src.note}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
-          </Tile>
+          </div>
         </div>
       )}
     </div>

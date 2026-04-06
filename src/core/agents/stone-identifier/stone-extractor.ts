@@ -17,9 +17,114 @@ import type {
   PreliminaryStone,
   CrossValidationResult,
   StoneType,
+  ReadinessProfile,
+  LinguisticSignals,
+  ChangeStage,
 } from '@types-app/agents';
-import { callReasoning } from '@lib/ai-router';
+import { callReasoning, callWithTools } from '@lib/ai-router';
+import type { GroqTool } from '@lib/ai-router';
+import { flags } from '@config/feature-flags';
 import { STONE_DESCRIPTIONS, STONE_TO_CATEGORY, ALL_STONE_TYPES } from './stone-taxonomy';
+import { aggregateLinguisticSignals, linguisticSignalsToStonePriors } from './linguistic-analyzer';
+import { interpretReadiness } from './interview-engine';
+
+// ─── Tool Schemas ─────────────────────────────────────────────────────────────
+
+const STONE_TYPE_ENUM = ALL_STONE_TYPES as unknown as string[];
+
+const EXTRACT_STONES_TOOL: GroqTool = {
+  type: 'function',
+  function: {
+    name: 'extract_stone_profile',
+    description: 'Extract behavioral stone profile from user diagnostic answers.',
+    parameters: {
+      type: 'object',
+      properties: {
+        stoneProfile: {
+          type: 'object',
+          properties: {
+            userArchetype: { type: 'string' },
+            primaryStone:  { type: 'string', enum: STONE_TYPE_ENUM },
+            stones: {
+              type: 'array',
+              minItems: 1,
+              maxItems: 4,
+              items: {
+                type: 'object',
+                properties: {
+                  type:       { type: 'string', enum: STONE_TYPE_ENUM },
+                  category:   { type: 'string', enum: ['Logistical', 'Psychological', 'Cognitive', 'Behavioural'] },
+                  trigger:    { type: 'string' },
+                  severity:   { type: 'string', enum: ['Low', 'Moderate', 'High', 'Critical'] },
+                  riskImpact: { type: 'number', minimum: 0, maximum: 1 },
+                },
+                required: ['type', 'category', 'trigger', 'severity', 'riskImpact'],
+              },
+            },
+            agent3Guidance: { type: 'array', items: { type: 'string' }, minItems: 1 },
+            agent5Note:     { type: 'string' },
+            confidence:     { type: 'number', minimum: 0, maximum: 1 },
+          },
+          required: ['userArchetype', 'primaryStone', 'stones', 'agent3Guidance', 'agent5Note', 'confidence'],
+        },
+      },
+      required: ['stoneProfile'],
+    },
+  },
+};
+
+const EXTRACT_PRELIMINARY_TOOL: GroqTool = {
+  type: 'function',
+  function: {
+    name: 'extract_preliminary_stones',
+    description: 'Perform preliminary stone analysis and generate follow-up questions.',
+    parameters: {
+      type: 'object',
+      properties: {
+        preliminaryStones: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              type:       { type: 'string', enum: STONE_TYPE_ENUM },
+              confidence: { type: 'number', minimum: 0, maximum: 1 },
+            },
+            required: ['type', 'confidence'],
+          },
+        },
+        contradictionDetected: { type: 'boolean' },
+        contradictionNote:     { type: 'string' },
+        followUpQuestions: {
+          type: 'array',
+          maxItems: 4,
+          items: {
+            type: 'object',
+            properties: {
+              id:       { type: 'string' },
+              question: { type: 'string' },
+              type:     { type: 'string' },
+              resolves: { type: 'string' },
+              options: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    value:    { type: 'string' },
+                    label:    { type: 'string' },
+                    pointsTo: { type: 'string' },
+                  },
+                  required: ['value', 'label'],
+                },
+              },
+            },
+            required: ['id', 'question', 'type', 'resolves', 'options'],
+          },
+        },
+      },
+      required: ['preliminaryStones', 'contradictionDetected', 'followUpQuestions'],
+    },
+  },
+};
 
 function buildSystemPrompt(): string {
   const taxonomyList = Object.entries(STONE_DESCRIPTIONS)
@@ -80,22 +185,60 @@ agent5Note: Predictive note for the recalibrator
 - ONLY use stone types from the provided taxonomy
 - Pick 2–4 stones maximum (avoid over-classification)
 - The primaryStone must be the single highest-risk stone
-- Return ONLY valid JSON, no markdown`;
+- Return ONLY valid JSON, no markdown
+- **CRITICAL — "never_tried" handling**: If any answer value is exactly "never_tried", the user has ZERO prior history with this goal. Do NOT assign Inconsistency or ProcrastinationPattern based on that answer alone — those require an observed failure pattern. Assign LowConfidence or SkillGap instead (first-timers lack self-efficacy data, not discipline). Use archetype "Ambitious First-Timer" or similar. Other answers may still reveal real stones — evaluate them independently.`;
 }
 
 function buildUserPrompt(
-  context: AgentContext,
-  goalAnalysis: Agent1Output,
-  answers: StoneAnswer[]
+  context:          AgentContext,
+  goalAnalysis:     Agent1Output,
+  answers:          StoneAnswer[],
+  readinessProfile?: ReadinessProfile,
+  linguisticSignals?: LinguisticSignals
 ): string {
   const g = goalAnalysis.goalAnalysis;
 
   const answersText = answers
     .map(a => {
-      const base = `Q (${a.stoneId}): ${typeof a.answer === 'object' ? JSON.stringify(a.answer) : a.answer}`;
-      return a.comment ? `${base} [User added: "${a.comment}" — treat as high-signal modifier that can deepen or override the default stone assignment]` : base;
+      const answerStr = typeof a.answer === 'object' ? JSON.stringify(a.answer) : a.answer;
+      const impactHint = a.impact && Object.keys(a.impact).length > 0
+        ? ` [Pre-classified impact: ${JSON.stringify(a.impact)}]`
+        : '';
+      const commentHint = a.comment ? ` [User added: "${a.comment}" — high-signal modifier]` : '';
+      return `Q (${a.stoneId}): ${answerStr}${impactHint}${commentHint}`;
     })
     .join('\n');
+
+  // ── Readiness ruler section (Miller & Rollnick, USE_READINESS_RULER) ──────
+  let readinessSection = '';
+  if (flags.USE_READINESS_RULER && readinessProfile) {
+    const { flags: rFlags } = interpretReadiness(readinessProfile.importance, readinessProfile.selfEfficacy);
+    readinessSection = `
+## Readiness Ruler (Miller & Rollnick)
+Importance (1-10): ${readinessProfile.importance}
+Self-Efficacy (1-10): ${readinessProfile.selfEfficacy}
+Interpretation signals: ${rFlags.join(', ') || 'none'}
+NOTE: Low importance (<6) suggests UnrealisticExpectations. Low self-efficacy (<5) escalates LowConfidence. High importance + low self-efficacy is the classic FearOfFailure signature. Both ≥8 reduces Inconsistency likelihood.`;
+  }
+
+  // ── Linguistic signals section (USE_LINGUISTIC_SIGNALS) ──────────────────
+  let linguisticSection = '';
+  if (flags.USE_LINGUISTIC_SIGNALS && linguisticSignals) {
+    const priors = linguisticSignalsToStonePriors(linguisticSignals);
+    const priorsText = Object.entries(priors)
+      .map(([stone, delta]) => `${stone}: ${delta > 0 ? '+' : ''}${(delta * 100).toFixed(0)}%`)
+      .join(', ');
+    linguisticSection = `
+## Linguistic Signals (HOW the user answered)
+Hedge density: ${(linguisticSignals.hedgeDensity * 100).toFixed(0)}% (>25% = ambivalence/FearOfFailure/LowConfidence)
+Change vs sustain talk ratio: ${linguisticSignals.changeVsSustainRatio.toFixed(2)} (>1 = change-oriented)
+Passive voice count: ${linguisticSignals.passiveVoiceCount} (≥2 = external attribution → Inconsistency)
+Conditional language: ${linguisticSignals.conditionalLanguage ? 'Yes (barrier-framing detected)' : 'No'}
+Answer length pattern: ${linguisticSignals.answerLength}
+Topic avoidance detected: ${linguisticSignals.topicAvoidanceDetected ? 'Yes (Perfectionism/FearOfFailure signal)' : 'No'}
+Stone priors from linguistics: ${priorsText || 'none'}
+NOTE: These are probabilistic signals, not verdicts. Weigh against answer content.`;
+  }
 
   return `Extract the stone profile from these answers.
 
@@ -106,7 +249,7 @@ Intensity: ${g.intensity}
 Horizon: ${g.horizon}
 Risks from goal analysis: ${g.risksDetected.join(', ') || 'None'}
 Constraints from goal analysis: ${g.constraintsDetected.join(', ') || 'None'}
-
+${readinessSection}${linguisticSection}
 ## User's Answers
 ${answersText}
 
@@ -134,7 +277,12 @@ Return a JSON object with this exact schema:
 }`;
 }
 
-function validateOutput(raw: unknown): Agent2ProfileOutput {
+function validateOutput(
+  raw:              unknown,
+  readinessProfile?: ReadinessProfile,
+  linguisticSignals?: LinguisticSignals,
+  changeStage?:      ChangeStage
+): Agent2ProfileOutput {
   const parsed = raw as Agent2ProfileOutput;
   const p = parsed?.stoneProfile;
 
@@ -144,7 +292,7 @@ function validateOutput(raw: unknown): Agent2ProfileOutput {
 
   // Validate primaryStone against taxonomy
   if (!ALL_STONE_TYPES.includes(p.primaryStone)) {
-    p.primaryStone = 'Inconsistency'; // Safe default
+    p.primaryStone = 'LowConfidence'; // Safe default (avoids wrongly labelling first-timers as inconsistent)
   }
 
   // Validate and fix each stone
@@ -161,6 +309,11 @@ function validateOutput(raw: unknown): Agent2ProfileOutput {
   p.agent5Note = p.agent5Note ?? '';
   p.confidence = Math.min(1, Math.max(0, p.confidence ?? 0.6));
   p.userArchetype = p.userArchetype ?? 'Unknown Archetype';
+
+  // Preserve research-backed enrichment fields
+  if (readinessProfile)  p.readinessProfile  = readinessProfile;
+  if (linguisticSignals) p.linguisticSignals = linguisticSignals;
+  if (changeStage)       p.changeStage       = changeStage;
 
   return parsed;
 }
@@ -179,7 +332,13 @@ export async function extractPreliminary(
 ): Promise<StoneRound2Output> {
   const g = goalAnalysis.goalAnalysis;
   const answersText = round1Answers
-    .map(a => `Q (${a.stoneId}): ${typeof a.answer === 'object' ? JSON.stringify(a.answer) : a.answer}`)
+    .map(a => {
+      const answerStr = typeof a.answer === 'object' ? JSON.stringify(a.answer) : a.answer;
+      const impactHint = a.impact && Object.keys(a.impact).length > 0
+        ? ` [Pre-classified impact: ${JSON.stringify(a.impact)}]`
+        : '';
+      return `Q (${a.stoneId}): ${answerStr}${impactHint}`;
+    })
     .join('\n');
 
   const prompt = `Perform a PRELIMINARY stone analysis on these Round 1 answers.
@@ -211,19 +370,28 @@ Return JSON:
   ]
 }`;
 
-  const { content } = await callReasoning({
-    messages: [
-      { role: 'system', content: buildSystemPrompt() },
-      { role: 'user', content: prompt },
-    ],
-    temperature: 0.2,
-    max_tokens: 1000,
-    response_format: { type: 'json_object' },
-  });
+  const callMessages = [
+    { role: 'system' as const, content: buildSystemPrompt() },
+    { role: 'user'   as const, content: prompt },
+  ];
 
-  if (!content) throw new Error('Agent 2 preliminary extraction: No response');
-
-  const raw = JSON.parse(content) as StoneRound2Output;
+  let raw: StoneRound2Output;
+  if (flags.USE_TOOL_CALLING) {
+    const args = await callWithTools(
+      { messages: callMessages, temperature: 0.2, max_tokens: 1000, tools: [EXTRACT_PRELIMINARY_TOOL], tool_name: 'extract_preliminary_stones' },
+      'reasoning'
+    );
+    raw = JSON.parse(args) as StoneRound2Output;
+  } else {
+    const { content } = await callReasoning({
+      messages: callMessages,
+      temperature: 0.2,
+      max_tokens: 1000,
+      response_format: { type: 'json_object' },
+    });
+    if (!content) throw new Error('Agent 2 preliminary extraction: No response');
+    raw = JSON.parse(content) as StoneRound2Output;
+  }
 
   // Validate preliminary stones
   const validatedPrelim: PreliminaryStone[] = (raw.preliminaryStones ?? [])
@@ -331,24 +499,101 @@ export function crossValidateStones(
   };
 }
 
+/**
+ * Detect the user's Transtheoretical Model (TTM) stage of change
+ * from their answers and readiness profile.
+ *
+ * Research: Prochaska & DiClemente (1983)
+ * Stage determines whether Agent 3 builds a skills curriculum (Preparation/Action)
+ * or a motivation-activation phase 0 (Precontemplation/Contemplation).
+ */
+export function detectChangeStage(
+  answers:          StoneAnswer[],
+  readiness?:       ReadinessProfile,
+  linguisticSignals?: LinguisticSignals
+): ChangeStage {
+  const importance    = readiness?.importance   ?? 5;
+  const selfEfficacy  = readiness?.selfEfficacy ?? 5;
+  const hedgeDensity  = linguisticSignals?.hedgeDensity ?? 0;
+  const sustain       = (linguisticSignals?.changeVsSustainRatio ?? 1) < 0.8;
+
+  // Combine answer text for keyword signals
+  const allAnswerText = answers
+    .map(a => (typeof a.answer === 'string' ? a.answer : JSON.stringify(a.answer)))
+    .join(' ')
+    .toLowerCase();
+
+  const hasStarted   = /already started|been doing|currently|i do|i am doing/.test(allAnswerText);
+  const hasPlan      = /i plan|i have a plan|i know what|next week|i\'ve mapped/.test(allAnswerText);
+  const noAttempts   = /never tried|never done|don\'t know where|no idea|never started/.test(allAnswerText);
+  const manyAttempts = /tried many|tried several|multiple times|always fail|tried before and/.test(allAnswerText);
+
+  // Action: already started, asks about optimization
+  if (hasStarted && importance >= 7 && selfEfficacy >= 6) return 'action';
+
+  // Precontemplation: low importance, no prior attempts, no plan awareness
+  if (importance < 4 && noAttempts && !hasPlan) return 'precontemplation';
+
+  // Contemplation: aware, ambivalent, not yet planning
+  if (importance < 6 && sustain && hedgeDensity > 0.15) return 'contemplation';
+  if (importance < 6 && manyAttempts && selfEfficacy < 5) return 'contemplation';
+
+  // Preparation: ready to start, has a plan or prior attempt knowledge
+  if (importance >= 7 && (hasPlan || manyAttempts) && selfEfficacy >= 5) return 'preparation';
+
+  // Default to preparation (most users who complete onboarding are at least in prep)
+  return 'preparation';
+}
+
 export async function extractStones(
-  context: AgentContext,
+  context:      AgentContext,
   goalAnalysis: Agent1Output,
-  answers: StoneAnswer[]
+  answers:      StoneAnswer[],
+  enrichment?: {
+    readinessProfile?:  ReadinessProfile;
+    answerTexts?:       string[];   // Raw open-ended answer strings for linguistic analysis
+    changeStage?:       ChangeStage;
+  }
 ): Promise<Agent2ProfileOutput> {
-  const { content } = await callReasoning({
-    messages: [
-      { role: 'system', content: buildSystemPrompt() },
-      { role: 'user', content: buildUserPrompt(context, goalAnalysis, answers) },
-    ],
-    temperature: 0.2,  // Analytical — consistent stone mapping
-    max_tokens: 1200,
-    response_format: { type: 'json_object' },
-  });
-  if (!content) {
-    throw new Error('Agent 2 Mode 2: No response received');
+  // ── Compute linguistic signals from raw answer text if flag is on ──────────
+  let linguisticSignals: LinguisticSignals | undefined;
+  if (flags.USE_LINGUISTIC_SIGNALS && enrichment?.answerTexts?.length) {
+    linguisticSignals = aggregateLinguisticSignals(enrichment.answerTexts);
   }
 
-  const raw = JSON.parse(content) as unknown;
-  return validateOutput(raw);
+  // ── Detect TTM change stage ───────────────────────────────────────────────
+  const changeStage: ChangeStage = enrichment?.changeStage
+    ?? detectChangeStage(answers, enrichment?.readinessProfile, linguisticSignals);
+
+  const callMessages = [
+    { role: 'system' as const, content: buildSystemPrompt() },
+    { role: 'user'   as const, content: buildUserPrompt(
+        context,
+        goalAnalysis,
+        answers,
+        enrichment?.readinessProfile,
+        linguisticSignals
+      )
+    },
+  ];
+
+  let raw: unknown;
+  if (flags.USE_TOOL_CALLING) {
+    const args = await callWithTools(
+      { messages: callMessages, temperature: 0.2, max_tokens: 1200, tools: [EXTRACT_STONES_TOOL], tool_name: 'extract_stone_profile' },
+      'reasoning'
+    );
+    raw = JSON.parse(args) as unknown;
+  } else {
+    const { content } = await callReasoning({
+      messages: callMessages,
+      temperature: 0.2,
+      max_tokens: 1200,
+      response_format: { type: 'json_object' },
+    });
+    if (!content) throw new Error('Agent 2 Mode 2: No response received');
+    raw = JSON.parse(content) as unknown;
+  }
+
+  return validateOutput(raw, enrichment?.readinessProfile, linguisticSignals, changeStage);
 }

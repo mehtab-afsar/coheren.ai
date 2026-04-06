@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle, ChevronRight, Sparkles, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import type { Agent2ProfileOutput } from '@types-app/agents';
 
 interface Props {
@@ -25,44 +25,53 @@ const STONE_LABELS: Record<string, string> = {
   Overcommitment: 'Overcommitment',
 };
 
-const STONE_DESCRIPTIONS: Record<string, string> = {
-  TimeConstraint: 'Your schedule genuinely limits how much time you can dedicate',
-  ResourceGap: 'Missing equipment, tools, or access you need',
-  EnvironmentFriction: 'Your environment makes it harder to practice',
-  Inconsistency: 'You start strong but momentum tends to drop off',
-  FearOfFailure: 'Fear of doing it wrong or being judged holds you back',
-  Perfectionism: 'You delay starting or finishing because it has to be perfect',
-  LowConfidence: 'You doubt whether you can actually do this',
-  UnrealisticExpectations: "Your expectations don't match typical progress timelines",
-  FocusFragility: 'Distractions easily pull you out of focused work',
-  CognitiveFatigue: 'Mental fatigue limits how much you can absorb per session',
-  SkillGap: 'Missing foundational skills that need to be built first',
-  ProcrastinationPattern: 'You have the time but struggle to actually use it',
-  Overcommitment: 'You take on more than you can sustain',
-};
-
 function getPraiseText(archetype: string, stoneType: string): string {
-  const a = archetype.toLowerCase();
-  if (a.includes('ambit')) {
-    return "You set high standards and take action fast. The key is pairing that drive with a system that keeps momentum even on the hard days.";
+  switch (stoneType) {
+    case 'SkillGap':
+      return "Everyone starts somewhere. The plan is structured to build missing foundations first — so each session adds to a base that actually holds.";
+    case 'TimeConstraint':
+      return "Working with limited time is a real constraint, not an excuse. The sessions ahead are designed to fit your actual schedule, not an ideal one.";
+    case 'LowConfidence':
+    case 'FearOfFailure':
+      return "Starting something new takes real courage. The roadmap is built around early wins — so you can build evidence that you can do this, one session at a time.";
+    case 'Perfectionism':
+      return "Your attention to detail is a real strength. The plan ahead is built to let you ship imperfect reps — because consistency beats perfect, every time.";
+    case 'ProcrastinationPattern':
+      return "You think carefully before you act — which means your actions tend to be well-considered. The plan uses tiny first steps to bypass the hesitation loop.";
+    case 'Overcommitment':
+      return "You care enough to say yes to a lot. The plan protects your energy by keeping daily effort small and sustainable, not heroic.";
+    case 'Inconsistency':
+      return "Momentum is a skill, not a personality trait. The structure ahead is designed to make showing up the path of least resistance.";
+    case 'FocusFragility':
+      return "Deep focus is trainable. Sessions are kept short and single-threaded so distraction has fewer opportunities to win.";
+    case 'CognitiveFatigue':
+      return "Your brain has limits — and working with them beats fighting them. Sessions are spaced to keep load manageable and retention high.";
+    case 'EnvironmentFriction':
+      return "Your environment is working against you right now. The plan includes friction-reduction steps so the context supports the habit.";
+    case 'ResourceGap':
+      return "The plan works with what you have. Each session is scoped to your current access — and scales as your resources do.";
+    case 'UnrealisticExpectations':
+      return "Real progress is slower and more durable than most people expect. The timeline ahead is calibrated to actual research, not hype.";
   }
+
+  const a = archetype.toLowerCase();
   if (a.includes('perfect')) {
     return "Your attention to detail is a real strength. The plan ahead is built to let you ship imperfect reps — because consistency beats perfect, every time.";
   }
-  if (a.includes('procrastin') || stoneType === 'ProcrastinationPattern') {
-    return "You think carefully before you act — which means your actions tend to be well-considered. The plan uses tiny first steps to bypass the hesitation loop.";
-  }
-  if (a.includes('overcommit') || stoneType === 'Overcommitment') {
-    return "You care enough to say yes to a lot. The plan protects your energy by keeping daily effort small and sustainable, not heroic.";
-  }
-  if (a.includes('fear') || stoneType === 'FearOfFailure' || stoneType === 'LowConfidence') {
-    return "Starting something new takes real courage. The roadmap is built around early wins — so you can build evidence that you can do this, one session at a time.";
+  if (a.includes('ambit')) {
+    return "You set high standards and take action fast. The key is pairing that drive with a system that keeps momentum even on the hard days.";
   }
   return "You've got the self-awareness most people skip. Knowing your blockers is the first and most important step to actually moving past them.";
 }
 
+const SEVERITY_COLORS: Record<string, { bg: string; border: string; text: string }> = {
+  Low:      { bg: 'rgba(34,197,94,0.06)',   border: 'rgba(34,197,94,0.20)',   text: '#16a34a' },
+  Moderate: { bg: 'rgba(245,158,11,0.06)',  border: 'rgba(245,158,11,0.20)',  text: '#d97706' },
+  High:     { bg: 'rgba(239,68,68,0.06)',   border: 'rgba(239,68,68,0.20)',   text: '#dc2626' },
+  Critical: { bg: 'rgba(124,58,237,0.06)',  border: 'rgba(124,58,237,0.20)', text: '#7c3aed' },
+};
+
 export default function StoneProfileConfirmation({ stoneProfile, onConfirm, onDoesntFit }: Props) {
-  const [expanded, setExpanded] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
 
@@ -71,185 +80,206 @@ export default function StoneProfileConfirmation({ stoneProfile, onConfirm, onDo
   const secondaryStones = profile.stones.filter(s => s.type !== profile.primaryStone).slice(0, 2);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-      style={{ maxWidth: 480, margin: '0 auto', padding: '0 20px' }}
-    >
+    <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 24px' }}>
+
       {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: 24 }}>
-        <div style={{
-          width: 40,
-          height: 40,
-          borderRadius: '50%',
-          background: 'rgba(124,58,237,0.08)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          margin: '0 auto 14px',
-        }}>
-          <Sparkles size={16} color="#7c3aed" strokeWidth={1.8} />
-        </div>
-        <h2 style={{
-          fontSize: 20,
-          fontWeight: 700,
-          color: '#1a1a2e',
-          margin: '0 0 6px',
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        style={{ marginBottom: 32 }}
+      >
+        <h1 style={{
+          fontFamily: 'var(--c-font-display)',
+          fontSize: 'clamp(28px, 6vw, 40px)',
+          fontWeight: 500,
+          color: 'var(--c-text-primary)',
           letterSpacing: '-0.02em',
+          lineHeight: 1.2,
+          margin: '0 0 12px',
         }}>
-          Here's what we found
-        </h2>
-        <p style={{ fontSize: 13, color: '#9ca3af', margin: 0, fontWeight: 400 }}>
-          {profile.userArchetype}
+          Here's what we learned
+          <br />about you.
+        </h1>
+        <p style={{
+          fontSize: 16,
+          color: 'var(--c-text-tertiary)',
+          margin: 0,
+          lineHeight: 1.5,
+          fontFamily: 'var(--c-font-body)',
+        }}>
+          We identified {profile.stones.length} pattern{profile.stones.length !== 1 ? 's' : ''} that could
+          affect your progress.
         </p>
-      </div>
-
-      {/* Praise block */}
-      {primaryStone && (
-        <div style={{
-          background: 'rgba(124,58,237,0.04)',
-          border: '1px solid rgba(124,58,237,0.1)',
-          borderRadius: 12,
-          padding: '12px 16px',
-          marginBottom: 16,
-        }}>
-          <p style={{ fontSize: 13, color: '#374151', margin: 0, lineHeight: 1.65 }}>
-            {getPraiseText(profile.userArchetype, primaryStone.type)}
-          </p>
-        </div>
-      )}
-
-      {/* Primary stone card */}
-      {primaryStone && (
-        <div style={{
-          background: '#fff',
-          borderRadius: 20,
-          boxShadow: '0 2px 16px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.04)',
-          padding: '20px',
-          marginBottom: 10,
-        }}>
+        {profile.userArchetype && (
           <span style={{
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            color: '#7c3aed',
-            display: 'block',
-            marginBottom: 8,
+            display: 'inline-block',
+            marginTop: 12,
+            padding: '4px 12px',
+            borderRadius: 9999,
+            background: 'rgba(139,92,246,0.10)',
+            border: '1px solid rgba(139,92,246,0.20)',
+            fontSize: 12,
+            fontWeight: 600,
+            color: 'var(--c-accent-purple)',
+            fontFamily: 'var(--c-font-body)',
+            letterSpacing: '0.01em',
           }}>
-            Primary obstacle
+            {profile.userArchetype}
           </span>
-          <p style={{
-            fontSize: 16,
-            fontWeight: 700,
-            color: '#1a1a2e',
-            margin: '0 0 6px',
-            letterSpacing: '-0.01em',
-          }}>
-            {STONE_LABELS[primaryStone.type] ?? primaryStone.type}
-          </p>
-          <p style={{ fontSize: 13, color: '#6b7280', margin: 0, lineHeight: 1.55 }}>
-            {STONE_DESCRIPTIONS[primaryStone.type] ?? primaryStone.trigger}
-          </p>
-        </div>
-      )}
+        )}
+      </motion.div>
+
+      {/* Primary stone */}
+      {primaryStone && (() => {
+        const sev = primaryStone.severity ?? 'Moderate';
+        const colors = SEVERITY_COLORS[sev] ?? SEVERITY_COLORS.Moderate;
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+            style={{ marginBottom: 10 }}
+          >
+            <div style={{
+              fontSize: 10, fontWeight: 600, letterSpacing: '0.08em',
+              textTransform: 'uppercase', color: 'var(--c-text-quaternary)',
+              marginBottom: 8, fontFamily: 'var(--c-font-body)',
+            }}>
+              Primary
+            </div>
+            <div style={{
+              padding: '20px',
+              backgroundColor: colors.bg,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 12,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <span style={{
+                  fontSize: 15, fontWeight: 600,
+                  color: 'var(--c-text-primary)',
+                  fontFamily: 'var(--c-font-body)',
+                }}>
+                  {STONE_LABELS[primaryStone.type] ?? primaryStone.type}
+                </span>
+                <span style={{
+                  fontSize: 10, fontWeight: 600,
+                  color: colors.text,
+                  backgroundColor: colors.border,
+                  padding: '2px 7px',
+                  borderRadius: 9999,
+                  fontFamily: 'var(--c-font-body)',
+                }}>
+                  {sev}
+                </span>
+                {primaryStone.category && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 600,
+                    color: 'var(--c-text-quaternary)',
+                    background: 'var(--c-surface-raised)',
+                    padding: '2px 7px',
+                    borderRadius: 9999,
+                    fontFamily: 'var(--c-font-body)',
+                  }}>
+                    {primaryStone.category}
+                  </span>
+                )}
+              </div>
+              {primaryStone.trigger && (
+                <p style={{
+                  fontSize: 14,
+                  color: 'var(--c-text-secondary)',
+                  margin: '0 0 10px',
+                  lineHeight: 1.6,
+                  fontFamily: 'var(--c-font-body)',
+                }}>
+                  {primaryStone.trigger}
+                </p>
+              )}
+              <p style={{
+                fontFamily: 'var(--c-font-display)',
+                fontStyle: 'italic',
+                fontSize: 13,
+                color: 'var(--c-text-tertiary)',
+                margin: 0,
+                lineHeight: 1.6,
+              }}>
+                "{getPraiseText(profile.userArchetype, primaryStone.type)}"
+              </p>
+            </div>
+          </motion.div>
+        );
+      })()}
 
       {/* Secondary stones */}
       {secondaryStones.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-          {secondaryStones.map(stone => (
-            <div
-              key={stone.type}
-              style={{
-                background: '#fff',
-                borderRadius: 14,
-                border: '1px solid #f3f4f6',
-                padding: '13px 16px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-              }}
-            >
-              <div style={{
-                width: 7,
-                height: 7,
-                borderRadius: '50%',
-                background: '#d1d5db',
-                flexShrink: 0,
-              }} />
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: 13, fontWeight: 600, color: '#1a1a2e', margin: 0 }}>
-                  {STONE_LABELS[stone.type] ?? stone.type}
-                </p>
-                <p style={{ fontSize: 12, color: '#9ca3af', margin: '2px 0 0' }}>
-                  {stone.severity} impact
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* How this shapes your plan — expandable */}
-      {profile.agent3Guidance.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <button
-            onClick={() => setExpanded(e => !e)}
-            style={{
-              width: '100%',
-              background: 'rgba(124,58,237,0.04)',
-              border: '1px solid rgba(124,58,237,0.12)',
-              borderRadius: 12,
-              padding: '12px 16px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              outline: 'none',
-            }}
-          >
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#7c3aed' }}>
-              How this shapes your plan
-            </span>
-            <ChevronRight
-              size={14}
-              color="#7c3aed"
-              style={{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
-            />
-          </button>
-          {expanded && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              style={{
-                background: 'rgba(124,58,237,0.03)',
-                border: '1px solid rgba(124,58,237,0.08)',
-                borderTop: 'none',
-                borderRadius: '0 0 12px 12px',
-                padding: '12px 16px',
-              }}
-            >
-              <ul style={{ margin: 0, padding: '0 0 0 16px' }}>
-                {profile.agent3Guidance.map((g, i) => (
-                  <li key={i} style={{
-                    fontSize: 13,
-                    color: '#374151',
-                    lineHeight: 1.55,
-                    marginBottom: i < profile.agent3Guidance.length - 1 ? 6 : 0,
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 32 }}>
+          {secondaryStones.map((stone, i) => {
+            const sev = stone.severity ?? 'Low';
+            const colors = SEVERITY_COLORS[sev] ?? SEVERITY_COLORS.Low;
+            return (
+              <motion.div
+                key={stone.type}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, delay: 0.2 + i * 0.1, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <div style={{
+                  padding: '14px 16px',
+                  backgroundColor: colors.bg,
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: 10,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                }}>
+                  <div style={{ flex: 1 }}>
+                    <span style={{
+                      fontSize: 13, fontWeight: 600,
+                      color: 'var(--c-text-primary)',
+                      fontFamily: 'var(--c-font-body)',
+                    }}>
+                      {STONE_LABELS[stone.type] ?? stone.type}
+                    </span>
+                    {stone.category && (
+                      <span style={{ fontSize: 11, color: 'var(--c-text-quaternary)', fontFamily: 'var(--c-font-body)' }}>
+                        {' · '}{stone.category}
+                      </span>
+                    )}
+                    {' '}
+                    <span style={{
+                      fontSize: 12,
+                      color: 'var(--c-text-tertiary)',
+                      fontFamily: 'var(--c-font-body)',
+                    }}>
+                      — {stone.trigger}
+                    </span>
+                  </div>
+                  <span style={{
+                    fontSize: 10, fontWeight: 600,
+                    color: colors.text,
+                    backgroundColor: colors.border,
+                    padding: '2px 7px',
+                    borderRadius: 9999,
+                    flexShrink: 0,
+                    fontFamily: 'var(--c-font-body)',
                   }}>
-                    {g}
-                  </li>
-                ))}
-              </ul>
-            </motion.div>
-          )}
+                    {sev}
+                  </span>
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
       )}
 
-      {/* CTA buttons */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* CTA */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, delay: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+      >
         {!showFeedback ? (
           <>
             <button
@@ -257,35 +287,32 @@ export default function StoneProfileConfirmation({ stoneProfile, onConfirm, onDo
               style={{
                 width: '100%',
                 padding: '15px',
-                borderRadius: 14,
-                background: 'linear-gradient(135deg, #7c3aed, #a78bfa)',
+                borderRadius: 12,
+                background: 'var(--c-accent-purple)',
                 color: '#fff',
                 border: 'none',
                 fontSize: 15,
-                fontWeight: 700,
+                fontWeight: 600,
                 cursor: 'pointer',
-                boxShadow: '0 4px 14px rgba(124,58,237,0.3)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
+                fontFamily: 'var(--c-font-body)',
+                letterSpacing: '-0.01em',
               }}
             >
-              <CheckCircle size={16} strokeWidth={2.5} />
-              Yes, this sounds like me
+              Build my plan →
             </button>
             <button
               onClick={() => setShowFeedback(true)}
               style={{
                 width: '100%',
                 padding: '13px',
-                borderRadius: 14,
+                borderRadius: 12,
                 background: 'transparent',
-                color: '#9ca3af',
-                border: '1.5px solid #f3f4f6',
+                color: 'var(--c-text-quaternary)',
+                border: '1px solid var(--c-border-subtle)',
                 fontSize: 13,
                 fontWeight: 500,
                 cursor: 'pointer',
+                fontFamily: 'var(--c-font-body)',
               }}
             >
               Some parts don't fit
@@ -297,8 +324,11 @@ export default function StoneProfileConfirmation({ stoneProfile, onConfirm, onDo
             animate={{ opacity: 1, y: 0 }}
             style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
           >
-            <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 2px' }}>
-              What feels off? <span style={{ color: '#9ca3af' }}>(optional)</span>
+            <p style={{
+              fontSize: 13, color: 'var(--c-text-tertiary)',
+              margin: '0 0 2px', fontFamily: 'var(--c-font-body)',
+            }}>
+              What feels off? <span style={{ color: 'var(--c-text-quaternary)' }}>(optional)</span>
             </p>
             <textarea
               value={feedbackText}
@@ -307,45 +337,46 @@ export default function StoneProfileConfirmation({ stoneProfile, onConfirm, onDo
               rows={3}
               style={{
                 width: '100%',
-                borderRadius: 12,
-                border: '1.5px solid #e5e7eb',
-                padding: '10px 14px',
-                fontSize: 13,
+                border: 'none',
+                borderBottom: '1.5px solid var(--c-border-subtle)',
+                padding: '0 0 10px',
+                fontSize: 14,
                 resize: 'none',
                 outline: 'none',
-                fontFamily: 'inherit',
-                color: '#1a1a2e',
+                fontFamily: 'var(--c-font-body)',
+                color: 'var(--c-text-primary)',
                 lineHeight: 1.6,
+                background: 'transparent',
                 boxSizing: 'border-box',
                 transition: 'border-color 0.15s',
               }}
-              onFocus={e => { e.currentTarget.style.borderColor = '#c4b5fd'; }}
-              onBlur={e => { e.currentTarget.style.borderColor = '#e5e7eb'; }}
+              onFocus={e => { e.currentTarget.style.borderBottomColor = 'var(--c-accent-purple)'; }}
+              onBlur={e => { e.currentTarget.style.borderBottomColor = 'var(--c-border-subtle)'; }}
             />
-            <button
-              onClick={() => onDoesntFit(feedbackText || undefined)}
-              style={{
-                width: '100%',
-                padding: '13px',
-                borderRadius: 14,
-                background: '#1a1a2e',
-                color: '#fff',
-                border: 'none',
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-              }}
-            >
-              Continue anyway
-              <ArrowRight size={15} strokeWidth={2} />
-            </button>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+              <button
+                onClick={() => onDoesntFit(feedbackText || undefined)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: 'var(--c-accent-purple)',
+                  fontFamily: 'var(--c-font-body)',
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                Continue anyway
+                <ArrowRight size={15} strokeWidth={2} />
+              </button>
+            </div>
           </motion.div>
         )}
-      </div>
-    </motion.div>
+      </motion.div>
+    </div>
   );
 }

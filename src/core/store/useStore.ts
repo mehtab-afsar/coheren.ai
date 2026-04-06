@@ -4,14 +4,29 @@ import type { OnboardingState, GoalCategory } from '@types-app/index.js';
 import { generateTasksForDay, generateTasksFromAIPlan } from '@shared/utils/taskGenerator.js';
 import type { User } from '@supabase/supabase-js';
 import { getCurrentUser } from '@lib/supabase';
-import { updateTaskCompletion, updateTaskSkip, updateProfile, saveTaskFeedback, syncDailyTasksToDB } from '@lib/database';
+import { updateTaskCompletion, updateTaskSkip, updateProfile, saveTaskFeedback, syncDailyTasksToDB, deleteUserData } from '@lib/database';
 import type { Agent3Output, Agent2ProfileOutput, DailyTask, TaskStep, AssessmentQuestion, AssessmentResult } from '@types-app/agents.js';
 import { runTaskGenerator } from '@core/agents';
+import { callEconomyStream } from '@lib/ai-router';
+import type { StoneHistoryEntry } from '@lib/stoneUpdater';
 import { generateFallbackTask } from '@core/agents/fallback-task-generator';
 import { track } from '@lib/analytics';
 import { flags } from '@config/feature-flags';
+import { type BanditState, type BanditContext, type VariantArm, getInitialBanditState, selectVariant, recordSelection, computeReward, updateArm } from '@lib/bandit';
 
 // ── New hierarchical roadmap types ──────────────────────────────────────────
+/** Tracks what resource (video/article) was consumed on a given day.
+ *  Used to give practice and retrieval tasks content-aware context. */
+export interface ContentEntry {
+  day:            number;
+  resourceTitle:  string;
+  resourceUrl:    string;
+  topic:          string;   // day skeleton theme or phase goal
+  timestamps?:    Record<string, string>;
+  watchFrom?:     string;
+  watchTo?:       string;
+}
+
 export interface WeekDay {
   day: number;       // absolute day number (1-indexed from goal start)
   weekDay: number;   // 1-7 within the week
@@ -131,6 +146,11 @@ export interface Task {
   assessmentQuestions?: AssessmentQuestion[];
   assessmentResults?: AssessmentResult[];
   retrievalInterval?: number; // days since content was first learned (spaced repetition)
+  // Pre-generation fields (5.7)
+  status?: 'active' | 'pregenerated';
+  createdAt?: string; // ISO8601 — for stale detection
+  // Speculative variant (Item 7)
+  variant?: 'light' | 'standard' | 'deep';
 }
 
 interface WeekPerformance {
@@ -183,6 +203,7 @@ interface AppStore extends OnboardingState {
   weeklyCheckIns: WeeklyCheckIn[];
   pendingWeeklyCheckIn: number | null;
   stoneProfile: Agent2ProfileOutput | null;
+  stoneHistory: StoneHistoryEntry[];
   tasks: Task[];
   currentDay: number;
   streak: number;
@@ -203,6 +224,8 @@ interface AppStore extends OnboardingState {
   setCheckInTime: (time: string) => void;
   setRoadmap: (roadmap: Roadmap) => void;
   setAgentData: (agentRoadmap: Agent3Output, stoneProfile: Agent2ProfileOutput) => void;
+  updateStoneProfile: (updated: Agent2ProfileOutput) => void;
+  addStoneHistoryEntry: (entry: StoneHistoryEntry) => void;
   updateAgentRoadmap: (updater: (roadmap: Agent3Output) => Agent3Output) => void;
   setAgentRoadmapV2: (roadmap: AgentRoadmapV2) => void;
   updateWeek: (weekNumber: number, updatedWeek: WeekPlan) => void;
@@ -215,6 +238,20 @@ interface AppStore extends OnboardingState {
   canAdvanceDay: () => boolean;
   advanceDay: () => boolean;
   generateNextDayTasks: () => void;
+  pregenerateTasksForDay: (day: number) => Promise<void>;
+  /** Speculative variant selection — keyed by day number (Item 7). */
+  selectedVariants: Record<number, 'light' | 'standard' | 'deep'>;
+  selectTaskVariant: (day: number, variant: 'light' | 'standard' | 'deep') => void;
+  /** Thompson Sampling bandit state — tracks Beta distributions per context. */
+  banditState: BanditState;
+  /** Call after task feedback is submitted to update the bandit arm. */
+  updateBanditFeedback: (taskId: string, completed: boolean, difficultyRating: number) => void;
+  /** Log of resources (videos/articles) consumed per day — used for content-aware practice. */
+  contentLog: Record<number, ContentEntry>;
+  logContent: (day: number, entry: ContentEntry) => void;
+  /** Transient: streaming preview description while Agent 4 generates. Null = not streaming. */
+  streamingTaskDescription: string | null;
+  setStreamingTaskDescription: (text: string | null) => void;
   completeAssessment: (taskId: string, results: AssessmentResult[]) => void;
   trackWeekPerformance: () => void;
   resetOnboarding: () => void;
@@ -242,6 +279,7 @@ export const useStore = create<AppStore>()(
       weeklyCheckIns: [],
       pendingWeeklyCheckIn: null,
       stoneProfile: null,
+      stoneHistory: [],
       tasks: [],
       currentDay: 1,
       streak: 0,
@@ -284,6 +322,10 @@ export const useStore = create<AppStore>()(
       setRoadmap: (roadmap) => set({ roadmap }),
 
       setAgentData: (agentRoadmap, stoneProfile) => set({ agentRoadmap, stoneProfile }),
+
+      updateStoneProfile: (updated) => set({ stoneProfile: updated }),
+
+      addStoneHistoryEntry: (entry) => set(s => ({ stoneHistory: [...s.stoneHistory, entry] })),
 
       updateAgentRoadmap: (updater) => set((state) => {
         if (!state.agentRoadmap) return state;
@@ -378,6 +420,23 @@ export const useStore = create<AppStore>()(
               : t
           ),
         }));
+
+        // Update bandit arm with reward signal from this feedback
+        {
+          const feedbackState = get();
+          const feedbackTask = feedbackState.tasks.find(t => t.id === taskId);
+          if (feedbackTask?.variant) {
+            const ctx: BanditContext = {
+              domain: (feedbackState.currentGoal as { category?: string }).category ?? 'general',
+              primaryStone: feedbackState.stoneProfile?.primaryStone?.stoneType ?? 'unknown',
+              dayOfWeek: feedbackTask.scheduledFor
+                ? new Date(feedbackTask.scheduledFor + 'T00:00:00').getDay()
+                : new Date().getDay(),
+            };
+            const reward = computeReward(feedbackTask.completed, difficultyRating);
+            set({ banditState: updateArm(feedbackState.banditState, ctx, feedbackTask.variant as VariantArm, reward) });
+          }
+        }
 
         const state = get();
         const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(taskId);
@@ -570,6 +629,28 @@ export const useStore = create<AppStore>()(
 
         const nextDay = state.currentDay;
 
+        // Check if Day N was already pre-generated — if so, just activate it (5.7)
+        const pregenerated = state.tasks.find(
+          t => t.day === nextDay && t.status === 'pregenerated'
+        );
+        if (pregenerated) {
+          const STALE_MS = 48 * 60 * 60 * 1000;
+          const isStale = pregenerated.createdAt
+            ? Date.now() - new Date(pregenerated.createdAt).getTime() > STALE_MS
+            : false;
+          if (!isStale) {
+            // Activate pre-generated task (change status to 'active')
+            set(s => ({
+              tasks: s.tasks.map(t =>
+                t.id === pregenerated.id ? { ...t, status: 'active' } : t
+              )
+            }));
+            return;
+          }
+          // Stale — remove it and fall through to regenerate
+          set(s => ({ tasks: s.tasks.filter(t => t.id !== pregenerated.id) }));
+        }
+
         // If we have full agent data AND AI agents are enabled, use Agent 4
         if (flags.USE_AI_AGENTS && state.agentRoadmap && state.stoneProfile) {
           const dailyMinutes = parseInt(state.roadmap.dailyTime) || 30;
@@ -593,7 +674,120 @@ export const useStore = create<AppStore>()(
           const goalText = (state.currentGoal as { specificGoal?: string }).specificGoal ?? undefined;
           const goalCategory = (state.currentGoal as { category?: string }).category ?? undefined;
           const skillLevel = (state.currentGoal as { skillLevel?: 'beginner' | 'intermediate' | 'advanced' }).skillLevel ?? 'beginner';
-          runTaskGenerator(nextDay, state.agentRoadmap, state.stoneProfile, dailyMinutes, previousTasksContext, goalText, goalCategory, skillLevel)
+
+          // Build week content summary so practice/retrieval tasks reference real content
+          const weekStartDay = Math.floor((nextDay - 1) / 7) * 7 + 1;
+          const weekContentEntries = Object.values(state.contentLog)
+            .filter(e => e.day >= weekStartDay && e.day < nextDay);
+          const weekContentSummary = weekContentEntries.length > 0
+            ? weekContentEntries.map(e => {
+                const tsStr = e.timestamps && Object.keys(e.timestamps).length > 0
+                  ? ` (key sections: ${Object.entries(e.timestamps).map(([k, v]) => `${v} — ${k}`).join(', ')})`
+                  : e.watchFrom ? ` (watched ${e.watchFrom}–${e.watchTo ?? 'end'})` : '';
+                return `Day ${e.day}: "${e.resourceTitle}"${tsStr} — topic: ${e.topic}`;
+              }).join('\n')
+            : undefined;
+
+          // Item 7 — Speculative task variants: run 3 parallel Agent 4 calls
+          if (flags.USE_TASK_VARIANTS) {
+            const VARIANT_HINTS: Record<'light' | 'standard' | 'deep', string> = {
+              light:    'Make this gentle and accessible. Shorter, lower cognitive load, 60–70% standard duration.',
+              standard: '',
+              deep:     'Make this challenging and comprehensive. More steps, 130–150% standard duration.',
+            };
+            ;(async () => {
+              const variants = (['light', 'standard', 'deep'] as const);
+              const results = await Promise.allSettled(
+                variants.map(v => runTaskGenerator(nextDay, state.agentRoadmap!, state.stoneProfile!, dailyMinutes, previousTasksContext, goalText, goalCategory, skillLevel, VARIANT_HINTS[v], weekContentSummary))
+              );
+              const variantTasks: Task[] = [];
+              for (let i = 0; i < variants.length; i++) {
+                const r = results[i];
+                if (r.status === 'fulfilled') {
+                  const agentTask = r.value;
+                  const assessmentData = agentTask as DailyTask & { assessmentQuestions?: AssessmentQuestion[]; taskType?: string };
+                  variantTasks.push({
+                    id: `agent-day-${nextDay}-${variants[i]}`,
+                    title: agentTask.task.title,
+                    description: agentTask.task.description,
+                    type: (assessmentData.taskType as Task['type']) || 'practice',
+                    duration: agentTask.task.estimatedMinutes,
+                    completed: false,
+                    skipped: false,
+                    scheduledFor: new Date().toISOString().split('T')[0],
+                    day: nextDay,
+                    dayNumber: nextDay,
+                    segments: agentTask.task.segments ?? [],
+                    steps: agentTask.task.steps.map((s: TaskStep) => s.instruction),
+                    tips: agentTask.task.tips,
+                    successCriteria: agentTask.task.successCriteria.primary,
+                    coachTips: agentTask.task.coachTips ?? [],
+                    reflection: agentTask.task.reflection,
+                    requiresPrep: agentTask.task.requiresPrep,
+                    resources: agentTask.task.resources,
+                    assessmentQuestions: assessmentData.assessmentQuestions,
+                    variant: variants[i],
+                  });
+                }
+              }
+              get().setStreamingTaskDescription(null);
+              if (variantTasks.length > 0) {
+                // Thompson Sampling: pick the best arm for this context
+                const currentState = get();
+                const banditCtx: BanditContext = {
+                  domain: (currentState.currentGoal as { category?: string }).category ?? 'general',
+                  primaryStone: currentState.stoneProfile?.primaryStone?.stoneType ?? 'unknown',
+                  dayOfWeek: new Date().getDay(),
+                };
+                const autoVariant = selectVariant(currentState.banditState, banditCtx);
+                const updatedBandit = recordSelection(currentState.banditState, nextDay, autoVariant);
+                set(s => ({
+                  tasks: s.tasks
+                    .filter(t => t.id !== `placeholder-day-${nextDay}`)
+                    .concat(variantTasks),
+                  selectedVariants: { ...s.selectedVariants, [nextDay]: autoVariant },
+                  banditState: updatedBandit,
+                }));
+                // Log content for the auto-selected variant so practice tasks can reference it
+                const selectedVariantTask = variantTasks.find(t => t.variant === autoVariant);
+                const primaryRes = selectedVariantTask?.resources?.primary;
+                if (primaryRes) {
+                  const skeletonTheme = state.agentRoadmap?.roadmap?.phases
+                    ?.flatMap(p => p.daySkeleton ?? [])
+                    .find((_, i) => i === nextDay - 1)?.theme ?? goalText ?? '';
+                  get().logContent(nextDay, {
+                    day: nextDay,
+                    resourceTitle: primaryRes.title,
+                    resourceUrl: primaryRes.url,
+                    topic: skeletonTheme,
+                    timestamps: primaryRes.timestamps,
+                    watchFrom: (primaryRes as { watchFrom?: string }).watchFrom,
+                    watchTo: (primaryRes as { watchTo?: string }).watchTo,
+                  });
+                }
+              } else {
+                // All 3 failed — fall through to single-task fallback
+                set(s => ({ tasks: s.tasks.filter(t => t.id !== `placeholder-day-${nextDay}`) }));
+                get().generateNextDayTasks();
+              }
+            })();
+            // Add placeholder and return — variants will replace it async
+            const placeholder: Task = {
+              id: `placeholder-day-${nextDay}`,
+              title: "Generating today's task...",
+              description: 'Your personalized task is being prepared.',
+              type: 'practice',
+              duration: dailyMinutes,
+              completed: false,
+              skipped: false,
+              scheduledFor: new Date().toISOString().split('T')[0],
+              day: nextDay,
+            };
+            set((s) => ({ tasks: [...s.tasks, placeholder] }));
+            return;
+          }
+
+          runTaskGenerator(nextDay, state.agentRoadmap, state.stoneProfile, dailyMinutes, previousTasksContext, goalText, goalCategory, skillLevel, undefined, weekContentSummary)
             .then((agentTask: DailyTask) => {
               // Check if this is an assessment task (has assessment questions attached)
               const assessmentData = agentTask as DailyTask & { assessmentQuestions?: AssessmentQuestion[]; taskType?: string };
@@ -617,15 +811,33 @@ export const useStore = create<AppStore>()(
                 coachTips: agentTask.task.coachTips ?? [],
                 reflection: agentTask.task.reflection,
                 requiresPrep: agentTask.task.requiresPrep,
+                resources: agentTask.task.resources,
                 // Assessment data
                 assessmentQuestions: assessmentData.assessmentQuestions,
               };
-              // Replace placeholder with real task
+              // Replace placeholder with real task, clear streaming preview
+              get().setStreamingTaskDescription(null);
               set((s) => ({
                 tasks: s.tasks
                   .filter(t => t.id !== `placeholder-day-${nextDay}`)
                   .concat([newTask])
               }));
+              // Log content so tomorrow's practice/retrieval can reference it
+              if (agentTask.task.resources?.primary) {
+                const res = agentTask.task.resources.primary;
+                const skeletonTheme = state.agentRoadmap?.roadmap?.phases
+                  ?.flatMap(p => p.daySkeleton ?? [])
+                  .find((_, i) => i === nextDay - 1)?.theme ?? goalText ?? '';
+                get().logContent(nextDay, {
+                  day: nextDay,
+                  resourceTitle: res.title,
+                  resourceUrl: res.url,
+                  topic: skeletonTheme,
+                  timestamps: res.timestamps,
+                  watchFrom: (res as { watchFrom?: string }).watchFrom,
+                  watchTo: (res as { watchTo?: string }).watchTo,
+                });
+              }
 
               // Sync to Supabase in background (non-blocking)
               const syncState = get();
@@ -670,6 +882,7 @@ export const useStore = create<AppStore>()(
                 successCriteria: fallbackTask.task.successCriteria.primary,
                 coachTips: fallbackTask.task.coachTips ?? [],
               };
+              get().setStreamingTaskDescription(null);
               set((s) => ({
                 tasks: s.tasks
                   .filter(t => t.id !== `placeholder-day-${nextDay}`)
@@ -692,6 +905,25 @@ export const useStore = create<AppStore>()(
                 }).catch(() => { /* non-critical */ });
               }
             });
+
+          // ── Streaming preview (fire-and-forget) ──
+          // Streams a one-sentence description of what Day N will focus on
+          // into streamingTaskDescription while Agent 4 runs.
+          const phaseTheme = (state.agentRoadmap as unknown as { months?: Array<{ title: string }> } | null)?.months?.[0]?.title ?? state.roadmap?.category ?? 'your goal';
+          ;(async () => {
+            try {
+              get().setStreamingTaskDescription('');
+              for await (const token of callEconomyStream({
+                messages: [{ role: 'user', content: `One sentence: what will day ${nextDay} practice focus on? Goal: ${goalText ?? 'the goal'}, phase: ${phaseTheme}` }],
+                max_tokens: 60,
+                temperature: 0.5,
+              })) {
+                get().setStreamingTaskDescription((get().streamingTaskDescription ?? '') + token);
+              }
+            } catch {
+              get().setStreamingTaskDescription(null);
+            }
+          })();
 
           // Add a lightweight placeholder so the UI isn't empty while Agent 4 runs
           const placeholder: Task = {
@@ -734,24 +966,115 @@ export const useStore = create<AppStore>()(
         }));
       },
 
-      resetOnboarding: () => set({
-        step: 0,
-        universalProfile: {},
-        currentGoal: {},
-        roadmap: null,
-        agentRoadmap: null,
-        agentRoadmapV2: null,
-        weeklyCheckIns: [],
-        pendingWeeklyCheckIn: null,
-        stoneProfile: null,
-        tasks: [],
-        currentDay: 1,
-        streak: 0,
-        completionRate: 0,
-        lastCheckInDate: null,
-        performanceHistory: [],
-        initialGoal: null,
-      }),
+      selectedVariants: {},
+      selectTaskVariant: (day, variant) => set(state => ({
+        selectedVariants: { ...state.selectedVariants, [day]: variant },
+      })),
+
+      contentLog: {},
+      logContent: (day, entry) => set(s => ({ contentLog: { ...s.contentLog, [day]: entry } })),
+
+      banditState: getInitialBanditState(),
+      updateBanditFeedback: (taskId, completed, difficultyRating) => {
+        const state = get();
+        const task = state.tasks.find(t => t.id === taskId);
+        if (!task?.variant) return;
+        const ctx: BanditContext = {
+          domain: (state.currentGoal as { category?: string }).category ?? 'general',
+          primaryStone: state.stoneProfile?.primaryStone?.stoneType ?? 'unknown',
+          dayOfWeek: task.scheduledFor
+            ? new Date(task.scheduledFor + 'T00:00:00').getDay()
+            : new Date().getDay(),
+        };
+        const reward = computeReward(completed, difficultyRating);
+        set({ banditState: updateArm(state.banditState, ctx, task.variant as VariantArm, reward) });
+      },
+
+      streamingTaskDescription: null,
+      setStreamingTaskDescription: (text: string | null) => set({ streamingTaskDescription: text }),
+
+      pregenerateTasksForDay: async (day: number): Promise<void> => {
+        const state = get();
+        if (!flags.BACKGROUND_TASK_PREGENERATION && !flags.PREGENERATE_TASKS) return;
+        if (!state.roadmap || !state.agentRoadmap || !state.stoneProfile) return;
+        // Don't pregenerate if already present (active or pregenerated)
+        if (state.tasks.some(t => t.day === day)) return;
+
+        const dailyMinutes = parseInt(state.roadmap.dailyTime) || 30;
+        const goalText = (state.currentGoal as { specificGoal?: string }).specificGoal ?? undefined;
+        const goalCategory = (state.currentGoal as { category?: string }).category ?? undefined;
+        const skillLevel = (state.currentGoal as { skillLevel?: 'beginner' | 'intermediate' | 'advanced' }).skillLevel ?? 'beginner';
+
+        try {
+          const agentTask = await runTaskGenerator(day, state.agentRoadmap, state.stoneProfile, dailyMinutes, undefined, goalText, goalCategory, skillLevel);
+          const assessmentData = agentTask as DailyTask & { assessmentQuestions?: AssessmentQuestion[]; taskType?: string };
+          const taskType = (assessmentData.taskType as Task['type']) || 'practice';
+
+          const pregenTask: Task = {
+            id: `pregenerated-day-${day}`,
+            title: agentTask.task.title,
+            description: agentTask.task.description,
+            type: taskType,
+            duration: agentTask.task.estimatedMinutes,
+            completed: false,
+            skipped: false,
+            scheduledFor: new Date().toISOString().split('T')[0],
+            day,
+            dayNumber: day,
+            segments: agentTask.task.segments ?? [],
+            steps: agentTask.task.steps.map((s: TaskStep) => s.instruction),
+            tips: agentTask.task.tips,
+            successCriteria: agentTask.task.successCriteria.primary,
+            coachTips: agentTask.task.coachTips ?? [],
+            reflection: agentTask.task.reflection,
+            requiresPrep: agentTask.task.requiresPrep,
+            assessmentQuestions: assessmentData.assessmentQuestions,
+            status: 'pregenerated',
+            createdAt: new Date().toISOString(),
+          };
+
+          // Only store if the day's task hasn't appeared since we started generating
+          set(s => {
+            if (s.tasks.some(t => t.day === day)) return {};
+            return { tasks: [...s.tasks, pregenTask] };
+          });
+        } catch {
+          // Background failure — silently ignore
+        }
+      },
+
+      resetOnboarding: () => {
+        // Clear Supabase data before wiping local state
+        getCurrentUser().then(user => {
+          if (user?.id) {
+            deleteUserData(user.id).catch(err =>
+              console.warn('⚠️ DB reset failed (local state still cleared):', err)
+            );
+          }
+        });
+
+        set({
+          step: 0,
+          universalProfile: {},
+          currentGoal: {},
+          roadmap: null,
+          agentRoadmap: null,
+          agentRoadmapV2: null,
+          weeklyCheckIns: [],
+          pendingWeeklyCheckIn: null,
+          stoneProfile: null,
+          stoneHistory: [],
+          tasks: [],
+          currentDay: 1,
+          streak: 0,
+          completionRate: 0,
+          lastCheckInDate: null,
+          performanceHistory: [],
+          initialGoal: null,
+          contentLog: {},
+          banditState: getInitialBanditState(),
+        });
+      },
     }),
     {
       name: 'consist-storage',

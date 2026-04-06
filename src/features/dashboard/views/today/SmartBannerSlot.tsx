@@ -40,8 +40,8 @@ export default function SmartBannerSlot() {
   // Compute which banner to show (priority order)
   const weekNum = Math.ceil(currentDay / 7);
 
-  // plan-adjustment: within 3 days after checkpoint (use currentDay as checkpoint proxy)
-  const showPlanAdjust = currentDay - lastCheckpointDay <= 3 && lastCheckpointDay > 0;
+  // plan-adjustment: disabled
+  const showPlanAdjust = false;
   const planAdjustKey = getDismissKey('plan-adjustment', lastCheckpointDay);
 
   // streak-milestone: multiples of 7, 14, 30

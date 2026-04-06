@@ -1,126 +1,351 @@
-import { Home, Map, BarChart2, BookMarked, User, MessageCircle } from 'lucide-react';
+import { Home, Map, BarChart2, BookMarked, User, MessageSquare, Settings, Flame, ArrowUpRight } from 'lucide-react';
 import { useStore } from '@core/store/useStore';
-import { useUserLevel } from '@hooks/useUserLevel';
-import { ap } from '@core/design-system/appleTokens';
+import { useCoachMessages } from '../hooks/useCoachMessages';
+import type { ViewType } from '../hooks/useDashboardNav';
 
 interface DashboardSidebarProps {
-  currentView: 'today' | 'roadmap' | 'insights' | 'library' | 'you';
-  onViewChange: (view: 'today' | 'roadmap' | 'insights' | 'library' | 'you') => void;
+  currentView: ViewType;
+  onViewChange: (view: ViewType) => void;
   onCoachOpen?: () => void;
   isOpen?: boolean;
   onToggle?: (open: boolean) => void;
 }
 
-export default function DashboardSidebar({ currentView, onViewChange, onCoachOpen }: DashboardSidebarProps) {
-  const setStep = useStore((state) => state.setStep);
-  const { universalProfile, roadmap } = useStore();
-  const level = useUserLevel();
+const MICRO_LABEL: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 600,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+  color: 'var(--c-text-quaternary)',
+  padding: '0 12px',
+  marginTop: 20,
+  marginBottom: 2,
+  fontFamily: 'var(--c-font-body)',
+};
 
-  const userName = universalProfile?.name || '';
+function NavItem({
+  id,
+  icon: Icon,
+  label,
+  badge,
+  active,
+  onClick,
+}: {
+  id: ViewType;
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number; color?: string }>;
+  label: string;
+  badge?: string | number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 9,
+        height: 36,
+        padding: '0 10px',
+        borderRadius: 8,
+        border: 'none',
+        cursor: 'pointer',
+        width: '100%',
+        textAlign: 'left',
+        fontFamily: 'var(--c-font-body)',
+        fontSize: 14,
+        fontWeight: active ? 600 : 450,
+        color: active ? 'var(--c-accent-purple)' : 'var(--c-text-secondary)',
+        backgroundColor: active ? 'var(--c-accent-purple-soft)' : 'transparent',
+        transition: 'all 0.12s ease',
+        position: 'relative',
+      }}
+      onMouseEnter={e => {
+        if (!active) e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.03)';
+      }}
+      onMouseLeave={e => {
+        if (!active) e.currentTarget.style.backgroundColor = 'transparent';
+      }}
+    >
+      <Icon
+        size={15}
+        strokeWidth={active ? 2.2 : 1.7}
+        color={active ? 'var(--c-accent-purple)' : 'var(--c-text-tertiary)'}
+      />
+      <span style={{ flex: 1 }}>{label}</span>
+      {badge != null && (
+        <span style={{
+          minWidth: 18,
+          height: 18,
+          borderRadius: 9,
+          backgroundColor: active ? 'var(--c-accent-purple)' : 'var(--c-text-quaternary)',
+          color: '#fff',
+          fontSize: 10,
+          fontWeight: 700,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '0 4px',
+        }}>
+          {badge}
+        </span>
+      )}
+    </button>
+  );
+}
 
-  const navItems = [
-    { id: 'today'    as const, icon: Home,      label: 'Today' },
-    { id: 'roadmap'  as const, icon: Map,        label: 'Journey' },
-    { id: 'insights' as const, icon: BarChart2,  label: 'Progress' },
-    { id: 'library'  as const, icon: BookMarked, label: 'Library' },
-    { id: 'you'      as const, icon: User,        label: 'You' },
-  ];
+export default function DashboardSidebar({ currentView, onViewChange }: DashboardSidebarProps) {
+  const { universalProfile, currentGoal, roadmap, streak, tasks, currentDay } = useStore();
+  const { getMessages } = useCoachMessages();
+
+  const userName = universalProfile?.name ?? '';
+  const firstName = userName.split(' ')[0] || 'You';
+  const initials = userName ? userName.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() : 'U';
+
+  const goalText = currentGoal?.specificGoal ?? roadmap?.title ?? '';
+  const weekNum = Math.ceil((currentDay || 1) / 7);
+
+  const todaysTasks = tasks.filter(t => t.day === currentDay && !t.skipped);
+  const completedToday = todaysTasks.filter(t => t.completed).length;
+  const todayBadge = todaysTasks.length > 0
+    ? `${completedToday}/${todaysTasks.length}`
+    : undefined;
+
+  const unreadCoach = getMessages().filter(m => !m.read).length;
+
+  const setStep = useStore(s => s.setStep);
 
   return (
     <div style={{
-      width: 220, minWidth: 220, height: '100vh', position: 'fixed', left: 0, top: 0,
-      backgroundColor: ap.surface, borderRight: `1px solid ${ap.border}`,
-      display: 'flex', flexDirection: 'column', fontFamily: ap.font, zIndex: 40,
+      width: 220,
+      minWidth: 220,
+      height: '100vh',
+      position: 'fixed',
+      left: 0,
+      top: 0,
+      backgroundColor: '#ffffff',
+      borderRight: '1px solid var(--c-border-subtle)',
+      display: 'flex',
+      flexDirection: 'column',
+      fontFamily: 'var(--c-font-body)',
+      zIndex: 40,
     }}>
-      {/* Logo */}
-      <div style={{ padding: '22px 18px 16px' }}>
+
+      {/* ── Logo row ── */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '20px 16px 16px',
+      }}>
         <button
-          onClick={() => {
-            setStep(0);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+          onClick={() => { setStep(0); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            padding: 0, textAlign: 'left',
           }}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}
         >
-          <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.03em', color: ap.textPrimary }}>
-            coheren<span style={{ color: ap.accent }}>.</span>ai
-          </div>
-          <div style={{ fontSize: 10, fontWeight: 500, color: ap.textTertiary, letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 3 }}>
-            Think less · Do more
-          </div>
+          <span style={{
+            fontFamily: 'var(--c-font-display)',
+            fontSize: 18,
+            fontWeight: 600,
+            letterSpacing: '-0.02em',
+            color: 'var(--c-text-primary)',
+          }}>
+            coheren<span style={{ color: 'var(--c-accent-purple)' }}>.</span>
+          </span>
+        </button>
+        <button
+          onClick={() => onViewChange('you')}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--c-text-quaternary)',
+            display: 'flex', alignItems: 'center',
+            padding: 4, borderRadius: 6,
+            transition: 'color 0.12s ease',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = 'var(--c-text-secondary)'; }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'var(--c-text-quaternary)'; }}
+          title="Settings / Profile"
+        >
+          <Settings size={14} strokeWidth={1.5} />
         </button>
       </div>
 
-      {/* Nav */}
-      <nav style={{ padding: '0 10px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {navItems.map(({ id, icon: Icon, label }) => {
-          const active = currentView === id;
-          return (
-            <button key={id} onClick={() => onViewChange(id)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '9px 10px', borderRadius: 9, border: 'none', cursor: 'pointer',
-                backgroundColor: active ? ap.surfaceAlt : 'transparent',
-                color: active ? ap.textPrimary : ap.textSecondary,
-                fontWeight: active ? 600 : 500, fontSize: 14,
-                fontFamily: ap.font, transition: 'background 0.15s',
-                textAlign: 'left', width: '100%',
-              }}>
-              <Icon size={19} strokeWidth={1.2} />
-              {label}
-            </button>
-          );
-        })}
+      {/* ── Context block: Day + Goal ── */}
+      {goalText && (
+        <div style={{
+          margin: '0 12px 4px',
+          padding: '8px 10px',
+          backgroundColor: 'var(--c-accent-purple-soft)',
+          border: '1px solid var(--c-accent-purple-border)',
+          borderRadius: 8,
+        }}>
+          <div style={{
+            fontSize: 11,
+            fontWeight: 600,
+            color: 'var(--c-accent-purple)',
+            marginBottom: 2,
+            fontFamily: 'var(--c-font-body)',
+          }}>
+            Day {currentDay ?? 1} · Week {weekNum}
+          </div>
+          <div style={{
+            fontSize: 12,
+            color: 'var(--c-text-secondary)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            lineHeight: 1.3,
+          }}>
+            {goalText}
+          </div>
+        </div>
+      )}
+
+      {/* ── Nav ── */}
+      <nav style={{ padding: '4px 8px', flex: 1 }}>
+
+        <div style={MICRO_LABEL}>Today</div>
+        <NavItem
+          id="today"
+          icon={Home}
+          label="Today"
+          badge={todayBadge}
+          active={currentView === 'today'}
+          onClick={() => onViewChange('today')}
+        />
+
+        <div style={MICRO_LABEL}>Journey</div>
+        <NavItem
+          id="roadmap"
+          icon={Map}
+          label="My Roadmap"
+          active={currentView === 'roadmap'}
+          onClick={() => onViewChange('roadmap')}
+        />
+
+        <div style={MICRO_LABEL}>Insights</div>
+        <NavItem
+          id="insights"
+          icon={BarChart2}
+          label="Progress"
+          active={currentView === 'insights'}
+          onClick={() => onViewChange('insights')}
+        />
+        <NavItem
+          id="coach"
+          icon={MessageSquare}
+          label="Coach"
+          badge={unreadCoach > 0 ? unreadCoach : undefined}
+          active={currentView === 'coach'}
+          onClick={() => onViewChange('coach')}
+        />
+
+        {/* Divider */}
+        <div style={{ height: 1, backgroundColor: 'var(--c-border-subtle)', margin: '12px 4px' }} />
+
+        <NavItem
+          id="library"
+          icon={BookMarked}
+          label="Library"
+          active={currentView === 'library'}
+          onClick={() => onViewChange('library')}
+        />
       </nav>
 
-      {/* Divider + Coach */}
-      <div style={{ margin: '8px 10px' }}>
-        <div style={{ height: 1, backgroundColor: ap.border }} />
-      </div>
-      <div style={{ padding: '0 10px' }}>
-        <button onClick={() => onCoachOpen?.()}
+      {/* ── Streak footer ── */}
+      {streak > 0 && (
+        <button
+          onClick={() => onViewChange('insights')}
           style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            padding: '9px 10px', borderRadius: 9, border: 'none', cursor: 'pointer',
-            backgroundColor: 'transparent', color: ap.textSecondary,
-            fontWeight: 500, fontSize: 14, fontFamily: ap.font,
-            textAlign: 'left', width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            margin: '0 12px 8px',
+            padding: '7px 10px',
+            backgroundColor: 'rgba(34, 197, 94, 0.06)',
+            border: '1px solid rgba(34, 197, 94, 0.15)',
+            borderRadius: 8,
+            cursor: 'pointer',
+            width: 'calc(100% - 24px)',
+            textAlign: 'left',
+            transition: 'background-color 0.12s ease',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(34, 197, 94, 0.10)'; }}
+          onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(34, 197, 94, 0.06)'; }}
+        >
+          <Flame size={13} strokeWidth={2} color="var(--c-accent-green)" />
+          <span style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: 'var(--c-accent-green)',
+            flex: 1,
           }}>
-          <MessageCircle size={19} strokeWidth={1.2} />
-          Coach
+            {streak}-day streak
+          </span>
+          <ArrowUpRight size={11} color="var(--c-accent-green)" strokeWidth={2} />
         </button>
-      </div>
+      )}
 
-      {/* Spacer */}
-      <div style={{ flex: 1 }} />
-
-      {/* User card */}
-      <div style={{ padding: 12 }}>
+      {/* ── User row ── */}
+      <button
+        onClick={() => onViewChange('you')}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 9,
+          margin: '0 12px 16px',
+          padding: '8px 10px',
+          borderRadius: 8,
+          border: '1px solid var(--c-border-subtle)',
+          backgroundColor: 'var(--c-surface-elevated)',
+          cursor: 'pointer',
+          textAlign: 'left',
+          transition: 'background-color 0.12s ease',
+          width: 'calc(100% - 24px)',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--c-surface-card)'; }}
+        onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'var(--c-surface-elevated)'; }}
+      >
+        {/* Avatar */}
         <div style={{
-          backgroundColor: ap.surfaceAlt, borderRadius: 10,
-          border: `1px solid ${ap.border}`, padding: '10px 12px',
+          width: 28,
+          height: 28,
+          borderRadius: 8,
+          background: 'var(--c-gradient-purple)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#fff',
+          fontSize: 10,
+          fontWeight: 700,
+          flexShrink: 0,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: 7, flexShrink: 0,
-              background: `linear-gradient(135deg, ${ap.accent}, #8B7CF6)`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontSize: 11, fontWeight: 700,
-            }}>
-              {(userName || 'AB').slice(0, 2).toUpperCase()}
-            </div>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: ap.textPrimary, lineHeight: 1.2 }}>{userName || 'User'}</div>
-              <div style={{ fontSize: 11, color: ap.textTertiary, lineHeight: 1.3, marginTop: 1 }}>
-                {roadmap?.title || 'Your Journey'}
-              </div>
-            </div>
-          </div>
-          <div style={{ height: 3, borderRadius: 3, backgroundColor: 'rgba(0,0,0,.07)', overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${level.progress}%`, backgroundColor: ap.accent, borderRadius: 3, transition: 'width 0.8s ease' }} />
-          </div>
-          <div style={{ fontSize: 11, color: ap.textTertiary, marginTop: 4 }}>{level.label} · {level.progress}%</div>
+          {initials}
         </div>
-      </div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: 'var(--c-text-primary)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            lineHeight: 1.3,
+          }}>
+            {firstName}
+          </div>
+          <div style={{
+            fontSize: 10,
+            color: 'var(--c-text-quaternary)',
+            lineHeight: 1.2,
+          }}>
+            Profile & settings
+          </div>
+        </div>
+        <User size={12} strokeWidth={1.5} color="var(--c-text-quaternary)" />
+      </button>
     </div>
   );
 }

@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "db:reset": "supabase db reset",
+    "db:seed-dump": "node --env-file=.env.local node_modules/.bin/tsx scripts/dump-seed.ts",
     "db:verify": "chmod +x scripts/verify-db-data.sh && ./scripts/verify-db-data.sh",
     "db:tables": "docker exec supabase_db_consist psql -U postgres -d postgres -c \"SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;\"",
     "db:feedback": "docker exec supabase_db_consist psql -U postgres -d postgres -c \"SELECT difficulty_score, actual_duration_mins, feedback_tags, created_at FROM task_feedback ORDER BY created_at DESC LIMIT 10;\"",
@@ -25,7 +26,9 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:smoke": "playwright test e2e/smoke.test.ts",
     "rag:ingest": "node --env-file=.env node_modules/.bin/tsx scripts/ingest-knowledge.ts",
+    "rag:raptor": "node --env-file=.env node_modules/.bin/tsx scripts/build-raptor-index.ts",
     "rag:verify": "node --env-file=.env node_modules/.bin/tsx scripts/verify-rag.ts",
+    "resources:ingest": "node --env-file=.env node_modules/.bin/tsx scripts/ingest-resources.ts",
     "test:pipeline": "node --env-file=.env node_modules/.bin/tsx scripts/test-full-pipeline.ts",
     "resources:validate": "node_modules/.bin/tsx scripts/validate-resources.ts",
     "test:matrix": "node --env-file=.env node_modules/.bin/tsx scripts/test-matrix.ts",
@@ -34,6 +37,7 @@
     "test:simulation:dry": "node --env-file=.env node_modules/.bin/tsx --tsconfig tsconfig.scripts.json scripts/test-10day-simulation.ts --dry-run"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.82.0",
     "@number-flow/react": "^0.5.11",
     "@radix-ui/react-label": "^2.1.8",
     "@radix-ui/react-slot": "^1.2.4",
@@ -60,6 +64,7 @@
     "@vitejs/plugin-react": "^5.1.1",
     "@vitest/ui": "^4.0.18",
     "autoprefixer": "^10.4.23",
+    "dotenv": "^17.4.0",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",

@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useStore, type Task, type WeekPlan } from '@core/store/useStore';
-import { getRecentFeedback } from '@lib/database';
+import { getRecentFeedback, updateRoadmapStoneProfile, loadThresholdAdjustments, saveThresholdAdjustments } from '@lib/database';
 import { track } from '@lib/analytics';
 import { handleCheckpoint } from '@core/agents/orchestrator';
-import { recalibrateWeek } from '@core/agents/recalibrator';
+import { recalibrateWeek, computeSignals, adaptThresholds, DEFAULT_THRESHOLDS } from '@core/agents/recalibrator';
 import { isCheckpointDay } from '@lib/checkpointHelpers';
 import { flags } from '@config/feature-flags';
+import { updateStoneSeverities } from '@lib/stoneUpdater';
+import { embedAndSaveSprintMemory } from '@lib/sprintMemory';
+import { compress } from '@lib/sprintCompressor';
 import type { Agent2ProfileOutput } from '@types-app/agents';
 
 interface CheckpointData {
@@ -46,7 +49,10 @@ export function useCheckpoint() {
   const setTasks           = useStore((state) => state.setTasks);
   const updateAgentRoadmap = useStore((state) => state.updateAgentRoadmap);
   const updateWeek         = useStore((state) => state.updateWeek);
-  const setPendingWeeklyCheckIn = useStore((state) => state.setPendingWeeklyCheckIn);
+  const setPendingWeeklyCheckIn  = useStore((state) => state.setPendingWeeklyCheckIn);
+  const updateStoneProfile       = useStore((state) => state.updateStoneProfile);
+  const addStoneHistoryEntry     = useStore((state) => state.addStoneHistoryEntry);
+  const stoneHistory             = useStore((state) => state.stoneHistory);
 
   const CHECKPOINT_INTERVAL = 7; // weekly recalibration
   const isCheckpoint = flags.USE_RECALIBRATION && isCheckpointDay(currentDay, CHECKPOINT_INTERVAL);
@@ -163,15 +169,70 @@ export function useCheckpoint() {
           };
         });
 
+        // ── Bayesian stone update ──
+        // Nudge stone riskImpact based on this sprint's behavioral evidence.
+        const sprintNumber = Math.ceil(currentDay / 7);
+        // For resolution tracking, get the previous sprint's stone snapshot
+        const prevHistory = stoneHistory.length > 0
+          ? stoneHistory[stoneHistory.length - 1]
+          : undefined;
+        const updatedProfile = updateStoneSeverities(
+          resolvedStoneProfile, taskFeedback, sprintNumber,
+          { withEvolution: flags.DYNAMIC_STONE_EVOLUTION, prevHistory },
+        );
+
+        // Persist updated profile (Zustand sync, Supabase non-blocking)
+        updateStoneProfile(updatedProfile);
+        addStoneHistoryEntry({
+          sprintNumber,
+          updatedAt: new Date().toISOString(),
+          stones: updatedProfile.stoneProfile.stones.map(s => ({
+            type: s.type,
+            riskImpact: s.riskImpact,
+            severity: s.severity,
+          })),
+        });
+        const roadmapId = (roadmap as unknown as Record<string, unknown> & { id?: string })?.id as string | undefined;
+        if (roadmapId) {
+          updateRoadmapStoneProfile(roadmapId, updatedProfile).catch(() => {/* non-critical */});
+        }
+
+        // Item 6 — load adaptive thresholds
+        const thresholds = flags.ADAPTIVE_THRESHOLDS && roadmapId
+          ? await loadThresholdAdjustments(roadmapId).catch(() => DEFAULT_THRESHOLDS)
+          : DEFAULT_THRESHOLDS;
+
+        // Compute signals locally to capture prevStatus for threshold nudging
+        const signals = computeSignals(taskFeedback, dailyMinutes, thresholds);
+        const prevStatus = signals.status;
+
         const result = await recalibrateWeek({
           context: { goal: goalText, timeline: timelineDays, dailyMinutes },
           roadmap: agentRoadmapV2,
-          stoneProfile: resolvedStoneProfile,
+          stoneProfile: updatedProfile,
           completedTasks: taskFeedback,
           currentDay,
           weekNumber: Math.ceil(currentDay / 7),
           weeklyCheckInAnswers,
+          thresholds,
         });
+
+        // If stone evolution produced an updated profile, apply it now (overrides updateStoneSeverities above)
+        if (result.evolvedStoneProfile) {
+          updateStoneProfile(result.evolvedStoneProfile);
+          addStoneHistoryEntry({
+            sprintNumber,
+            updatedAt: new Date().toISOString(),
+            stones: result.evolvedStoneProfile.stoneProfile.stones.map(s => ({
+              type: s.type,
+              riskImpact: s.riskImpact,
+              severity: s.severity,
+            })),
+          });
+          if (roadmapId) {
+            updateRoadmapStoneProfile(roadmapId, result.evolvedStoneProfile).catch(() => {});
+          }
+        }
 
         // Update the store with the new week plan
         const nextWeekNumber = Math.ceil(currentDay / 7) + 1;
@@ -182,6 +243,29 @@ export function useCheckpoint() {
           recalibratedFrom: Math.ceil(currentDay / 7),
         };
         updateWeek(nextWeekNumber, newWeek);
+
+        // Item 6 — persist nudged thresholds (non-blocking)
+        if (flags.ADAPTIVE_THRESHOLDS && roadmapId) {
+          const newAdj = adaptThresholds(prevStatus, signals, thresholds);
+          saveThresholdAdjustments(roadmapId, newAdj).catch(() => {});
+        }
+
+        // Item 8 — embed and save sprint memory (non-blocking)
+        if (flags.USE_AGENT_MEMORY && user?.id && roadmapId) {
+          (async () => {
+            try {
+              const { snapshot } = await compress(taskFeedback, updatedProfile).catch(() => ({ snapshot: null }));
+              const content = snapshot?.summaryNarrative
+                ?? `Sprint ${sprintNumber}: ${signals.completionRate.toFixed(0)}% completion. Status: ${signals.status}.`;
+              await embedAndSaveSprintMemory(user.id!, roadmapId!, sprintNumber, content, {
+                completionRate: signals.completionRate,
+                status: signals.status,
+                weekRange: `Days ${currentDay - 6}–${currentDay}`,
+              });
+            } catch { /* non-fatal */ }
+          })();
+        }
+
         setPendingWeeklyCheckIn(null);
 
         track({

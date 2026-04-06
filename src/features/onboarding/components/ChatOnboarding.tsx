@@ -6,7 +6,7 @@ import { DitheringShader } from '@shared/components/ui/dithering-shader';
 
 
 import { useStore } from '@core/store/useStore';
-import { callReasoning, callEconomy } from '@lib/ai-router';
+import { callReasoning, callEconomy, callReasoningStream } from '@lib/ai-router';
 import { tokens } from '@core/design-system';
 import { detectCategory } from '@shared/utils/categoryDetection';
 import { retrieveKnowledge, type UserContext } from '@core/rag';
@@ -18,6 +18,8 @@ import { runOnboardingAgents, generateCompleteRoadmap, generateTaskBatch, getCur
 import type { BuildingStone, StoneAnswer, Agent1Output, DailyTask, CurriculumPreview, PaceCalibration, PaceChoice } from '@core/agents';
 import type { AgentRoadmapV2 } from '@core/store/useStore';
 import StoneQuestions from '@features/onboarding/components/StoneQuestions';
+import AdaptiveInterview from '@features/onboarding/components/AdaptiveInterview';
+import { flags } from '@config/feature-flags';
 import StoneProfileConfirmation from '@features/onboarding/components/StoneProfileConfirmation';
 import CurriculumPreviewComponent from '@features/onboarding/components/CurriculumPreview';
 import { syncCompleteRoadmap } from '@lib/database';
@@ -55,6 +57,28 @@ function parseDailyTimeToMinutes(dailyTime: string | unknown): number {
   }
 
   return 30; // Default
+}
+
+// Calculate realistic timeline based on daily minutes (baseline = 60 min/day)
+function calculateRealisticTimeline(typicalTimelineStr: string, dailyMinutes: number): string {
+  let typicalMonths = 12;
+  const yearRange = typicalTimelineStr.match(/(\d+)[–\-](\d+)\s*year/i);
+  const monthRange = typicalTimelineStr.match(/(\d+)[–\-](\d+)\s*month/i);
+  const singleYear = typicalTimelineStr.match(/(\d+)\s*year/i);
+  const singleMonth = typicalTimelineStr.match(/(\d+)\s*month/i);
+
+  if (yearRange)       typicalMonths = ((parseInt(yearRange[1]) + parseInt(yearRange[2])) / 2) * 12;
+  else if (monthRange) typicalMonths = (parseInt(monthRange[1]) + parseInt(monthRange[2])) / 2;
+  else if (singleYear) typicalMonths = parseInt(singleYear[1]) * 12;
+  else if (singleMonth) typicalMonths = parseInt(singleMonth[1]);
+
+  const adjusted = Math.round(typicalMonths * 60 / Math.max(dailyMinutes, 10));
+
+  if (adjusted <= 2)  return `about ${adjusted} month${adjusted !== 1 ? 's' : ''}`;
+  if (adjusted <= 11) return `around ${adjusted} months`;
+  if (adjusted < 24)  return `around ${Math.round(adjusted / 3) * 3} months`;
+  const yrs = Math.round(adjusted / 12);
+  return `roughly ${yrs} year${yrs !== 1 ? 's' : ''}`;
 }
 
 // Helper function to calculate duration in months from timeline
@@ -159,6 +183,7 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
     subGoals: string[];
     timeline: string | null;
     behavioralFlags: string[];
+    practiceEnvironment: string;
   }>({
     goal: initialGoal || '',
     category: initialGoal ? detectCategory(initialGoal) : null,
@@ -168,7 +193,8 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
     skillLevel: '',
     subGoals: [],
     timeline: null,
-    behavioralFlags: []
+    behavioralFlags: [],
+    practiceEnvironment: '',
   });
 
   // Agent system state
@@ -206,6 +232,24 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
     setPendingSyncData,
     handleAuthGateSubmit
   } = useAuthGate({ collectedData, setInitialGoal, setStep });
+
+  // Rotating loading messages shown while generating the roadmap
+  const LOADING_MESSAGES = [
+    'Analysing your answers',
+    'Mapping your blockers',
+    'Designing your curriculum',
+    'Building your weekly structure',
+    'Calibrating difficulty curve',
+    'Almost there',
+  ];
+  const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
+  useEffect(() => {
+    if (!isGeneratingPlan) { setLoadingMsgIndex(0); return; }
+    const id = setInterval(() => {
+      setLoadingMsgIndex(i => Math.min(i + 1, LOADING_MESSAGES.length - 1));
+    }, 4000);
+    return () => clearInterval(id);
+  }, [isGeneratingPlan]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -346,6 +390,7 @@ Extract these fields based on conversation context:
 - dailyTime: How much time per day (e.g., "30 minutes", "1 hour", "2 hours")
 - energyPattern: Peak energy time - one of: "morning", "afternoon", "evening", "night"
 - behavioralFlags: Array of obstacle signals detected. Include any that apply: "past_failure_mentioned" (user references previous failed attempts), "conditional_availability" (availability depends on external factors like "if work allows"), "external_accountability_needed" (user wants a partner, deadline, or accountability), "low_confidence" (user expresses doubt about ability), "time_scarcity" (user emphasizes they have very little time), "perfectionist_tendency" (user wants everything to be perfect before starting), "timeline_accepted" (user explicitly says they understand the timeline is aggressive/unrealistic but want to proceed anyway, or says things like "I know it's short", "proceed anyway", "let's try", "I'm aware"). Return [] if none apply.
+- practiceEnvironment: WHERE the user will practice or work on their goal. Extract this from context clues. Use one of: "gym", "home", "office", "outdoor", "online", "studio", "classroom", "multiple" (if they mention both home and gym, say "home+gym"). Return "" if not mentioned.
 
 CRITICAL RULES:
 1. Use conversation context to understand what each response refers to
@@ -376,6 +421,7 @@ Current Data Already Collected: ${JSON.stringify(collectedData)}`
         const combined = new Set([...mergedData.behavioralFlags, ...newData.behavioralFlags]);
         mergedData.behavioralFlags = Array.from(combined);
       }
+      if (newData.practiceEnvironment) mergedData.practiceEnvironment = newData.practiceEnvironment;
       if (!mergedData.category && mergedData.goal) {
         mergedData.category = detectCategory(mergedData.goal);
       }
@@ -564,9 +610,30 @@ The system will automatically detect when the data is complete and transition to
         : 3;
       const timelineDays = durationInMonths * 30;
 
+      // ── Parallel streaming coach voice ──
+      // Streams a 2-3 sentence acknowledgement while Agent 1+2 run concurrently.
+      const streamMsgId = `stream-${Date.now()}`;
+      setMessages(prev => [...prev, { id: streamMsgId, role: 'ai', content: '', timestamp: new Date() }]);
+      const streamCoachVoice = async () => {
+        try {
+          for await (const token of callReasoningStream({
+            messages: [
+              { role: 'system', content: "You are Coheren. In 2-3 sentences, acknowledge the user's goal and name one key challenge they'll likely face. Be direct, use 'you' language, no lists." },
+              { role: 'user', content: `Goal: "${collectedData.goal}"` },
+            ],
+            temperature: 0.7,
+            max_tokens: 120,
+          })) {
+            setMessages(prev => prev.map(m =>
+              m.id === streamMsgId ? { ...m, content: m.content + token } : m
+            ));
+          }
+        } catch { /* suppress — UX only */ }
+      };
 
       // Run Agent 1 & 2 — pass everything from chat so Agent 2 won't re-ask it
-      const { goalAnalysis: analysis, stones: identifiedStones } = await runOnboardingAgents(
+      const [agentsResult] = await Promise.all([
+        runOnboardingAgents(
         collectedData.goal,
         timelineDays,
         dailyMinutes,
@@ -575,9 +642,15 @@ The system will automatically detect when the data is complete and transition to
           skillLevel: collectedData.skillLevel || undefined,
           energyPattern: collectedData.energyPattern || undefined,
           category: collectedData.category || undefined,
+          practiceEnvironment: collectedData.practiceEnvironment || undefined,
         }
-      );
+      ),
+        streamCoachVoice(),
+      ]);
+      // Remove streaming message if nothing was produced
+      setMessages(prev => prev.filter(m => m.id !== streamMsgId || m.content.length > 0));
 
+      const { goalAnalysis: analysis, stones: identifiedStones } = agentsResult;
       setGoalAnalysis(analysis);
 
       // Check if Agent 1 flagged the goal as unrealistic — surface specific data to user
@@ -596,16 +669,26 @@ The system will automatically detect when the data is complete and transition to
         const durationInMonths = collectedData.timeline
           ? calculateDurationInMonths(collectedData.timeline)
           : 3;
-        const realismMessage = rc
-          ? `Before we map your plan, I want to flag something. ${rc.headline}.\n\nFor ${ag.category}, **${rc.typicalTimeline}** is typically what's needed. You're targeting ${durationInMonths} month${durationInMonths !== 1 ? 's' : ''} — ${rc.detail}\n\n${rc.suggestedAdjustment}\n\nYou can adjust your timeline to something more realistic, or continue as an intensive sprint knowing the bar is high. What feels right to you?`
-          : `I want to flag that this goal typically needs more time than you've planned. Would you like to adjust your timeline, or push forward as-is?`;
 
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: 'ai',
-          content: realismMessage,
-          timestamp: new Date(),
-        }]);
+        if (rc) {
+          const realisticTime = calculateRealisticTimeline(rc.typicalTimeline, dailyMinutes);
+          const msg1 = `One thing I want to flag before we build your plan — ${rc.headline.toLowerCase()}.`;
+          const msg2 = `At ${dailyMinutes} min/day, ${ag.category} goals like this typically take **${realisticTime}**. You're targeting ${durationInMonths} month${durationInMonths !== 1 ? 's' : ''}.`;
+          const msg3 = `You can adjust to a more realistic timeline, or push forward as an intensive sprint knowing the bar is high. What feels right to you?`;
+
+          setMessages(prev => [...prev, { id: `realism-1-${Date.now()}`, role: 'ai', content: msg1, timestamp: new Date() }]);
+          await new Promise(r => setTimeout(r, 700));
+          setMessages(prev => [...prev, { id: `realism-2-${Date.now()}`, role: 'ai', content: msg2, timestamp: new Date() }]);
+          await new Promise(r => setTimeout(r, 600));
+          setMessages(prev => [...prev, { id: `realism-3-${Date.now()}`, role: 'ai', content: msg3, timestamp: new Date() }]);
+        } else {
+          setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: 'ai',
+            content: `I want to flag that this goal typically needs more time than you've planned. Would you like to adjust your timeline, or push forward as-is?`,
+            timestamp: new Date(),
+          }]);
+        }
 
         setRealismGateShown(true);
         setIsGeneratingPlan(false);
@@ -687,6 +770,38 @@ The system will automatically detect when the data is complete and transition to
         { userId: 'temp', goal: collectedData.goal, timeline: timelineDays, dailyTimeAvailable: dailyMinutes },
         goalAnalysis,
         answers
+      );
+      setStoneProfile(profile);
+      setOnboardingPhase('stone_confirmation');
+    } catch {
+      setOnboardingPhase('generating');
+      generateStrategicPlanWithAgents(answers);
+    }
+  };
+
+  // Adaptive interview complete → extract profile with linguistic + readiness enrichment
+  const handleAdaptiveInterviewComplete = async (
+    answers: StoneAnswer[],
+    rawTexts: string[],
+    readinessProfile?: { importance: number; selfEfficacy: number }
+  ) => {
+    setRound1Answers(answers);
+
+    if (!goalAnalysis) {
+      setOnboardingPhase('generating');
+      generateStrategicPlanWithAgents(answers);
+      return;
+    }
+
+    try {
+      const dailyMinutes = parseDailyTimeToMinutes(collectedData.dailyTime);
+      const timelineDays = (collectedData.timeline ? calculateDurationInMonths(collectedData.timeline) : 3) * 30;
+      const { extractStones } = await import('@core/agents');
+      const profile = await extractStones(
+        { userId: 'temp', goal: collectedData.goal, timeline: timelineDays, dailyTimeAvailable: dailyMinutes },
+        goalAnalysis,
+        answers,
+        { answerTexts: rawTexts, readinessProfile }
       );
       setStoneProfile(profile);
       setOnboardingPhase('stone_confirmation');
@@ -897,7 +1012,10 @@ The system will automatically detect when the data is complete and transition to
         collectedData.category || undefined,
         collectedData.skillLevel || 'beginner',
         collectedData.behavioralFlags,
-        preComputedStoneProfile
+        preComputedStoneProfile,
+        undefined,
+        undefined,
+        collectedData.practiceEnvironment || undefined,
       );
 
       // Store agent roadmap for later use (preview + task generation)
@@ -934,6 +1052,28 @@ The system will automatically detect when the data is complete and transition to
   };
 
 
+
+  // Render AI message content: split paragraphs on \n\n, render **bold**, single \n as space
+  const renderMessageContent = (content: string) => {
+    const paragraphs = content.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
+    return (
+      <div className="flex flex-col gap-3">
+        {paragraphs.map((para, pi) => {
+          // Split on **bold** markers
+          const parts = para.split(/\*\*([^*]+)\*\*/g);
+          return (
+            <p key={pi} className="text-[1.05rem] font-normal leading-[1.8] text-zinc-900 m-0">
+              {parts.map((part, idx) =>
+                idx % 2 === 1
+                  ? <strong key={idx} className="font-semibold text-zinc-900">{part}</strong>
+                  : part.replace(/\n/g, ' ')
+              )}
+            </p>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div style={{
@@ -973,8 +1113,8 @@ The system will automatically detect when the data is complete and transition to
             }}>
               Building your roadmap
             </p>
-            <p style={{ fontSize: 13, color: '#a1a1aa', margin: 0 }}>
-              This takes about 10 seconds
+            <p style={{ fontSize: 13, color: '#a1a1aa', margin: 0, transition: 'opacity 0.4s' }}>
+              {LOADING_MESSAGES[loadingMsgIndex]}
             </p>
           </div>
 
@@ -1088,10 +1228,16 @@ The system will automatically detect when the data is complete and transition to
                 Your answers shape how the roadmap is built
               </p>
             </div>
-            <StoneQuestions
-              stones={stones}
-              onComplete={handleStoneQuestionsComplete}
-            />
+            {flags.USE_ADAPTIVE_INTERVIEW ? (
+              <AdaptiveInterview
+                onComplete={handleAdaptiveInterviewComplete}
+              />
+            ) : (
+              <StoneQuestions
+                stones={stones}
+                onComplete={handleStoneQuestionsComplete}
+              />
+            )}
           </div>
         </div>
       )}
@@ -1157,9 +1303,7 @@ The system will automatically detect when the data is complete and transition to
                             coheren
                           </p>
                         )}
-                        <p className="text-[1.05rem] font-normal leading-[1.8] text-zinc-900 m-0">
-                          {message.content}
-                        </p>
+                        {renderMessageContent(message.content)}
                       </div>
                     ) : (
                       <div className="bg-zinc-100 text-zinc-800 rounded-2xl rounded-br-sm px-4 py-2.5 text-[0.9rem] leading-relaxed max-w-[78%]">

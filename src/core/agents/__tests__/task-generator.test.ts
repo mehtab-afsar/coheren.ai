@@ -12,28 +12,37 @@ import { sanitizeResourceUrl, resolvePhaseForDay } from '@core/agents/task-gener
 import type { Phase } from '@types-app/agents';
 
 // ─── sanitizeResourceUrl ─────────────────────────────────────────────────────
-// Current behaviour (post-refactor):
-//   - Known placeholder video IDs  → null (resource library fills the gap)
-//   - YouTube search URLs           → null (not embeddable)
-//   - Non-YouTube URLs              → null (not embeddable)
+// Current behaviour:
+//   - Known placeholder video IDs + taskTitle  → YouTube search URL (always usable)
+//   - Known placeholder video IDs + no title   → null
+//   - YouTube search URLs                      → returned unchanged (ResourceCard shows search card)
+//   - Non-YouTube URLs                         → null (not embeddable)
 //   - Valid non-placeholder watch URLs / youtu.be → returned unchanged
-//   - Empty / non-string input      → null
+//   - Empty / non-string input                 → null
 
-describe('sanitizeResourceUrl — placeholder detection → null', () => {
-  it('returns null for the Rick Astley placeholder (dQw4w9WgXcQ)', () => {
-    expect(sanitizeResourceUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'Run Walk Intervals')).toBeNull();
+describe('sanitizeResourceUrl — placeholder detection → search URL fallback', () => {
+  it('converts Rick Astley placeholder to a search URL when taskTitle provided', () => {
+    const result = sanitizeResourceUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'Run Walk Intervals');
+    expect(result).toBe('https://www.youtube.com/results?search_query=Run%20Walk%20Intervals');
   });
 
-  it('returns null for second known placeholder (xvFZjo5PgG0)', () => {
-    expect(sanitizeResourceUrl('https://www.youtube.com/watch?v=xvFZjo5PgG0', 'Beginner Strength')).toBeNull();
+  it('converts second known placeholder to search URL', () => {
+    const result = sanitizeResourceUrl('https://www.youtube.com/watch?v=xvFZjo5PgG0', 'Beginner Strength');
+    expect(result).toBe('https://www.youtube.com/results?search_query=Beginner%20Strength');
   });
 
-  it('returns null for VIDEO_ID literal placeholder', () => {
-    expect(sanitizeResourceUrl('https://www.youtube.com/watch?v=VIDEO_ID', 'AWS Cloud Basics')).toBeNull();
+  it('converts VIDEO_ID literal placeholder to search URL', () => {
+    const result = sanitizeResourceUrl('https://www.youtube.com/watch?v=VIDEO_ID', 'AWS Cloud Basics');
+    expect(result).toBe('https://www.youtube.com/results?search_query=AWS%20Cloud%20Basics');
   });
 
-  it('returns null for XXXXXXXXXX placeholder', () => {
-    expect(sanitizeResourceUrl('https://www.youtube.com/watch?v=XXXXXXXXXX', 'Financial Planning')).toBeNull();
+  it('converts XXXXXXXXXX placeholder to search URL', () => {
+    const result = sanitizeResourceUrl('https://www.youtube.com/watch?v=XXXXXXXXXX', 'Financial Planning');
+    expect(result).toBe('https://www.youtube.com/results?search_query=Financial%20Planning');
+  });
+
+  it('returns null for placeholder when no taskTitle provided', () => {
+    expect(sanitizeResourceUrl('https://www.youtube.com/watch?v=XXXXXXXXXX')).toBeNull();
   });
 });
 
@@ -47,15 +56,14 @@ describe('sanitizeResourceUrl — accepted URLs', () => {
     const url = 'https://youtu.be/BKorP55Aqvg';
     expect(sanitizeResourceUrl(url, 'Any Task')).toBe(url);
   });
+
+  it('keeps a YouTube search URL unchanged (ResourceCard renders search card)', () => {
+    const url = 'https://www.youtube.com/results?search_query=run+walk+intervals';
+    expect(sanitizeResourceUrl(url, 'Any Task')).toBe(url);
+  });
 });
 
 describe('sanitizeResourceUrl — dropped URLs', () => {
-  it('returns null for a YouTube search URL (not embeddable)', () => {
-    expect(sanitizeResourceUrl(
-      'https://www.youtube.com/results?search_query=run+walk+intervals', 'Any Task'
-    )).toBeNull();
-  });
-
   it('returns null for a non-YouTube URL (not embeddable)', () => {
     expect(sanitizeResourceUrl('https://example.com/article', 'Any Task')).toBeNull();
   });

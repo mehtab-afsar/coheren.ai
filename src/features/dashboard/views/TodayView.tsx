@@ -17,6 +17,8 @@ import RestDayCard from './today/RestDayCard';
 import FocusComplete from './today/FocusComplete';
 import AssessmentCard from '../components/AssessmentCard';
 import ResourceCard from '../components/ResourceCard';
+import { TaskVariantPicker } from '../components/TaskVariantPicker';
+import { flags } from '@config/feature-flags';
 
 export default function TodayView({
   onNavigate,
@@ -30,7 +32,6 @@ export default function TodayView({
     currentDay,
     streak,
     completionRate,
-    canAdvanceDay,
   } = useStore();
 
   const { isMobile } = useBreakpoint();
@@ -39,6 +40,7 @@ export default function TodayView({
   const completeAssessment = useStore((state) => state.completeAssessment);
   const skipTask = useStore((state) => state.skipTask);
   const setTaskFeedback = useStore((state) => state.setTaskFeedback);
+  const selectedVariants = useStore(s => s.selectedVariants);
   const { completingTaskId, skippingTaskId, skipReasonTaskId, setSkipReasonTaskId, particles, showSkipMessage, pendingFeedbackTaskId, submitFeedback, dismissFeedback, handleCompleteTask, handleSkipTask, confirmSkip } = useTaskActions(completeTask, skipTask, setTaskFeedback);
 
   // Quick Mode — surfaces only the single most important incomplete task
@@ -110,7 +112,7 @@ export default function TodayView({
   const todaysTasks = tasks.filter(t => t.day === currentDay && !t.skipped);
   const completedTasks = todaysTasks.filter(t => t.completed);
   const allDone = todaysTasks.length > 0 && todaysTasks.every(t => t.completed);
-  const canAdvance = canAdvanceDay();
+
 
   // Re-engagement: streak broken, not first day, nothing done today
   const showReEngagement = streak === 0 && currentDay > 1 && completedTasks.length === 0;
@@ -120,8 +122,19 @@ export default function TodayView({
   const visibleTasks = (quickMode || (showReEngagement && easeBackMode))
     ? [...completedTasks, ...incompleteTasks.slice(0, 1)]
     : todaysTasks;
+  // Item 7 — Variant picker gate
+  const variantTasks = tasks.filter(t => t.day === currentDay && t.variant != null);
+  const hasVariants = flags.USE_TASK_VARIANTS && variantTasks.length === 3;
+  const chosenVariant = selectedVariants[currentDay];
+  const showVariantPicker = hasVariants && chosenVariant == null;
+
   // Hero task: first incomplete task of the day (shown as the featured focus card)
-  const heroTask = !allDone && incompleteTasks.length > 0 ? incompleteTasks[0] : null;
+  // When variants exist and one is chosen, hero = the chosen variant task
+  const heroTask = !allDone && incompleteTasks.length > 0
+    ? (hasVariants && chosenVariant
+        ? (variantTasks.find(t => t.variant === chosenVariant) ?? incompleteTasks[0])
+        : incompleteTasks[0])
+    : null;
   // List tasks: everything except the hero task (still respects quickMode/easeBack filtering)
   const listTasks = heroTask ? visibleTasks.filter(t => t.id !== heroTask.id) : visibleTasks;
 
@@ -557,9 +570,11 @@ export default function TodayView({
         </div>
       )}
 
-      {/* ── Primary task area: RestDay / AllDone / FocusCard ────────────── */}
+      {/* ── Primary task area: RestDay / AllDone / VariantPicker / FocusCard ── */}
       {isRestDay ? (
         <RestDayCard onNavigateJourney={() => onNavigate?.('roadmap')} />
+      ) : showVariantPicker ? (
+        <TaskVariantPicker day={currentDay} tasks={variantTasks} />
       ) : allDone ? (
         <AllDoneCard
           tasksCompleted={completedTasks.length}
@@ -670,6 +685,49 @@ export default function TodayView({
 
       {/* ── Tasks Section ────────────────────────────────────────────────── */}
       <div>
+        {/* When allDone: show compact completed log instead of full cards */}
+        {allDone && completedTasks.length > 0 && (
+        <div style={{
+          marginTop: 4,
+          background: ap.surface,
+          border: `1px solid ${ap.border}`,
+          borderRadius: 16,
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            padding: '10px 16px',
+            borderBottom: `1px solid ${ap.border}`,
+            fontSize: 11, fontWeight: 700, color: ap.textTertiary,
+            letterSpacing: '0.07em', textTransform: 'uppercase' as const,
+          }}>
+            Completed today
+          </div>
+          {completedTasks.map((task, i) => (
+            <div key={task.id} style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '11px 16px',
+              borderBottom: i < completedTasks.length - 1 ? `1px solid ${ap.border}` : 'none',
+            }}>
+              <CheckCircle2 size={15} color={ap.success} strokeWidth={2} style={{ flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: 13, fontWeight: 500, color: ap.textSecondary,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
+                }}>
+                  {task.title}
+                </div>
+              </div>
+              {(task.duration ?? 0) > 0 && (
+                <span style={{ fontSize: 11, color: ap.textTertiary, flexShrink: 0 }}>
+                  {task.duration}m
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: allDone ? 'none' : 'block' }}>
         {/* Section header — always show when there are list tasks */}
         {listTasks.length > 0 && <div style={{
           display: 'flex',
@@ -1118,65 +1176,7 @@ export default function TodayView({
             );
           })}
         </div>
-
-        {/* All Done — celebration card */}
-        {allDone && canAdvance && (
-          <div style={{ marginTop: tokens.spacing['3xl'], animation: 'celebration 0.6s ease-out' }}>
-            <div style={{
-              background: 'linear-gradient(135deg, #1e0a3c 0%, #2d1060 50%, #1a0a2e 100%)',
-              borderRadius: tokens.borderRadius.xl,
-              padding: `${tokens.spacing['3xl']} ${tokens.spacing['2xl']}`,
-              textAlign: 'center',
-              boxShadow: '0 20px 60px rgba(124,58,237,0.4), 0 0 0 1px rgba(167,139,250,0.2)',
-              position: 'relative' as const,
-              overflow: 'hidden' as const,
-            }}>
-              {/* Subtle radial glow */}
-              <div style={{
-                position: 'absolute',
-                top: '-40%',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                width: '300px',
-                height: '300px',
-                background: 'radial-gradient(circle, rgba(167,139,250,0.15) 0%, transparent 70%)',
-                pointerEvents: 'none',
-              }} />
-
-              {/* Sparkles */}
-              <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 20, position: 'relative' as const }}>
-                <Sparkles size={20} strokeWidth={1.5} color="rgba(167,139,250,0.5)" />
-                <Sparkles size={28} strokeWidth={1.5} color="#c4b5fd" style={{ filter: 'drop-shadow(0 0 8px rgba(167,139,250,0.8))' }} />
-                <Sparkles size={20} strokeWidth={1.5} color="rgba(167,139,250,0.5)" />
-              </div>
-
-              <h3 style={{ fontSize: tokens.typography.sizes['2xl'], fontWeight: tokens.typography.weights.semibold, color: '#f3e8ff', margin: '0 0 8px', letterSpacing: '-0.03em', position: 'relative' as const }}>
-                Day {currentDay} complete
-              </h3>
-              <p style={{ fontSize: tokens.typography.sizes.sm, fontWeight: tokens.typography.weights.regular, color: 'rgba(196,181,253,0.75)', margin: '0 0 32px', lineHeight: 1.6, position: 'relative' as const }}>
-                {streak > 1 ? `🔥 ${streak} day streak · ` : ''}You showed up and did the work.
-              </p>
-
-              {/* Stats row */}
-              <div style={{ display: 'flex', justifyContent: 'center', gap: tokens.spacing['2xl'], marginBottom: tokens.spacing['2xl'], flexWrap: 'wrap' as const, position: 'relative' as const }}>
-                {[
-                  { label: 'Completed', value: String(completedTasks.length) },
-                  { label: 'Streak', value: `${streak}d` },
-                  { label: 'Day', value: String(currentDay) },
-                ].map(({ label, value }) => (
-                  <div key={label} style={{ textAlign: 'center' }}>
-                    <p style={{ fontSize: 28, fontWeight: 700, color: '#e9d5ff', margin: 0, letterSpacing: '-0.04em' }}>{value}</p>
-                    <p style={{ fontSize: 10, color: 'rgba(196,181,253,0.55)', margin: '4px 0 0', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const }}>{label}</p>
-                  </div>
-                ))}
-              </div>
-
-              <p style={{ fontSize: tokens.typography.sizes.sm, color: 'rgba(196,181,253,0.45)', margin: 0, position: 'relative' as const }}>
-                Rest well — tomorrow starts automatically.
-              </p>
-            </div>
-          </div>
-        )}
+      </div>
 
         {todaysTasks.length === 0 && (
           <div style={{

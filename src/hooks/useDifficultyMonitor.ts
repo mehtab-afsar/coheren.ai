@@ -1,19 +1,24 @@
 import { useMemo } from 'react';
 import { useStore } from '@core/store/useStore';
+import { evaluateTriggers } from '@lib/recalibrationTrigger';
+import type { TriggerResult } from '@lib/recalibrationTrigger';
+import { flags } from '@config/feature-flags';
 
 const HARD_SKIP_THRESHOLD = 3;
 const LOW_MOOD_THRESHOLD = 4;
-const CONSECUTIVE_SKIP_THRESHOLD = 3;
 const WINDOW = 5;
 const COOLDOWN_KEY = 'difficulty_prompted_day';
 const EARLY_RECAL_KEY = 'early_recal_day';
 const COOLDOWN_DAYS = 7;
 
+export type { TriggerResult };
+
 export function useDifficultyMonitor() {
   const tasks = useStore(s => s.tasks);
   const currentDay = useStore(s => s.currentDay);
+  const streak = useStore(s => s.streak);
 
-  const { shouldPrompt, shouldTriggerEarlyRecalibration } = useMemo(() => {
+  const { shouldPrompt, shouldTriggerEarlyRecalibration, triggerResult } = useMemo(() => {
     const lastPromptDay = parseInt(localStorage.getItem(COOLDOWN_KEY) || '0', 10);
     const lastRecalDay = parseInt(localStorage.getItem(EARLY_RECAL_KEY) || '0', 10);
     const inPromptCooldown = currentDay - lastPromptDay < COOLDOWN_DAYS;
@@ -25,7 +30,11 @@ export function useDifficultyMonitor() {
       .slice(0, WINDOW);
 
     if (recent.length < 3) {
-      return { shouldPrompt: false, shouldTriggerEarlyRecalibration: false };
+      return {
+        shouldPrompt: false,
+        shouldTriggerEarlyRecalibration: false,
+        triggerResult: null as TriggerResult | null,
+      };
     }
 
     // Difficulty-based prompt (existing logic)
@@ -33,16 +42,38 @@ export function useDifficultyMonitor() {
     const lowMoods = recent.filter(t => (t as unknown as Record<string, unknown>).mood != null && Number((t as unknown as Record<string, unknown>).mood) <= 2).length;
     const prompt = !inPromptCooldown && (hardSkips >= HARD_SKIP_THRESHOLD || lowMoods >= LOW_MOOD_THRESHOLD);
 
-    // Consecutive skip detection — 3+ skips in a row triggers early recalibration
-    let consecutiveSkips = 0;
-    for (const t of recent) {
-      if (t.skipped) consecutiveSkips++;
-      else break; // stop counting at first non-skip
-    }
-    const earlyRecal = !inRecalCooldown && consecutiveSkips >= CONSECUTIVE_SKIP_THRESHOLD;
+    // Use evaluateTriggers() for consecutive-skip detection (replaces ad-hoc logic)
+    const completedCount = recent.filter(t => !t.skipped).length;
+    const completionRate = recent.length > 0 ? (completedCount / recent.length) * 100 : 0;
+    const trigger = flags.EVENT_DRIVEN_RECALIBRATION
+      ? evaluateTriggers(recent, streak, completionRate)
+      : (() => {
+          // Fallback: replicate original consecutive-skip logic
+          let consecutiveSkips = 0;
+          for (const t of recent) {
+            if (t.skipped) consecutiveSkips++;
+            else break;
+          }
+          if (!inRecalCooldown && consecutiveSkips >= 3) {
+            return {
+              triggered: true,
+              type: 'dropout_risk' as const,
+              action: 'decrease_difficulty' as const,
+              magnitude: 0.2 as const,
+              reasoning: `${consecutiveSkips} consecutive skips`,
+            };
+          }
+          return null;
+        })();
 
-    return { shouldPrompt: prompt, shouldTriggerEarlyRecalibration: earlyRecal };
-  }, [tasks, currentDay]);
+    const earlyRecal = trigger?.triggered && !inRecalCooldown;
+
+    return {
+      shouldPrompt: prompt,
+      shouldTriggerEarlyRecalibration: earlyRecal ?? false,
+      triggerResult: trigger,
+    };
+  }, [tasks, currentDay, streak]);
 
   const dismiss = () => {
     localStorage.setItem(COOLDOWN_KEY, String(currentDay));
@@ -52,5 +83,5 @@ export function useDifficultyMonitor() {
     localStorage.setItem(EARLY_RECAL_KEY, String(currentDay));
   };
 
-  return { shouldPrompt, shouldTriggerEarlyRecalibration, dismiss, dismissEarlyRecalibration };
+  return { shouldPrompt, shouldTriggerEarlyRecalibration, triggerResult, dismiss, dismissEarlyRecalibration };
 }

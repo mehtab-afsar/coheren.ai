@@ -17,3 +17,6 @@ export type { Colors, Typography, Spacing, BorderRadius, Shadows, Transitions } 
 // Apple design system
 export { ap } from './appleTokens';
 export { Chip, Bar, Label, Tile, Divider } from './AppleUI';
+
+// Coheren Design System (new spec)
+export { dt, dtRaw, typeScale } from './designTokens';

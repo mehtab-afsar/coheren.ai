@@ -12,6 +12,7 @@ const RoadmapView  = lazy(() => import('./views/RoadmapView'));
 const InsightsView = lazy(() => import('./views/InsightsView'));
 const YouView      = lazy(() => import('./views/YouView'));
 const LibraryView  = lazy(() => import('./views/LibraryView'));
+const CoachView    = lazy(() => import('./views/CoachView'));
 const AgentHealthDashboard = lazy(() => import('./components/AgentHealthDashboard'));
 
 import CheckpointScreen from '@features/dashboard/components/CheckpointScreen';
@@ -133,6 +134,8 @@ export default function Dashboard() {
         return <LibraryView />;
       case 'you':
         return <YouView />;
+      case 'coach':
+        return <CoachView />;
       default:
         return <TodayView onNavigate={(v) => setCurrentView(v as Parameters<typeof setCurrentView>[0])} />;
     }
@@ -251,10 +254,9 @@ export default function Dashboard() {
             <Suspense fallback={
               <ViewSkeleton type={
                 currentView === 'insights' ? 'progress'
-                : currentView === 'roadmap' ? 'journey'
-                : currentView === 'you'     ? 'me'
-                : currentView === 'today'   ? 'today'
-                : currentView === 'library' ? 'generic'
+                : currentView === 'roadmap'  ? 'journey'
+                : currentView === 'you'      ? 'me'
+                : currentView === 'today'    ? 'today'
                 : 'generic'
               } />
             }>

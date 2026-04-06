@@ -71,3 +71,52 @@ export async function embedDocuments(
 ): Promise<number[][]> {
   return callJina(texts, 'retrieval.passage', apiKey);
 }
+
+// ─── Reranker ────────────────────────────────────────────────────────────────
+
+const JINA_RERANK_URL   = 'https://api.jina.ai/v1/rerank';
+const JINA_RERANK_MODEL = 'jina-reranker-v2-base-multilingual';
+
+export interface JinaRerankResult {
+  index:           number;
+  relevance_score: number;
+  document:        { text: string };
+}
+
+interface JinaRerankResponse {
+  results: JinaRerankResult[];
+}
+
+/**
+ * Rerank documents using the Jina cross-encoder reranker.
+ * Returns results sorted by relevance_score descending; `index` refers to
+ * the position in the input `documents` array.
+ */
+export async function rerankDocuments(
+  query:     string,
+  documents: string[],
+  topN:      number,
+  apiKey:    string,
+): Promise<JinaRerankResult[]> {
+  const response = await fetch(JINA_RERANK_URL, {
+    method:  'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model:     JINA_RERANK_MODEL,
+      query,
+      documents,
+      top_n:     topN,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Jina reranker failed (${response.status}): ${body}`);
+  }
+
+  const data = await response.json() as JinaRerankResponse;
+  return data.results;
+}

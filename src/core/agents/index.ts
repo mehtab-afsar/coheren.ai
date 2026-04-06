@@ -7,7 +7,7 @@
 // Individual Agents
 export { analyzeGoal, buildClarifications } from './goal-analyzer';
 export { identifyStones, extractStones, extractPreliminary, crossValidateStones } from './stone-identifier';
-export { buildCurriculum, buildCurriculumPreview, resolvePaceCalibration, buildLegacyAgent3Output } from './curriculum-builder';
+export { buildCurriculum, buildCurriculumPreview, resolvePaceCalibration, buildLegacyAgent3Output, buildCurriculumSkeleton } from './curriculum-builder';
 export { generateTask } from './task-generator';
 export { recalibrateCurriculum, shouldTriggerCheckpoint, convertToFeedback } from './recalibrator';
 export { planSession, serializeBlueprint } from './session-planner';

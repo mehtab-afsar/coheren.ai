@@ -1,10 +1,115 @@
 /**
  * Checkpoint Helper Functions
  *
- * Utilities for detecting checkpoints and preparing data for Agent 5
+ * Utilities for:
+ *   1. Detecting sprint checkpoints and preparing data for Agent 5
+ *   2. Pipeline checkpoint CRUD (localStorage-based, works pre-auth)
  */
 
 import type { CompletedTaskFeedback } from '@types-app/agents';
+import { flags } from '@config/feature-flags';
+
+// ─── Pipeline Checkpoint CRUD (5.2) ──────────────────────────────────────────
+
+const PIPELINE_CHECKPOINT_KEY = 'coheren_pipeline_checkpoint';
+const CHECKPOINT_TTL_MS = 60 * 60 * 1000; // 60 minutes
+
+type AgentCheckpointKey = 'goal_analysis' | 'stone_profile' | 'curriculum' | 'tasks';
+
+interface AgentCheckpoint {
+  pipelineId: string;
+  agentKey: AgentCheckpointKey;
+  completedAt: string;  // ISO8601
+  expiresAt: string;    // ISO8601
+  output: unknown;
+}
+
+type CheckpointStore = Record<string, AgentCheckpoint[]>;
+
+function readCheckpointStore(): CheckpointStore {
+  try {
+    const raw = localStorage.getItem(PIPELINE_CHECKPOINT_KEY);
+    return raw ? (JSON.parse(raw) as CheckpointStore) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeCheckpointStore(store: CheckpointStore): void {
+  try {
+    localStorage.setItem(PIPELINE_CHECKPOINT_KEY, JSON.stringify(store));
+  } catch {
+    // Storage full or unavailable — silently ignore
+  }
+}
+
+export function generatePipelineId(): string {
+  return crypto.randomUUID();
+}
+
+export function saveAgentCheckpoint(
+  pipelineId: string,
+  agentKey: AgentCheckpointKey,
+  output: unknown
+): void {
+  if (!flags.PIPELINE_CHECKPOINTS) return;
+  const store = readCheckpointStore();
+  const now = Date.now();
+  const entry: AgentCheckpoint = {
+    pipelineId,
+    agentKey,
+    completedAt: new Date(now).toISOString(),
+    expiresAt: new Date(now + CHECKPOINT_TTL_MS).toISOString(),
+    output,
+  };
+
+  const existing = store[pipelineId] ?? [];
+  const idx = existing.findIndex(c => c.agentKey === agentKey);
+  if (idx !== -1) existing.splice(idx, 1, entry);
+  else existing.push(entry);
+
+  store[pipelineId] = existing;
+  writeCheckpointStore(store);
+}
+
+export function loadAgentCheckpoint<T>(
+  pipelineId: string,
+  agentKey: AgentCheckpointKey
+): T | null {
+  if (!flags.PIPELINE_CHECKPOINTS) return null;
+  const store = readCheckpointStore();
+  const entry = (store[pipelineId] ?? []).find(c => c.agentKey === agentKey);
+  if (!entry) return null;
+  if (new Date(entry.expiresAt) < new Date()) return null;
+  return entry.output as T;
+}
+
+export function clearPipelineCheckpoints(pipelineId: string): void {
+  const store = readCheckpointStore();
+  delete store[pipelineId];
+  writeCheckpointStore(store);
+}
+
+export function expireStaleCheckpoints(): void {
+  const store = readCheckpointStore();
+  const now = new Date();
+  let changed = false;
+
+  for (const pipelineId of Object.keys(store)) {
+    const valid = store[pipelineId].filter(c => new Date(c.expiresAt) >= now);
+    if (valid.length === 0) {
+      delete store[pipelineId];
+      changed = true;
+    } else if (valid.length !== store[pipelineId].length) {
+      store[pipelineId] = valid;
+      changed = true;
+    }
+  }
+
+  if (changed) writeCheckpointStore(store);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Check if a given day is a checkpoint day

@@ -18,7 +18,9 @@
  */
 
 import type { Agent1Output, AgentContext, GoalClarificationOutput } from '@types-app/agents';
-import { callReasoning } from '@lib/ai-router';
+import { callReasoning, callWithTools } from '@lib/ai-router';
+import type { GroqTool } from '@lib/ai-router';
+import { flags } from '@config/feature-flags';
 
 const SYSTEM_PROMPT = `You are Agent 1: Goal Analyzer — a precision intelligence module.
 
@@ -69,6 +71,25 @@ Extract from phrases like: "while working full-time", "as a student", "no equipm
 - Conflicting priorities (multiple incompatible goals)
 - Experience gap (advanced goal with zero background)
 
+## Goal Type Classification
+Classify the goal into exactly one of four types that determines the curriculum structure:
+- "skill_based"     → There is a known, teachable curriculum for this goal.
+                      Examples: learn Python, play guitar, speak French, run a marathon, learn boxing.
+                      Indicator: the goal names a specific learnable skill with established pedagogy.
+- "behavior_based"  → No standard curriculum exists. The goal is about changing a pattern of behavior.
+                      Examples: be more disciplined, stop procrastinating, build a morning routine,
+                      become more consistent, improve focus, be less reactive.
+                      Indicator: the goal is an abstract character/trait change with no skill syllabus.
+- "outcome_based"   → A defined endpoint with a flexible path. The skill required is secondary.
+                      Examples: lose 10kg, earn $5000/month, get promoted, publish a book.
+                      Indicator: goal is an outcome metric, not a skill or behavior.
+- "hybrid"          → Requires BOTH skill acquisition AND behavior change.
+                      Examples: get fit AND track nutrition, launch a business AND build discipline,
+                      learn to code AND build the habit of shipping daily.
+
+When in doubt between behavior_based and outcome_based: if there is no natural curriculum and success
+depends primarily on repeating a new behavior pattern, use "behavior_based".
+
 ## Scoring
 clarityScore 0.0–1.0: 1.0=perfectly defined, 0.5=partially defined, 0.0="be better"
 ambiguityScore 0.0–1.0: 0.0=crystal clear, 1.0=contradictory/undecipherable
@@ -113,6 +134,7 @@ Return a JSON object with this exact schema:
     "constraintsDetected": [],
     "risksDetected": [],
     "complexity": "beginner|intermediate|advanced",
+    "goalType": "skill_based|behavior_based|outcome_based|hybrid",
     "learningTypes": ["physical|cognitive|creative|social|mental"],
     "typicalTimeline": {
       "minimum": "X weeks",
@@ -159,6 +181,41 @@ function detectDomainOverride(goalText: string): string | null {
     if (lower.includes(keyword)) return domain;
   }
   return null;
+}
+
+// Keywords that strongly indicate a behavior_based goal (no pre-built curriculum)
+const BEHAVIOR_BASED_KEYWORDS = [
+  'more disciplin', 'be disciplin', 'more consistent', 'be consistent',
+  'stop procrastinat', 'procrastinat', 'better focus', 'improve focus',
+  'morning routine', 'daily routine', 'build a routine', 'better habits',
+  'less reactive', 'be more productive', 'improve productiv',
+  'stop being lazy', 'be more motivated', 'build motivation',
+  'better work ethic', 'be more organized', 'better time management',
+  'build self-discipline', 'build willpower', 'be more confident',
+];
+
+// Keywords that strongly indicate an outcome_based goal (metric endpoint)
+const OUTCOME_BASED_KEYWORDS = [
+  'lose weight', 'lose.*kg', 'lose.*lbs', 'lose.*pounds',
+  'earn.*month', 'make.*month', 'save.*dollars', 'save.*month',
+  'get promoted', 'get a job', 'get hired', 'land a job',
+  'publish', 'launch', 'ship', 'release', 'build and launch',
+];
+
+function detectGoalType(goalText: string): import('@types-app/agents').GoalType | null {
+  const lower = goalText.toLowerCase();
+
+  // Check behavior_based first (these are most likely to be misclassified)
+  for (const kw of BEHAVIOR_BASED_KEYWORDS) {
+    if (new RegExp(kw).test(lower)) return 'behavior_based';
+  }
+
+  // Check outcome_based
+  for (const kw of OUTCOME_BASED_KEYWORDS) {
+    if (new RegExp(kw).test(lower)) return 'outcome_based';
+  }
+
+  return null; // Let the LLM decide
 }
 
 function validateAndNormalize(raw: unknown, goalText?: string): Agent1Output {
@@ -224,6 +281,18 @@ function validateAndNormalize(raw: unknown, goalText?: string): Agent1Output {
   // Ensure complexity
   const validComplexity = ['beginner', 'intermediate', 'advanced'];
   if (!validComplexity.includes(g.complexity)) g.complexity = 'beginner';
+
+  // Validate goalType — apply deterministic keyword override first, then validate LLM value
+  const validGoalTypes = ['skill_based', 'behavior_based', 'outcome_based', 'hybrid'];
+  if (goalText) {
+    const override = detectGoalType(goalText);
+    if (override) g.goalType = override;
+  }
+  if (!g.goalType || !validGoalTypes.includes(g.goalType)) {
+    // Default: Lifestyle/Health behavior-based goals default to behavior_based;
+    // everything else defaults to skill_based
+    g.goalType = (g.domain === 'Lifestyle' || g.domain === 'Health') ? 'behavior_based' : 'skill_based';
+  }
 
   return parsed;
 }
@@ -370,20 +439,95 @@ function buildSpecificityOptions(
   ];
 }
 
+const ANALYZE_GOAL_TOOL: GroqTool = {
+  type: 'function',
+  function: {
+    name: 'analyze_goal',
+    description: 'Transform a human goal statement into structured goal metadata.',
+    parameters: {
+      type: 'object',
+      properties: {
+        goalAnalysis: {
+          type: 'object',
+          properties: {
+            goal:           { type: 'string' },
+            domain:         { type: 'string', enum: ['Cognitive', 'Kinesthetic', 'Career', 'Financial', 'Creative', 'Health', 'Lifestyle', 'Hybrid'] },
+            subDomains:     { type: 'array', items: { type: 'string' } },
+            category:       { type: 'string' },
+            horizon:        { type: 'string', enum: ['Short-term', 'Mid-term', 'Long-term'] },
+            intensity:      { type: 'string', enum: ['Low', 'Moderate', 'High', 'Extreme'] },
+            clarityScore:   { type: 'number', minimum: 0, maximum: 1 },
+            ambiguityScore: { type: 'number', minimum: 0, maximum: 1 },
+            confidence:     { type: 'number', minimum: 0, maximum: 1 },
+            smartStatus: {
+              type: 'object',
+              properties: {
+                specific:    { type: 'boolean' },
+                measurable:  { type: 'boolean' },
+                achievable:  { type: 'boolean' },
+                relevant:    { type: 'boolean' },
+                timeBound:   { type: 'boolean' },
+              },
+              required: ['specific', 'measurable', 'achievable', 'relevant', 'timeBound'],
+            },
+            missingSMART:       { type: 'array', items: { type: 'string' } },
+            realismChecks: {
+              type: 'object',
+              properties: {
+                timeRealism:   { type: 'string', enum: ['Realistic', 'Optimistic', 'Unrealistic', 'Unknown'] },
+                effortRealism: { type: 'string', enum: ['Realistic', 'Optimistic', 'Unrealistic', 'Unknown'] },
+              },
+              required: ['timeRealism', 'effortRealism'],
+            },
+            constraintsDetected: { type: 'array', items: { type: 'string' } },
+            risksDetected:       { type: 'array', items: { type: 'string' } },
+            complexity:          { type: 'string', enum: ['beginner', 'intermediate', 'advanced'] },
+            learningTypes:       { type: 'array', items: { type: 'string' } },
+            typicalTimeline: {
+              type: 'object',
+              properties: {
+                minimum:  { type: 'string' },
+                realistic: { type: 'string' },
+                mastery:  { type: 'string' },
+              },
+              required: ['minimum', 'realistic', 'mastery'],
+            },
+            keyMilestones:    { type: 'array', items: { type: 'string' } },
+            successCriteria:  { type: 'array', items: { type: 'string' } },
+            prerequisites:    { type: 'array', items: { type: 'string' } },
+            commonObstacles:  { type: 'array', items: { type: 'string' } },
+          },
+          required: ['goal', 'domain', 'category', 'horizon', 'intensity', 'clarityScore', 'ambiguityScore', 'confidence', 'smartStatus', 'realismChecks'],
+        },
+      },
+      required: ['goalAnalysis'],
+    },
+  },
+};
+
 export async function analyzeGoal(context: AgentContext): Promise<Agent1Output> {
-  const { content } = await callReasoning({
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: buildUserPrompt(context) },
-    ],
-    temperature: 0.2,  // Low: analytical precision, not creative
-    max_tokens: 1500,
-    response_format: { type: 'json_object' },
-  });
-  if (!content) {
-    throw new Error('Agent 1: No response received from model');
+  const callMessages = [
+    { role: 'system' as const, content: SYSTEM_PROMPT },
+    { role: 'user'   as const, content: buildUserPrompt(context) },
+  ];
+
+  let raw: unknown;
+  if (flags.USE_TOOL_CALLING) {
+    const args = await callWithTools(
+      { messages: callMessages, temperature: 0.2, max_tokens: 1500, tools: [ANALYZE_GOAL_TOOL], tool_name: 'analyze_goal' },
+      'reasoning'
+    );
+    raw = JSON.parse(args) as unknown;
+  } else {
+    const { content } = await callReasoning({
+      messages: callMessages,
+      temperature: 0.2,
+      max_tokens: 1500,
+      response_format: { type: 'json_object' },
+    });
+    if (!content) throw new Error('Agent 1: No response received from model');
+    raw = JSON.parse(content) as unknown;
   }
 
-  const raw = JSON.parse(content) as unknown;
   return validateAndNormalize(raw, context.goal);
 }

@@ -1,90 +1,28 @@
-import { Home, Map, User, BarChart2, BookMarked } from 'lucide-react';
+import { Home, Map, MessageSquare, BarChart2, User } from 'lucide-react';
 import type { ViewType } from '../hooks/useDashboardNav';
+import { useCoachMessages } from '../hooks/useCoachMessages';
 
 interface BottomNavProps {
   activeTab: ViewType;
   onTabChange: (tab: ViewType) => void;
 }
 
-const ACTIVE_COLOR = '#7c3aed';
-const INACTIVE_COLOR = 'rgba(255,255,255,0.35)';
-
-const TABS: { id: ViewType; label: string; icon: React.ComponentType<{ size: number; strokeWidth: number; color: string; style?: React.CSSProperties }> }[] = [
+const TABS: {
+  id: ViewType;
+  label: string;
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number; color?: string }>;
+}[] = [
   { id: 'today',    label: 'Today',    icon: Home },
   { id: 'roadmap',  label: 'Journey',  icon: Map },
-  { id: 'library',  label: 'Library',  icon: BookMarked },
+  { id: 'coach',    label: 'Coach',    icon: MessageSquare },
   { id: 'insights', label: 'Progress', icon: BarChart2 },
   { id: 'you',      label: 'You',      icon: User },
 ];
 
-function TabButton({
-  id,
-  label,
-  icon: Icon,
-  isActive,
-  onTabChange,
-}: {
-  id: ViewType;
-  label: string;
-  icon: typeof TABS[0]['icon'];
-  isActive: boolean;
-  onTabChange: (tab: ViewType) => void;
-}) {
-  return (
-    <button
-      onClick={() => onTabChange(id)}
-      style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '3px',
-        height: '56px',
-        background: 'none',
-        border: 'none',
-        cursor: 'pointer',
-        padding: '6px 2px',
-        position: 'relative',
-        WebkitTapHighlightColor: 'transparent',
-      }}
-      aria-label={label}
-      aria-current={isActive ? 'page' : undefined}
-    >
-      {isActive && (
-        <span style={{
-          position: 'absolute',
-          top: 0,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: '28px',
-          height: '2px',
-          borderRadius: '0 0 3px 3px',
-          backgroundColor: ACTIVE_COLOR,
-          boxShadow: `0 0 8px ${ACTIVE_COLOR}80`,
-        }} />
-      )}
-      <Icon
-        size={20}
-        strokeWidth={isActive ? 2 : 1.5}
-        color={isActive ? ACTIVE_COLOR : INACTIVE_COLOR}
-        style={{ transition: 'color 150ms ease' }}
-      />
-      <span style={{
-        fontSize: '10px',
-        fontWeight: isActive ? 600 : 400,
-        color: isActive ? ACTIVE_COLOR : INACTIVE_COLOR,
-        letterSpacing: '0.02em',
-        lineHeight: 1,
-        transition: 'color 150ms ease',
-      }}>
-        {label}
-      </span>
-    </button>
-  );
-}
-
 export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
+  const { getMessages } = useCoachMessages();
+  const unreadCoach = getMessages().filter(m => !m.read).length;
+
   return (
     <nav
       style={{
@@ -95,24 +33,85 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
         zIndex: 100,
         display: 'flex',
         alignItems: 'stretch',
-        background: 'linear-gradient(180deg, rgba(8,8,15,0.95) 0%, rgba(8,8,15,1) 100%)',
-        borderTop: '1px solid rgba(255,255,255,0.07)',
+        backgroundColor: '#ffffff',
+        borderTop: '1px solid var(--c-border-subtle)',
         paddingBottom: 'env(safe-area-inset-bottom)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        boxShadow: '0 -4px 24px rgba(0,0,0,0.25)',
+        boxShadow: '0 -1px 0 rgba(0,0,0,0.06)',
       }}
     >
-      {TABS.map(({ id, label, icon }) => (
-        <TabButton
-          key={id}
-          id={id}
-          label={label}
-          icon={icon}
-          isActive={activeTab === id}
-          onTabChange={onTabChange}
-        />
-      ))}
+      {TABS.map(({ id, label, icon: Icon }) => {
+        const active = activeTab === id;
+        const showBadge = id === 'coach' && unreadCoach > 0 && !active;
+        return (
+          <button
+            key={id}
+            onClick={() => onTabChange(id)}
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 3,
+              height: 56,
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '6px 2px',
+              position: 'relative',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+            aria-label={label}
+            aria-current={active ? 'page' : undefined}
+          >
+            {/* Active indicator — top bar */}
+            {active && (
+              <span style={{
+                position: 'absolute',
+                top: 0,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: 24,
+                height: 2,
+                borderRadius: '0 0 2px 2px',
+                backgroundColor: 'var(--c-accent-purple)',
+              }} />
+            )}
+
+            <div style={{ position: 'relative' }}>
+              <Icon
+                size={20}
+                strokeWidth={active ? 2.2 : 1.5}
+                color={active ? 'var(--c-accent-purple)' : 'var(--c-text-tertiary)'}
+              />
+              {showBadge && (
+                <span style={{
+                  position: 'absolute',
+                  top: -3,
+                  right: -4,
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--c-accent-red)',
+                  border: '1.5px solid #fff',
+                }} />
+              )}
+            </div>
+
+            <span style={{
+              fontSize: 10,
+              fontWeight: active ? 600 : 400,
+              color: active ? 'var(--c-accent-purple)' : 'var(--c-text-tertiary)',
+              letterSpacing: '0.01em',
+              lineHeight: 1,
+              fontFamily: 'var(--c-font-body)',
+              transition: 'color 0.12s ease',
+            }}>
+              {label}
+            </span>
+          </button>
+        );
+      })}
     </nav>
   );
 }

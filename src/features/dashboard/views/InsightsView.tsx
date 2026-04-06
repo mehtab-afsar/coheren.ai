@@ -1,19 +1,92 @@
 import { useMemo, useState } from 'react';
-import { Flame, TrendingUp, Calendar, CheckCircle, Brain, ChevronDown, ChevronUp } from 'lucide-react';
+import { Flame, CheckCircle, Brain, ChevronDown, ChevronUp, Trophy, Clock, Target } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useStore } from '@core/store/useStore';
 import { useBreakpoint } from '@hooks/useBreakpoint';
 import { ap } from '@core/design-system/appleTokens';
 import StreakCalendar, { type CalendarDay } from './progress/StreakCalendar';
-import PersonalRecords from './progress/PersonalRecords';
-import TrendSparkline from './progress/TrendSparkline';
 import CoachSummary from './progress/CoachSummary';
-import DifficultyTrend from './progress/DifficultyTrend';
 import TaskTypeBreakdown from './progress/TaskTypeBreakdown';
-import SkipPatterns from './progress/SkipPatterns';
-import ConsistencyScore from './progress/ConsistencyScore';
 import { useFeedbackMetrics } from '../hooks/useFeedbackMetrics';
 
+// ── Ring Progress ────────────────────────────────────────────────────────────
+function RingProgress({ pct, size = 120, stroke = 9, color = '#667eea' }: {
+  pct: number; size?: number; stroke?: number; color?: string;
+}) {
+  const r = (size - stroke * 2) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ * (1 - Math.min(pct, 100) / 100);
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(0,0,0,0.06)" strokeWidth={stroke} />
+      <circle
+        cx={size/2} cy={size/2} r={r} fill="none"
+        stroke={color} strokeWidth={stroke}
+        strokeDasharray={circ} strokeDashoffset={offset}
+        strokeLinecap="round"
+        style={{ transition: 'stroke-dashoffset 0.8s cubic-bezier(0.16,1,0.3,1)' }}
+      />
+    </svg>
+  );
+}
+
+// ── Stat Cell ────────────────────────────────────────────────────────────────
+function StatCell({ value, label, sub, last = false }: {
+  value: string; label: string; sub?: string; last?: boolean;
+}) {
+  return (
+    <div style={{
+      flex: 1,
+      padding: '14px 0',
+      textAlign: 'center',
+      borderRight: last ? 'none' : `1px solid ${ap.border}`,
+    }}>
+      <div style={{ fontSize: 22, fontWeight: 700, color: ap.textPrimary, letterSpacing: '-0.03em', lineHeight: 1 }}>
+        {value}
+      </div>
+      <div style={{ fontSize: 11, color: ap.textTertiary, marginTop: 3, fontWeight: 500 }}>
+        {label}
+      </div>
+      {sub && (
+        <div style={{ fontSize: 10, color: ap.textTertiary, marginTop: 2, opacity: 0.7 }}>
+          {sub}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Record Chip ──────────────────────────────────────────────────────────────
+function RecordChip({ icon, label, value, color }: {
+  icon: React.ReactNode; label: string; value: string; color: string;
+}) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10,
+      padding: '12px 16px',
+      background: ap.surface, border: `1px solid ${ap.border}`,
+      borderRadius: 14, flex: 1, minWidth: 0,
+    }}>
+      <div style={{
+        width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+        background: color + '12', border: `1px solid ${color}22`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        {icon}
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: ap.textPrimary, letterSpacing: '-0.02em' }}>
+          {value}
+        </div>
+        <div style={{ fontSize: 11, color: ap.textTertiary, marginTop: 1 }}>
+          {label}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
 export default function InsightsView() {
   const { tasks, currentDay, streak, roadmap } = useStore();
   const agentRoadmap = useStore(s => s.agentRoadmap);
@@ -21,36 +94,33 @@ export default function InsightsView() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const metrics = useFeedbackMetrics();
 
+  // ── Data ───────────────────────────────────────────────────────────────────
   const currentWeek = Math.ceil(currentDay / 7);
   const totalDays = agentRoadmap?.roadmap?.totalDays
     ?? ((roadmap?.strategicPlan?.totalWeeks ?? Math.ceil((roadmap?.duration || 3) * 4)) * 7);
   const totalWeeks = Math.ceil(totalDays / 7);
-  const estimatedTotalMinutes = (totalWeeks * 5 * 45); // rough estimate
 
-  const totalTasks = tasks.length;
   const completedTasks = tasks.filter(t => t.completed).length;
+  const totalTasks = tasks.length;
   const overallCompletion = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
-  // Previous week completion for context
-  const prevWeekTasks = tasks.filter(t => Math.ceil(t.day / 7) === currentWeek - 1);
-  const prevWeekDone = prevWeekTasks.filter(t => t.completed).length;
-  const prevWeekCompletion = prevWeekTasks.length > 0
-    ? Math.round((prevWeekDone / prevWeekTasks.length) * 100) : null;
 
   const thisWeekTasks = tasks.filter(t => Math.ceil(t.day / 7) === currentWeek);
   const thisWeekCompleted = thisWeekTasks.filter(t => t.completed).length;
   const weeklyCompletion = thisWeekTasks.length > 0
     ? Math.round((thisWeekCompleted / thisWeekTasks.length) * 100) : 0;
 
+  const prevWeekTasks = tasks.filter(t => Math.ceil(t.day / 7) === currentWeek - 1);
+  const prevWeekDone = prevWeekTasks.filter(t => t.completed).length;
+  const prevWeekCompletion = prevWeekTasks.length > 0
+    ? Math.round((prevWeekDone / prevWeekTasks.length) * 100) : null;
+
   const totalMinutesInvested = useMemo(
     () => tasks.filter(t => t.completed).reduce((sum, t) => sum + (t.duration || 0), 0),
     [tasks],
   );
   const hoursInvested = Math.round((totalMinutesInvested / 60) * 10) / 10;
-  const estimatedHoursTotal = Math.round(estimatedTotalMinutes / 60);
-  const hoursRemaining = Math.max(0, estimatedHoursTotal - hoursInvested);
 
-  // Calendar days (last 28)
+  // Calendar
   const calendarDays = useMemo<CalendarDay[]>(() => {
     const tasksByDay = new Map<number, { total: number; completed: number }>();
     tasks.forEach(t => {
@@ -81,7 +151,6 @@ export default function InsightsView() {
     return result.slice(0, 28);
   }, [tasks, currentDay]);
 
-  // Personal records
   const longestStreak = useMemo(() => {
     let best = 0, cur = 0;
     for (const d of calendarDays) {
@@ -103,225 +172,368 @@ export default function InsightsView() {
     return { number: bestNum, percentage: bestPct };
   }, [tasks]);
 
-  // Trend data
-  const trendData = useMemo(() => {
-    const hwt = tasks.length > 0 ? Math.max(...tasks.map(t => Math.ceil(t.day / 7))) : currentWeek;
-    return Array.from({ length: Math.min(hwt, currentWeek) }, (_, i) => {
-      const w = i + 1;
-      const wTasks = tasks.filter(t => Math.ceil(t.day / 7) === w);
-      const wDone = wTasks.filter(t => t.completed).length;
-      return { week: w, percentage: wTasks.length > 0 ? Math.round((wDone / wTasks.length) * 100) : 0 };
-    });
-  }, [tasks, currentWeek]);
-
-  // Coach summary
   const coachSummary = (() => {
     try { return localStorage.getItem('coheren_coach_summary') ?? ''; } catch { return ''; }
   })();
 
-  // Context sentences for momentum strip
-  const completionContext = prevWeekCompletion !== null
-    ? overallCompletion >= prevWeekCompletion
-      ? `up from ${prevWeekCompletion}% last week`
-      : `down from ${prevWeekCompletion}% last week`
-    : 'overall completion rate';
-
-  const streakContext = streak >= longestStreak && streak > 0
-    ? 'your longest yet'
-    : streak > 0
-    ? `best is ${longestStreak} days`
-    : 'keep going';
-
-  const hoursContext = hoursRemaining > 0
-    ? `~${hoursRemaining}h to go`
-    : 'goal within reach';
-
-  const weekContext = `week ${currentWeek} of ${totalWeeks}`;
-
-  const momentumStats = [
-    { icon: TrendingUp, label: 'COMPLETION', value: `${overallCompletion}%`, context: completionContext, color: '#7c3aed', bg: 'linear-gradient(135deg, #f5f3ff, #ede9fe)', border: '#ddd6fe' },
-    { icon: Flame, label: 'STREAK',     value: `${streak}d`,             context: streakContext,    color: '#f97316', bg: 'linear-gradient(135deg, #fff7ed, #ffedd5)', border: '#fed7aa' },
-    { icon: CheckCircle, label: 'HOURS',  value: `${hoursInvested}h`,     context: hoursContext,     color: '#22c55e', bg: 'linear-gradient(135deg, #f0fdf4, #dcfce7)', border: '#bbf7d0' },
-    { icon: Calendar,  label: 'PROGRESS', value: weekContext,              context: `${weeklyCompletion}% this week`, color: '#0ea5e9', bg: 'linear-gradient(135deg, #eff6ff, #dbeafe)', border: '#bfdbfe' },
-  ];
-
-  // History log (last 30 completed tasks)
   const historyTasks = [...tasks]
     .filter(t => t.completed)
     .sort((a, b) => b.day - a.day)
     .slice(0, 30);
 
+  // ── Ring color ─────────────────────────────────────────────────────────────
+  const ringColor = overallCompletion >= 80 ? '#22c55e' : overallCompletion >= 50 ? '#667eea' : '#f97316';
+
+  // ── Week delta ─────────────────────────────────────────────────────────────
+  const weekDelta = prevWeekCompletion !== null ? weeklyCompletion - prevWeekCompletion : null;
+
+  // ── RENDER ──────────────────────────────────────────────────────────────────
   return (
-    <div style={{ paddingBottom: 32, fontFamily: ap.font }}>
+    <div style={{ paddingBottom: 40, fontFamily: ap.font }}>
 
-      {/* Page title */}
-      <h1 style={{ fontSize: 26, fontWeight: 700, color: ap.textPrimary, margin: '0 0 24px', letterSpacing: '-0.03em' }}>
-        Progress
-      </h1>
-
-      {/* ── 1. Momentum Strip — horizontal scroll on mobile ── */}
-      <div style={{
-        display: 'flex',
-        gap: 8,
-        marginBottom: 24,
-        overflowX: isMobile ? 'auto' : 'visible',
-        scrollbarWidth: 'none',
-        WebkitOverflowScrolling: 'touch',
-        flexWrap: isMobile ? 'nowrap' : 'wrap',
-        paddingBottom: isMobile ? 4 : 0,
-      }}>
-        {momentumStats.map(({ icon: Icon, label, value, context, color }, idx) => (
-          <motion.div
-            key={label}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: idx * 0.07 }}
-            style={{
-              background: ap.surface,
-              border: `1px solid ${ap.border}`,
-              borderRadius: 14,
-              padding: '14px 16px',
-              flexShrink: 0,
-              minWidth: isMobile ? 140 : 0,
-              flex: isMobile ? 'none' : 1,
-              boxShadow: ap.shadow,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-              <Icon size={12} color={color} />
-              <span style={{ fontSize: 9, fontWeight: 700, color: ap.textTertiary, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                {label}
-              </span>
-            </div>
-            <p style={{ fontSize: 26, fontWeight: 700, color: ap.textPrimary, margin: '0 0 2px', letterSpacing: '-0.03em', lineHeight: 1, fontFamily: ap.mono }}>
-              {value}
-            </p>
-            <p style={{ fontSize: 11, color: ap.textTertiary, margin: 0 }}>{context}</p>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* ── 2. Activity Calendar — full width centrepiece ── */}
-      <div style={{ marginBottom: 20 }}>
-        <p style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 10 }}>
-          28-Day Activity
+      {/* ── Header ── */}
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35 }}
+        style={{ marginBottom: 28 }}
+      >
+        <h1 style={{
+          fontSize: 26, fontWeight: 700, color: ap.textPrimary,
+          margin: '0 0 4px', letterSpacing: '-0.03em',
+          fontFamily: 'Fraunces, Georgia, serif',
+        }}>
+          Insights
+        </h1>
+        <p style={{ margin: 0, fontSize: 13, color: ap.textTertiary }}>
+          Day {currentDay} · Week {currentWeek} of {totalWeeks}
         </p>
-        <StreakCalendar days={calendarDays} currentStreak={streak} longestStreak={longestStreak} />
-      </div>
+      </motion.div>
 
-      {/* ── 3. Weekly Performance — 2-col on desktop ── */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-        gap: 12,
-        marginBottom: 20,
-      }}>
-        {trendData.length > 1 && (
-          <div>
-            <p style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 10 }}>
-              Weekly Trend
-            </p>
-            <TrendSparkline data={trendData} />
+      {/* ── Hero: ring + headline ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.05 }}
+        style={{
+          background: ap.surface,
+          border: `1px solid ${ap.border}`,
+          borderRadius: 24,
+          padding: isMobile ? '28px 24px' : '32px 36px',
+          marginBottom: 12,
+          display: 'flex', alignItems: 'center',
+          gap: 28,
+        }}
+      >
+        {/* Ring */}
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <RingProgress pct={overallCompletion} size={isMobile ? 100 : 112} stroke={8} color={ringColor} />
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+          }}>
+            <span style={{
+              fontSize: isMobile ? 22 : 26, fontWeight: 700,
+              color: ap.textPrimary, letterSpacing: '-0.03em', lineHeight: 1,
+            }}>
+              {overallCompletion}%
+            </span>
+            <span style={{ fontSize: 10, color: ap.textTertiary, marginTop: 2 }}>done</span>
           </div>
-        )}
-        <div>
-          <p style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 10 }}>
-            Personal Records
+        </div>
+
+        {/* Text block */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: isMobile ? 18 : 22,
+            fontFamily: 'Fraunces, Georgia, serif',
+            fontWeight: 500, color: ap.textPrimary,
+            letterSpacing: '-0.02em', marginBottom: 4,
+          }}>
+            {overallCompletion === 100 ? 'Perfect run' :
+             overallCompletion >= 80 ? 'Strong performance' :
+             overallCompletion >= 50 ? 'Solid progress' : 'Getting started'}
+          </div>
+          <p style={{ margin: '0 0 14px', fontSize: 13, color: ap.textSecondary, lineHeight: 1.5 }}>
+            {completedTasks} of {totalTasks} task{totalTasks !== 1 ? 's' : ''} completed overall
           </p>
-          <PersonalRecords
-            longestStreak={longestStreak}
-            totalTasksDone={completedTasks}
-            totalMinutes={totalMinutesInvested}
-            bestWeekNumber={bestWeek.number}
-            bestWeekPercent={bestWeek.percentage}
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {streak > 0 && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '5px 12px',
+                background: 'rgba(249,115,22,0.07)',
+                border: '1px solid rgba(249,115,22,0.18)',
+                borderRadius: 99,
+              }}>
+                <Flame size={11} color="#f97316" strokeWidth={2} />
+                <span style={{ fontSize: 12, color: '#ea580c', fontWeight: 600 }}>
+                  {streak}-day streak
+                </span>
+              </div>
+            )}
+            {weeklyCompletion > 0 && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '5px 12px',
+                background: ap.accentSoft,
+                border: `1px solid ${ap.accentMid}`,
+                borderRadius: 99,
+              }}>
+                <Target size={11} color={ap.accent} strokeWidth={2} />
+                <span style={{ fontSize: 12, color: ap.accent, fontWeight: 600 }}>
+                  {weeklyCompletion}% this week
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </motion.div>
+
+      {/* ── Stat row ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, delay: 0.1 }}
+        style={{
+          background: ap.surface,
+          border: `1px solid ${ap.border}`,
+          borderRadius: 18,
+          display: 'flex',
+          marginBottom: 20,
+          overflow: 'hidden',
+        }}
+      >
+        <StatCell value={String(completedTasks)} label="tasks done" />
+        <StatCell value={`${hoursInvested}h`} label="invested" sub={`of ~${Math.round((totalWeeks * 5 * 45) / 60)}h total`} />
+        <StatCell value={`Wk ${currentWeek}`} label={`of ${totalWeeks}`} sub={`${weeklyCompletion}% this week`} last />
+      </motion.div>
+
+      {/* ── This week progress bar ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, delay: 0.15 }}
+        style={{
+          background: ap.surface,
+          border: `1px solid ${ap.border}`,
+          borderRadius: 18,
+          padding: '18px 20px',
+          marginBottom: 20,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: ap.textPrimary }}>
+            This week
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: weeklyCompletion >= 80 ? ap.success : ap.textPrimary }}>
+            {thisWeekCompleted}/{thisWeekTasks.length} done
+          </span>
+        </div>
+        {/* Progress bar */}
+        <div style={{
+          height: 6, borderRadius: 99, background: ap.surfaceAlt,
+          overflow: 'hidden', marginBottom: 8,
+        }}>
+          <div style={{
+            height: '100%', borderRadius: 99,
+            width: `${weeklyCompletion}%`,
+            background: weeklyCompletion === 100
+              ? 'linear-gradient(90deg, #22c55e, #4ade80)'
+              : 'linear-gradient(90deg, #667eea, #764ba2)',
+            transition: 'width 0.8s cubic-bezier(0.16,1,0.3,1)',
+          }} />
+        </div>
+        {weekDelta !== null && (
+          <p style={{ margin: 0, fontSize: 11, color: weekDelta >= 0 ? ap.success : '#f97316' }}>
+            {weekDelta >= 0 ? '↑' : '↓'} {Math.abs(weekDelta)}% vs last week
+          </p>
+        )}
+      </motion.div>
+
+      {/* ── Activity calendar ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, delay: 0.18 }}
+        style={{ marginBottom: 20 }}
+      >
+        <p style={{
+          fontSize: 11, fontWeight: 700, color: ap.textTertiary,
+          letterSpacing: '0.07em', textTransform: 'uppercase',
+          marginBottom: 10, margin: '0 0 10px',
+        }}>
+          28-day activity
+        </p>
+        <div style={{
+          background: ap.surface, border: `1px solid ${ap.border}`,
+          borderRadius: 18, padding: '18px 20px',
+        }}>
+          <StreakCalendar days={calendarDays} currentStreak={streak} longestStreak={longestStreak} />
+        </div>
+      </motion.div>
+
+      {/* ── Records ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, delay: 0.22 }}
+        style={{ marginBottom: 20 }}
+      >
+        <p style={{
+          fontSize: 11, fontWeight: 700, color: ap.textTertiary,
+          letterSpacing: '0.07em', textTransform: 'uppercase',
+          margin: '0 0 10px',
+        }}>
+          Personal bests
+        </p>
+        <div style={{
+          display: 'flex', gap: 10,
+          flexWrap: isMobile ? 'wrap' : 'nowrap',
+        }}>
+          <RecordChip
+            icon={<Flame size={15} color="#f97316" strokeWidth={2} />}
+            label="best streak"
+            value={`${longestStreak} day${longestStreak !== 1 ? 's' : ''}`}
+            color="#f97316"
+          />
+          <RecordChip
+            icon={<Trophy size={15} color="#667eea" strokeWidth={2} />}
+            label={`best week · Wk ${bestWeek.number}`}
+            value={`${bestWeek.percentage}%`}
+            color="#667eea"
+          />
+          <RecordChip
+            icon={<Clock size={15} color="#22c55e" strokeWidth={2} />}
+            label="time invested"
+            value={`${hoursInvested}h`}
+            color="#22c55e"
           />
         </div>
-      </div>
+      </motion.div>
 
-      {/* ── 4. AI Observations ── */}
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
-          <Brain size={13} color="#7c3aed" />
-          <p style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.07em', textTransform: 'uppercase', margin: 0 }}>
-            AI Observations
+      {/* ── Task type breakdown (if available) ── */}
+      {metrics.taskTypeBreakdown.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.25 }}
+          style={{ marginBottom: 20 }}
+        >
+          <p style={{
+            fontSize: 11, fontWeight: 700, color: ap.textTertiary,
+            letterSpacing: '0.07em', textTransform: 'uppercase',
+            margin: '0 0 10px',
+          }}>
+            Task types
           </p>
-        </div>
-        <CoachSummary summary={coachSummary} />
-      </div>
-
-      {/* ── 5. Deep Insights — 2×2 grid ── */}
-      {(metrics.taskTypeBreakdown.length > 0 || metrics.difficultyTrend.length >= 2 || metrics.skipPatterns.length > 0) && (
-        <div style={{ marginBottom: 20 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 10 }}>
-            Deep Insights
-          </p>
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 8 }}>
-            <div style={{ background: ap.surface, border: `1px solid ${ap.border}`, borderRadius: 14, padding: 16, overflow: 'hidden', boxShadow: ap.shadow }}>
-              <ConsistencyScore score={metrics.consistencyScore} />
-            </div>
-            {metrics.taskTypeBreakdown.length > 0 && (
-              <div style={{ background: ap.surface, border: `1px solid ${ap.border}`, borderRadius: 14, padding: 16, overflow: 'hidden', boxShadow: ap.shadow }}>
-                <TaskTypeBreakdown data={metrics.taskTypeBreakdown} />
-              </div>
-            )}
-            {metrics.difficultyTrend.length >= 2 && (
-              <div style={{ background: ap.surface, border: `1px solid ${ap.border}`, borderRadius: 14, padding: 16, overflow: 'hidden', boxShadow: ap.shadow }}>
-                <DifficultyTrend data={metrics.difficultyTrend} />
-              </div>
-            )}
-            {metrics.skipPatterns.length > 0 && (
-              <div style={{ background: ap.surface, border: `1px solid ${ap.border}`, borderRadius: 14, padding: 16, overflow: 'hidden', boxShadow: ap.shadow }}>
-                <SkipPatterns data={metrics.skipPatterns} />
-              </div>
-            )}
+          <div style={{
+            background: ap.surface, border: `1px solid ${ap.border}`,
+            borderRadius: 18, padding: '18px 20px',
+          }}>
+            <TaskTypeBreakdown data={metrics.taskTypeBreakdown} />
           </div>
-        </div>
+        </motion.div>
       )}
 
-      {/* ── 6. History (collapsible) ── */}
-      <div>
+      {/* ── AI Coach ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, delay: 0.28 }}
+        style={{ marginBottom: 20 }}
+      >
+        <div style={{
+          background: ap.surface, border: `1px solid ${ap.border}`,
+          borderRadius: 18, overflow: 'hidden',
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '14px 20px',
+            borderBottom: `1px solid ${ap.border}`,
+            background: ap.accentSoft,
+          }}>
+            <Brain size={14} color={ap.accent} strokeWidth={1.8} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: ap.accent, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              Coach notes
+            </span>
+          </div>
+          <div style={{ padding: '16px 20px' }}>
+            <CoachSummary summary={coachSummary} />
+          </div>
+        </div>
+      </motion.div>
+
+      {/* ── History ── */}
+      <div style={{
+        background: ap.surface, border: `1px solid ${ap.border}`,
+        borderRadius: 18, overflow: 'hidden',
+      }}>
         <button
           onClick={() => setHistoryOpen(o => !o)}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            width: '100%', padding: '12px 0',
+            width: '100%', padding: '14px 20px',
             background: 'none', border: 'none', cursor: 'pointer',
-            borderTop: '1px solid #f0f0f5',
           }}
         >
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.07em', textTransform: 'uppercase' }}>
-            History ({historyTasks.length})
-          </span>
-          {historyOpen ? <ChevronUp size={15} color="#9ca3af" /> : <ChevronDown size={15} color="#9ca3af" />}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <CheckCircle size={14} color={ap.success} strokeWidth={2} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: ap.textPrimary }}>
+              Completed tasks
+            </span>
+            <span style={{
+              fontSize: 11, padding: '1px 7px', borderRadius: 99,
+              background: ap.surfaceAlt, color: ap.textTertiary, fontWeight: 600,
+            }}>
+              {historyTasks.length}
+            </span>
+          </div>
+          {historyOpen
+            ? <ChevronUp size={15} color={ap.textTertiary} />
+            : <ChevronDown size={15} color={ap.textTertiary} />}
         </button>
+
         {historyOpen && (
-          <div style={{ paddingTop: 8 }}>
+          <div style={{ borderTop: `1px solid ${ap.border}` }}>
             {historyTasks.length === 0 ? (
-              <p style={{ color: '#9ca3af', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>
+              <p style={{ color: ap.textTertiary, fontSize: 13, textAlign: 'center', padding: '24px 0' }}>
                 Complete tasks to build your history.
               </p>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {historyTasks.map((task) => (
+              <div>
+                {historyTasks.map((task, i) => (
                   <div key={task.id} style={{
-                    background: '#fff', border: '1px solid #f3f4f6',
-                    borderRadius: 12, padding: '12px 14px',
                     display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '11px 20px',
+                    borderBottom: i < historyTasks.length - 1 ? `1px solid ${ap.border}` : 'none',
                   }}>
-                    <CheckCircle size={14} color="#7c3aed" style={{ flexShrink: 0 }} />
+                    <div style={{
+                      width: 6, height: 6, borderRadius: '50%',
+                      background: ap.success, flexShrink: 0,
+                    }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 13, color: '#374151', margin: '0 0 2px', fontWeight: 500, lineHeight: 1.3 }}>
+                      <p style={{
+                        fontSize: 13, color: ap.textPrimary, margin: 0,
+                        fontWeight: 500, lineHeight: 1.3,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
                         {task.title}
                       </p>
-                      <p style={{ fontSize: 11, color: '#9ca3af', margin: 0 }}>Day {task.day}</p>
                     </div>
-                    <span style={{
-                      fontSize: 10, padding: '2px 8px', borderRadius: 99,
-                      background: 'rgba(124,58,237,0.07)', color: '#7c3aed',
-                      flexShrink: 0,
-                    }}>
-                      {task.type}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                      <span style={{
+                        fontSize: 10, padding: '2px 7px', borderRadius: 99,
+                        background: ap.surfaceAlt,
+                        color: ap.textTertiary, fontWeight: 500,
+                      }}>
+                        {task.type}
+                      </span>
+                      <span style={{ fontSize: 11, color: ap.textTertiary }}>
+                        Day {task.day}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -329,6 +541,7 @@ export default function InsightsView() {
           </div>
         )}
       </div>
+
     </div>
   );
 }

@@ -6,6 +6,7 @@
 
 import { supabase } from './supabase';
 import type { Agent1Output, Agent2ProfileOutput, Agent3Output, StoneAnswer } from '@types-app/agents';
+import type { ThresholdAdjustments } from '@core/agents/recalibrator';
 
 // ============================================
 // GOAL OPERATIONS
@@ -154,6 +155,102 @@ export async function getRoadmapByGoalId(goalId: string) {
   }
 
   return data;
+}
+
+/**
+ * Update stone profile in roadmaps.config JSON column.
+ * Non-blocking — call with .catch(() => {}) to avoid surfacing errors in UI.
+ */
+export async function updateRoadmapStoneProfile(
+  roadmapId: string,
+  stoneProfile: import('@types-app/agents').Agent2ProfileOutput
+): Promise<void> {
+  // Supabase JS doesn't support JSONB path updates directly — fetch, merge, and update.
+  const { data: current } = await supabase
+    .from('roadmaps')
+    .select('config')
+    .eq('id', roadmapId)
+    .single();
+
+  if (!current) return;
+
+  const mergedConfig = { ...(current.config ?? {}), stone_profile_json: stoneProfile };
+  await supabase
+    .from('roadmaps')
+    .update({ config: mergedConfig })
+    .eq('id', roadmapId);
+}
+
+// ============================================
+// ADAPTIVE THRESHOLD OPERATIONS
+// ============================================
+
+/**
+ * Load per-user threshold adjustments from roadmaps.config JSONB.
+ * Returns DEFAULT_THRESHOLDS if not yet set.
+ */
+const DEFAULT_THRESHOLDS: ThresholdAdjustments = {
+  simplify_completion_rate:   60,
+  accelerate_completion_rate: 80,
+  accelerate_avg_difficulty:  2.5,
+  recover_consecutive_skips:  4,
+  recover_health_skips:       3,
+};
+
+export async function loadThresholdAdjustments(roadmapId: string): Promise<ThresholdAdjustments> {
+  const { data } = await supabase
+    .from('roadmaps')
+    .select('config')
+    .eq('id', roadmapId)
+    .single();
+  const adj = (data?.config as Record<string, unknown> | null)?.threshold_adjustments;
+  return (adj as ThresholdAdjustments) ?? DEFAULT_THRESHOLDS;
+}
+
+/**
+ * Persist updated threshold adjustments into roadmaps.config JSONB.
+ * Non-blocking — call with .catch(() => {}).
+ */
+export async function saveThresholdAdjustments(
+  roadmapId: string,
+  adj: ThresholdAdjustments,
+): Promise<void> {
+  const { data: current } = await supabase
+    .from('roadmaps')
+    .select('config')
+    .eq('id', roadmapId)
+    .single();
+
+  const mergedConfig = { ...(current?.config ?? {}), threshold_adjustments: adj };
+  await supabase
+    .from('roadmaps')
+    .update({ config: mergedConfig })
+    .eq('id', roadmapId);
+}
+
+// ============================================
+// SPRINT MEMORY OPERATIONS
+// ============================================
+
+/**
+ * Insert a sprint memory row (embedding computed in sprintMemory.ts before calling this).
+ */
+export async function saveSprintMemoryRow(
+  userId: string,
+  goalId: string,
+  sprintNumber: number,
+  content: string,
+  embedding: number[],
+  metadata: Record<string, unknown>,
+): Promise<void> {
+  await supabase.from('sprint_memories').insert({
+    user_id:      userId,
+    goal_id:      goalId,
+    sprint_number: sprintNumber,
+    content,
+    embedding,
+    metadata,
+  });
 }
 
 // ============================================
@@ -645,4 +742,30 @@ export async function syncCompleteRoadmap(
       error
     };
   }
+}
+
+// ============================================
+// RESET
+// ============================================
+
+/**
+ * Delete all goal-related data for a user.
+ * Deleting user_goals cascades to: goal_stones, roadmaps, daily_tasks,
+ * checkpoints, sprint_memories, agent_logs.
+ * task_feedback has no cascade so it is deleted explicitly first.
+ */
+export async function deleteUserData(userId: string): Promise<void> {
+  // task_feedback has no FK cascade — delete it first
+  await supabase
+    .from('task_feedback')
+    .delete()
+    .eq('user_id', userId);
+
+  // Deleting user_goals triggers all other cascades
+  const { error } = await supabase
+    .from('user_goals')
+    .delete()
+    .eq('user_id', userId);
+
+  if (error) throw new Error(`Failed to clear user data: ${error.message}`);
 }

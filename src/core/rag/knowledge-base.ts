@@ -29,7 +29,7 @@ export interface UserContext {
 }
 
 // Knowledge chunk structure
-interface KnowledgeChunk {
+export interface KnowledgeChunk {
   id: string;
   content: string;
   source: string;
@@ -496,6 +496,79 @@ export function getFullKnowledgeContext(): string {
     c.id.includes('core') || c.id.includes('sdt') || c.id.includes('tiny-habits')
   );
   return formatKnowledgeForPrompt(coreChunks);
+}
+
+// ─── BM25 retrieval ───────────────────────────────────────────────────────────
+
+export interface BM25Candidate {
+  chunk: KnowledgeChunk;
+  score: number;
+}
+
+const STOP_WORDS = new Set([
+  'a','an','and','are','as','at','be','been','being','by','do','for',
+  'from','has','have','he','her','his','how','i','in','is','it','its',
+  'of','on','or','our','out','s','she','so','some','than','that','the',
+  'their','them','there','they','this','to','up','us','was','we','were',
+  'what','when','which','who','will','with','you','your',
+]);
+
+// Precompute at module load — zero cost at runtime
+const N = KNOWLEDGE_BASE.length;
+const _avgdl = KNOWLEDGE_BASE.reduce((sum, c) => sum + c.keywords.length, 0) / N;
+
+// IDF per unique keyword token
+const _dfMap = new Map<string, number>();
+for (const chunk of KNOWLEDGE_BASE) {
+  for (const kw of chunk.keywords) {
+    for (const token of kw.toLowerCase().split(/\W+/).filter(t => t.length > 1)) {
+      _dfMap.set(token, (_dfMap.get(token) ?? 0) + 1);
+    }
+  }
+}
+const _idfMap = new Map<string, number>();
+for (const [term, df] of _dfMap) {
+  _idfMap.set(term, Math.log((N - df + 0.5) / (df + 0.5) + 1));
+}
+
+const BM25_K1 = 1.5;
+const BM25_B  = 0.75;
+
+function tokenize(text: string): string[] {
+  return text.toLowerCase().split(/\W+/).filter(t => t.length > 1 && !STOP_WORDS.has(t));
+}
+
+/**
+ * BM25 candidate retrieval over the static knowledge base.
+ * Uses chunk.keywords as the document vocabulary (tf = count within keywords list).
+ */
+export function getBm25Candidates(query: string, topK: number): BM25Candidate[] {
+  const queryTokens = tokenize(query);
+  if (queryTokens.length === 0) return [];
+
+  const results: BM25Candidate[] = [];
+
+  for (const chunk of KNOWLEDGE_BASE) {
+    const kwTokens = chunk.keywords.flatMap(kw => tokenize(kw));
+    const dl = kwTokens.length;
+    if (dl === 0) continue;
+
+    // Build tf map for this chunk
+    const tfMap = new Map<string, number>();
+    for (const t of kwTokens) tfMap.set(t, (tfMap.get(t) ?? 0) + 1);
+
+    let score = 0;
+    for (const qt of queryTokens) {
+      const tf  = tfMap.get(qt) ?? 0;
+      if (tf === 0) continue;
+      const idf = _idfMap.get(qt) ?? 0;
+      score += idf * (tf * (BM25_K1 + 1)) / (tf + BM25_K1 * (1 - BM25_B + BM25_B * dl / _avgdl));
+    }
+
+    if (score > 0) results.push({ chunk, score });
+  }
+
+  return results.sort((a, b) => b.score - a.score).slice(0, topK);
 }
 
 // ─── Async semantic retrieval with static fallback ────────────────────────────

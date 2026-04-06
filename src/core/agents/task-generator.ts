@@ -24,8 +24,12 @@ import type {
   TaskStep,
   AssessmentQuestion,
 } from '@types-app/agents';
-import { callEconomy, callReasoning } from '@lib/ai-router';
-import { retrieveKnowledgeSemantic } from '@core/rag/semantic-retriever';
+import { callEconomy, callReasoning, callWithTools } from '@lib/ai-router';
+import type { GroqTool } from '@lib/ai-router';
+import { flags } from '@config/feature-flags';
+import { retrieveKnowledgeSemantic, retrieveKnowledgeHybrid } from '@core/rag/semantic-retriever';
+import { getSimilarTaskPatterns } from '@lib/sprintMemory';
+import { getResourcesForTask } from '@lib/resourceRetriever';
 import { planSession, serializeBlueprint } from './session-planner';
 
 // ─── Stone Delivery Rules ─────────────────────────────────────────────────────
@@ -231,8 +235,11 @@ If domain is Financial AND Overcommitment is an active stone:
 1. duration (minutes) ≤ ${dailyTimeAvailable}. Never exceed the daily time budget.
 2. Steps must be specific and actionable — no vague instructions ("practice X" → "do 3×10 reps of X with a 90-second rest").
 3. Every step has a duration (e.g., "10 minutes", "2 sets of 8 reps").
-4. NO YouTube links, NO external URLs, NO "go watch this video". All content is self-contained.
-5. For learning tasks: explain the concept inline with examples. The user must understand it without going anywhere else.
+4. RESOURCE HANDLING:
+   - If a "RESOURCE FOR TODAY'S TASK" block is provided below: Step 1 of the task MUST direct the user to watch/read it using the exact URL and timestamps provided. Reference specific timestamps in subsequent steps (e.g., "at 3:15 in the video, notice how…"). Do NOT invent any other URLs. Use ONLY the resource provided.
+   - If NO resource is provided: keep the task fully self-contained. No external URLs. No "go watch this video."
+5. For learning tasks with a resource: guide the user through the content — what to pay attention to and when.
+   For learning tasks without a resource: explain the concept inline with examples. The user must understand without going elsewhere.
 6. For practice tasks: describe the exercise precisely. The user must know exactly what to do.
 7. successCriteria must be completion-based — not "do it perfectly" but "do it the specified number of times."
 8. coachTips come from the RAG science context provided — cite the framework/principle.
@@ -294,6 +301,8 @@ function buildUserPrompt(
   stoneProfile: Agent2ProfileOutput,
   ragContext: string,
   previousTasksContext?: string,
+  resourceContext?: import('@types-app/agents').TaskResource | null,
+  weekContentSummary?: string,
 ): string {
   const sp = stoneProfile.stoneProfile;
   const phasePct = Math.round((dayInPhase / (phase.durationDays ?? 14)) * 100);
@@ -338,8 +347,19 @@ USER BEHAVIORAL PROFILE:
 - Active Stones: ${sp.stones.map(s => `${s.type} [${s.severity}]`).join(', ')}
 - Agent Guidance: ${sp.agent3Guidance.join(' | ')}
 
-${ragContext ? `EXPERT SCIENCE CONTEXT (use for coaching cues and whyThisMatters):
+${resourceContext ? `RESOURCE FOR TODAY'S TASK:
+  Title: "${resourceContext.title}"
+  URL: ${resourceContext.url}
+  Platform: ${resourceContext.platform ?? 'YouTube'}${resourceContext.channel ? `\n  Channel: ${resourceContext.channel}` : ''}${resourceContext.duration ? `\n  Duration: ${resourceContext.duration}` : ''}${(resourceContext as { watchFrom?: string }).watchFrom ? `\n  Watch from: ${(resourceContext as { watchFrom?: string }).watchFrom}` : ''}${(resourceContext as { watchTo?: string }).watchTo ? ` → ${(resourceContext as { watchTo?: string }).watchTo}` : ''}${resourceContext.timestamps && Object.keys(resourceContext.timestamps).length > 0 ? `\n  Key timestamps: ${Object.entries(resourceContext.timestamps).map(([k, v]) => `${v} — ${k}`).join(', ')}` : ''}
+  Why this resource: ${resourceContext.why}
+
+INSTRUCTION: Step 1 MUST direct the user to watch/read this resource with the exact URL. Reference specific timestamps when instructing the user to pay attention to something.
+
+` : ''}${ragContext ? `EXPERT SCIENCE CONTEXT (use for coaching cues and whyThisMatters):
 ${ragContext}
+
+` : ''}${weekContentSummary ? `CONTENT LEARNED THIS WEEK (this is a practice/retrieval task — reference these specifically):
+${weekContentSummary}
 
 ` : ''}${previousTasksContext ? `RECENT TASK HISTORY — DO NOT repeat these topics. Build on them:
 ${previousTasksContext}
@@ -361,7 +381,7 @@ const PLACEHOLDER_VIDEO_IDS = new Set([
   'XXXXXXXXXX',
 ]);
 
-export function sanitizeResourceUrl(url: unknown, _taskTitle?: string): string | null {
+export function sanitizeResourceUrl(url: unknown, taskTitle?: string): string | null {
   if (typeof url !== 'string' || !url.trim()) return null;
 
   const raw = url.trim();
@@ -375,7 +395,12 @@ export function sanitizeResourceUrl(url: unknown, _taskTitle?: string): string |
   if (watchMatch) {
     const videoId = watchMatch[1];
     if (PLACEHOLDER_VIDEO_IDS.has(videoId)) {
-      // Known placeholder — drop it so the resource library fills in a real video
+      // Known placeholder — convert to a search URL using the task title so
+      // ResourceCard can still show a usable "Search YouTube" link
+      if (taskTitle) {
+        const q = encodeURIComponent(taskTitle);
+        return `https://www.youtube.com/results?search_query=${q}`;
+      }
       return null;
     }
     // Non-placeholder watch URL — accept it (real video the model recalled)
@@ -773,6 +798,65 @@ async function generateAssessmentQuestions(
   return raw;
 }
 
+// ─── Tool Schema (for native function calling) ────────────────────────────────
+
+const GENERATE_TASK_TOOL: GroqTool = {
+  type: 'function',
+  function: {
+    name: 'generate_daily_task',
+    description: 'Generate a structured daily practice task for the user.',
+    parameters: {
+      type: 'object',
+      properties: {
+        day:   { type: 'integer' },
+        week:  { type: 'integer' },
+        phase: { type: 'integer' },
+        task: {
+          type: 'object',
+          properties: {
+            title:            { type: 'string' },
+            type:             { type: 'string', enum: ['learning', 'practice', 'reflection', 'challenge', 'retrieval', 'rest'] },
+            estimatedMinutes: { type: 'integer', minimum: 5, maximum: 180 },
+            description:      { type: 'string' },
+            coachTips:        { type: 'array', items: { type: 'string' }, minItems: 2 },
+            successCriteria:  { type: 'string' },
+            whyThisMatters:   { type: 'string' },
+            steps: {
+              type: 'array',
+              minItems: 3,
+              items: {
+                type: 'object',
+                properties: {
+                  stepNumber:  { type: 'integer' },
+                  instruction: { type: 'string' },
+                  duration:    { type: 'string' },
+                  tip:         { type: 'string' },
+                },
+                required: ['stepNumber', 'instruction', 'duration'],
+              },
+            },
+            segments: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  label:       { type: 'string' },
+                  duration:    { type: 'integer' },
+                  description: { type: 'string' },
+                  tip:         { type: 'string' },
+                },
+                required: ['label', 'duration', 'description'],
+              },
+            },
+          },
+          required: ['title', 'estimatedMinutes', 'steps', 'successCriteria', 'coachTips'],
+        },
+      },
+      required: ['task'],
+    },
+  },
+};
+
 // ─── Main Export ──────────────────────────────────────────────────────────────
 
 export async function generateTask(
@@ -785,6 +869,8 @@ export async function generateTask(
   _skillLevel?: 'beginner' | 'intermediate' | 'advanced',
   ragContext?: string,
   goalText?: string,
+  variantHint?: string,
+  weekContentSummary?: string,
 ): Promise<DailyTask> {
   const phases                       = roadmap.roadmap.phases;
   const { phase, week, dayInPhase }  = resolvePhaseForDay(phases, dayNumber);
@@ -862,6 +948,30 @@ export async function generateTask(
     }
   }
 
+  // ── Resource-first fetch ──
+  // Fetch the best curated resource for today's topic BEFORE building the prompt
+  // so Agent 4 can write steps that reference the specific video/article.
+  // Uses the day skeleton theme as the search query (more precise than task title,
+  // which isn't known yet). Falls back to goalText if no skeleton exists.
+  const primaryResourcePromise = (async (): Promise<import('@types-app/agents').TaskResource | null> => {
+    if (!flags.USE_DYNAMIC_RESOURCES) return null;
+    const skeletonTheme = phase.daySkeleton?.[dayInPhase - 1]?.theme ?? goalText ?? goalLine;
+    try {
+      const res = await getResourcesForTask({
+        taskTitle:         skeletonTheme,
+        domain,
+        phase:             phase.phaseNumber,
+        stoneTypes:        [stoneProfile.stoneProfile.primaryStone],
+        difficultyLevel:   3,
+        durationAvailable: dailyTimeAvailable,
+        goalText,
+      });
+      return res.primary ?? null;
+    } catch {
+      return null;
+    }
+  })();
+
   // ── Parallel: RAG fetch + Session Blueprint ──
   // RAG is async network I/O; blueprint is sync CPU.
   // Run RAG in parallel with the sync work to save ~300-800ms.
@@ -877,7 +987,7 @@ export async function generateTask(
     const domainQuery = domain === 'Financial'
       ? `${subDomainPrefix}financial daily practice ${phase.phaseName} simulation exercises specific steps`
       : `${subDomainPrefix}${domain} ${phase.phaseName} daily practice exercises activities specific steps`;
-    return retrieveKnowledgeSemantic({
+    const ragOptions = {
       query: domainQuery,
       additionalQueries: [
         `${primaryStone} ${domain} coaching intervention habit delivery`,
@@ -885,7 +995,10 @@ export async function generateTask(
       boostCategories: [domain.toLowerCase(), ...stoneTypes.map(s => s.toLowerCase())],
       boostKeywords: [domain.toLowerCase(), phase.phaseName.toLowerCase()],
       matchCount: 4,
-    });
+    };
+    return flags.USE_HYBRID_RAG
+      ? retrieveKnowledgeHybrid(ragOptions)
+      : retrieveKnowledgeSemantic(ragOptions);
   })();
 
   // Session Blueprint (sync — runs while RAG is in-flight)
@@ -898,29 +1011,63 @@ export async function generateTask(
   const blueprint = planSession(dailyTimeAvailable, phaseProgress, domain, isAssessmentDay);
   const blueprintBlock = `\n${serializeBlueprint(blueprint)}\n`;
 
-  // Await RAG result (should already be resolved if sync work took >0ms)
-  const science = await ragPromise;
+  // Sprint memory hint — runs in parallel with RAG (Change 5)
+  const sprintHintPromise = (async (): Promise<string> => {
+    if (!flags.USE_SPRINT_MEMORY_IN_ALL_AGENTS) return '';
+    const taskType     = phase.daySkeleton?.[dayInPhase - 1]?.taskType ?? 'practice';
+    const primaryStone = stoneProfile.stoneProfile.primaryStone;
+    return getSimilarTaskPatterns(domain, primaryStone, taskType).catch(() => '');
+  })();
 
-  const systemPrompt = buildSystemPrompt(domain, detectedStones, dailyTimeAvailable) + blueprintBlock;
+  // Await RAG + sprint hint + resource in parallel (all already in-flight)
+  const [science, sprintHint, primaryResource] = await Promise.all([ragPromise, sprintHintPromise, primaryResourcePromise]);
+
+  const sprintHintBlock = sprintHint
+    ? `\n── HISTORICAL PATTERN (from user's past sprints) ──\n${sprintHint}\nApply this when choosing task format and delivery style.\n`
+    : '';
+
+  const variantPrefix = variantHint ? `VARIANT INSTRUCTION: ${variantHint}\n\n` : '';
+  const systemPrompt = variantPrefix + buildSystemPrompt(domain, detectedStones, dailyTimeAvailable) + blueprintBlock + sprintHintBlock;
   const userPrompt   = buildUserPrompt(
     dayNumber, goalLine, roadmap.roadmap.totalDays, dailyTimeAvailable,
     phase, week, dayInPhase, stoneProfile, science, previousTasksContext,
+    primaryResource,
+    weekContentSummary,
   );
 
-  const { content } = await callEconomy({
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user',   content: userPrompt   },
-    ],
-    temperature:     0.5,
-    max_tokens:      2500,
-    response_format: { type: 'json_object' },
-  });
+  const callMessages = [
+    { role: 'system' as const, content: systemPrompt },
+    { role: 'user'   as const, content: userPrompt   },
+  ];
 
-  if (!content) throw new Error('Agent 4: No response from model');
+  let raw: unknown;
+  if (flags.USE_TOOL_CALLING) {
+    const args = await callWithTools(
+      { messages: callMessages, temperature: 0.5, max_tokens: 2500, tools: [GENERATE_TASK_TOOL], tool_name: 'generate_daily_task' },
+      'economy'
+    );
+    raw = JSON.parse(args) as unknown;
+  } else {
+    const { content } = await callEconomy({
+      messages: callMessages,
+      temperature:     0.5,
+      max_tokens:      2500,
+      response_format: { type: 'json_object' },
+    });
+    if (!content) throw new Error('Agent 4: No response from model');
+    raw = JSON.parse(repairJSON(content)) as unknown;
+  }
 
-  const raw    = JSON.parse(repairJSON(content)) as unknown;
-  let result   = validateAndNormalize(raw, dayNumber, phase.phaseNumber, week, dailyTimeAvailable);
+  let result = validateAndNormalize(raw, dayNumber, phase.phaseNumber, week, dailyTimeAvailable);
+
+  // Assign primary resource fetched before the LLM call.
+  // The agent was already instructed to reference it — set it on the result now.
+  if (primaryResource) {
+    result.task.resources = {
+      primary: primaryResource,
+      supplementary: result.task.resources?.supplementary ?? [],
+    };
+  }
 
   // Validate quality — retry with 70b if issues found OR if 8b collapsed to 1 real step
   const validation = validateTaskQuality(result.task, dailyTimeAvailable);
@@ -936,25 +1083,34 @@ export async function generateTask(
       const retryUserPrompt = userPrompt + (validation.issues.length
         ? `\n\nPREVIOUS ATTEMPT HAD QUALITY ISSUES — FIX ALL OF THESE:\n${validation.issues.map(i => `- ${i}`).join('\n')}`
         : '');
-      const { content: retryContent } = await callReasoning({
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user',   content: retryUserPrompt },
-        ],
-        temperature:     0.5,
-        max_tokens:      2500,
-        response_format: { type: 'json_object' },
-      });
-      if (retryContent) {
-        const retryRaw    = JSON.parse(repairJSON(retryContent)) as unknown;
-        const retryResult = validateAndNormalize(retryRaw, dayNumber, phase.phaseNumber, week, dailyTimeAvailable);
-        const retryValidation = validateTaskQuality(retryResult.task, dailyTimeAvailable);
-        if (retryValidation.valid || retryResult.task.steps.length > result.task.steps.length) {
-          result = retryResult;
-        }
+      const retryMessages = [
+        { role: 'system' as const, content: systemPrompt },
+        { role: 'user'   as const, content: retryUserPrompt },
+      ];
+      let retryRaw: unknown;
+      if (flags.USE_TOOL_CALLING) {
+        const retryArgs = await callWithTools(
+          { messages: retryMessages, temperature: 0.5, max_tokens: 2500, tools: [GENERATE_TASK_TOOL], tool_name: 'generate_daily_task' },
+          'reasoning'
+        );
+        retryRaw = JSON.parse(retryArgs) as unknown;
+      } else {
+        const { content: retryContent } = await callReasoning({
+          messages: retryMessages,
+          temperature:     0.5,
+          max_tokens:      2500,
+          response_format: { type: 'json_object' },
+        });
+        if (!retryContent) throw new Error('empty retry');
+        retryRaw = JSON.parse(repairJSON(retryContent)) as unknown;
+      }
+      const retryResult = validateAndNormalize(retryRaw, dayNumber, phase.phaseNumber, week, dailyTimeAvailable);
+      const retryValidation = validateTaskQuality(retryResult.task, dailyTimeAvailable);
+      if (retryValidation.valid || retryResult.task.steps.length > result.task.steps.length) {
+        result = retryResult;
       }
     } catch {
-      // Non-blocking — 8b result is still used
+      // Non-blocking — original result is still used
     }
   }
 

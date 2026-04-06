@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { track } from '@lib/analytics';
 
-export type ViewType = 'today' | 'roadmap' | 'insights' | 'library' | 'you';
+export type ViewType = 'today' | 'roadmap' | 'insights' | 'library' | 'you' | 'coach';
 
 export function useDashboardNav() {
   const [currentView, setCurrentViewRaw] = useState<ViewType>('today');

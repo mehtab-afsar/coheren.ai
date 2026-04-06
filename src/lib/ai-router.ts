@@ -1,10 +1,12 @@
 /**
- * Multi-Provider AI Router — Groq edition
+ * Multi-Provider AI Router — Groq + Claude
  *
- * All agents call one of three public functions:
- *   callEconomy()   → Groq llama-3.1-8b-instant    Shadow Extractor, Task Generator (fast + cheap JSON)
- *   callReasoning() → Groq llama-3.3-70b-versatile  Goal Analyzer, Stone Identifier, Recalibrator
- *   callPremium()   → Groq llama-3.3-70b-versatile  Curriculum Builder (same model, max quality)
+ * All agents call one of five public functions:
+ *   callEconomy()                → Groq llama-3.1-8b-instant    Task Generator (fast + cheap JSON)
+ *   callReasoning()              → Groq llama-3.3-70b-versatile  Goal Analyzer, Stone Identifier, Recalibrator
+ *   callPremium()                → Groq llama-3.3-70b-versatile  Curriculum Builder (same model, max quality)
+ *   callStrategic()              → Claude claude-sonnet-4-6       Agent 3 + 5 when USE_CLAUDE_FOR_* flags on
+ *   callStrategicWithThinking()  → Claude extended thinking        Agent 3 curriculum design
  *
  * Adding a new provider: add a ProviderAdapter and push into the relevant chain.
  * Switching primary: reorder chain arrays — no agent changes needed.
@@ -13,9 +15,21 @@
 import {
   callGroqWithFallback,
   callGroqEconomy,
+  callGroqWithTools,
+  streamGroq,
   getGroqSessionStats,
   resetGroqSessionStats,
 } from './groq-client';
+import type { GroqTool } from './groq-client';
+import {
+  callClaude,
+  callClaudeWithThinking,
+  isClaudeAvailable,
+  type ClaudeMessage,
+  type ClaudeThinkingResult,
+  type ClaudeToolCallParams,
+  callClaudeWithTools as _callClaudeWithTools,
+} from './claude-client';
 
 // ── Shared types (agents depend on these) ─────────────────────────────────────
 
@@ -149,6 +163,127 @@ export async function callReasoning(params: RouterCallParams): Promise<RouterCom
  */
 export async function callPremium(params: RouterCallParams): Promise<RouterCompletion> {
   return routeCall(params, PREMIUM_CHAIN, 'premium');
+}
+
+// ── Tool calling ──────────────────────────────────────────────────────────────
+
+export type { GroqTool };
+
+export interface ToolCallParams extends Omit<RouterCallParams, 'response_format'> {
+  tools: GroqTool[];
+  tool_name: string;
+}
+
+/**
+ * Call any tier with native function calling.
+ * Returns the raw arguments string — caller does JSON.parse().
+ */
+export async function callWithTools(
+  params: ToolCallParams,
+  tier: 'economy' | 'reasoning' | 'premium' = 'reasoning'
+): Promise<string> {
+  const groqTier = tier === 'economy' ? 'economy' : tier === 'premium' ? 'premium' : 'standard';
+  return callGroqWithTools(
+    {
+      messages: params.messages,
+      temperature: params.temperature,
+      max_tokens: params.max_tokens,
+      tools: params.tools,
+      tool_name: params.tool_name,
+    },
+    groqTier as Parameters<typeof callGroqWithTools>[1]
+  );
+}
+
+// ── Streaming ─────────────────────────────────────────────────────────────────
+
+/**
+ * Stream tokens from the reasoning tier (llama-3.3-70b).
+ * Use for UX-only parallel calls — fail fast, suppress errors at call site.
+ */
+export async function* callReasoningStream(
+  params: Omit<RouterCallParams, 'response_format'>
+): AsyncGenerator<string> {
+  yield* streamGroq(
+    { messages: params.messages, temperature: params.temperature, max_tokens: params.max_tokens },
+    'standard'
+  );
+}
+
+/**
+ * Stream tokens from the economy tier (llama-3.1-8b).
+ * Use for cheap preview text during Agent 4 generation.
+ */
+export async function* callEconomyStream(
+  params: Omit<RouterCallParams, 'response_format'>
+): AsyncGenerator<string> {
+  yield* streamGroq(
+    { messages: params.messages, temperature: params.temperature, max_tokens: params.max_tokens },
+    'economy'
+  );
+}
+
+// ── Claude strategic tier ─────────────────────────────────────────────────────
+
+/**
+ * Strategic — Claude claude-sonnet-4-6.
+ * Agent 3 (Curriculum Builder) and Agent 5 (Recalibrator) when USE_CLAUDE_FOR_* flags are on.
+ * Falls back to callPremium() (Groq 70b) when VITE_ANTHROPIC_API_KEY is not set.
+ */
+export async function callStrategic(params: RouterCallParams): Promise<RouterCompletion> {
+  if (!isClaudeAvailable()) return callPremium(params);
+  const content = await callClaude({
+    messages: params.messages.filter(m => m.role !== 'system').map(m => ({
+      role:    m.role as 'user' | 'assistant',
+      content: m.content,
+    })) as ClaudeMessage[],
+    systemPrompt: params.messages.find(m => m.role === 'system')?.content,
+    temperature:  params.temperature,
+    max_tokens:   params.max_tokens,
+  });
+  return { content, provider: 'claude', model: 'claude-sonnet-4-6' };
+}
+
+/**
+ * Strategic with extended thinking — Claude claude-sonnet-4-6 + thinking block.
+ * Returns `{ content, thinking }` embedded in content as `[THINKING]…[/THINKING]\n{output}`.
+ * Falls back to callStrategic() when VITE_ANTHROPIC_API_KEY is not set.
+ */
+export async function callStrategicWithThinking(
+  params: RouterCallParams & { budgetTokens?: number },
+): Promise<RouterCompletion & { thinking?: string }> {
+  if (!isClaudeAvailable()) {
+    const result = await callPremium(params);
+    return result;
+  }
+  const result: ClaudeThinkingResult = await callClaudeWithThinking({
+    messages: params.messages.filter(m => m.role !== 'system').map(m => ({
+      role:    m.role as 'user' | 'assistant',
+      content: m.content,
+    })) as ClaudeMessage[],
+    systemPrompt: params.messages.find(m => m.role === 'system')?.content,
+    budgetTokens: params.budgetTokens ?? 8000,
+    max_tokens:   params.max_tokens ?? 12000,
+  });
+  return {
+    content:  result.output,
+    thinking: result.thinking,
+    provider: 'claude',
+    model:    'claude-sonnet-4-6',
+  };
+}
+
+/**
+ * Re-export callClaudeWithTools so agents can do tool-use loops through the router.
+ * Only available when VITE_ANTHROPIC_API_KEY is set; throws otherwise.
+ */
+export async function callStrategicWithTools(
+  params: ClaudeToolCallParams,
+) {
+  if (!isClaudeAvailable()) {
+    throw new Error('[AI Router] callStrategicWithTools requires VITE_ANTHROPIC_API_KEY');
+  }
+  return _callClaudeWithTools(params);
 }
 
 // ── Telemetry ─────────────────────────────────────────────────────────────────

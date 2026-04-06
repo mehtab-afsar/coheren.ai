@@ -12,7 +12,7 @@ export interface AgentLogEntry {
   userId?: string;
   goalId?: string;
   agentName: string;
-  runType?: 'onboarding' | 'checkpoint' | 'daily_task' | 'early_recal';
+  runType?: 'onboarding' | 'checkpoint' | 'daily_task' | 'early_recal' | 'micro_recalibration' | 'shadow';
   input?: unknown;
   output?: unknown;
   latencyMs: number;
@@ -21,6 +21,13 @@ export interface AgentLogEntry {
   success: boolean;
   errorMsg?: string;
   metadata?: Record<string, unknown>;
+  // v2 fields (5.8)
+  pipelineId?: string;
+  wave?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  checkpointRestored?: boolean;
+  contextSizeTokens?: number;
 }
 
 const MAX_OUTPUT_BYTES = 10_000;
@@ -64,6 +71,13 @@ export function logAgentRun(entry: AgentLogEntry): void {
     success: entry.success,
     error_msg: entry.errorMsg ?? null,
     metadata: entry.metadata ?? {},
+    // v2 fields
+    pipeline_id: entry.pipelineId ?? null,
+    wave: entry.wave ?? null,
+    input_tokens: entry.inputTokens ?? null,
+    output_tokens: entry.outputTokens ?? null,
+    checkpoint_restored: entry.checkpointRestored ?? false,
+    context_size_tokens: entry.contextSizeTokens ?? null,
   };
 
   Promise.resolve(
@@ -77,16 +91,19 @@ export function logAgentRun(entry: AgentLogEntry): void {
 
 /**
  * Helper to wrap an agent call with automatic logging.
+ * Optional extra param accepts v2 pipeline metadata (pipelineId, wave, checkpointRestored).
  */
 export async function withAgentLogging<T>(
   entry: Omit<AgentLogEntry, 'latencyMs' | 'success' | 'output' | 'errorMsg'>,
-  fn: () => Promise<T>
+  fn: () => Promise<T>,
+  extra?: Pick<AgentLogEntry, 'pipelineId' | 'wave' | 'checkpointRestored'>
 ): Promise<T> {
   const start = performance.now();
   try {
     const result = await fn();
     logAgentRun({
       ...entry,
+      ...extra,
       latencyMs: Math.round(performance.now() - start),
       success: true,
       output: result,
@@ -95,6 +112,7 @@ export async function withAgentLogging<T>(
   } catch (err) {
     logAgentRun({
       ...entry,
+      ...extra,
       latencyMs: Math.round(performance.now() - start),
       success: false,
       errorMsg: err instanceof Error ? err.message : String(err),

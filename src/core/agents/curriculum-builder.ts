@@ -885,28 +885,32 @@ export async function buildCurriculum(
   let behavioralContext = '';
   const stoneTypes   = stoneProfile.stoneProfile.stones.map(s => s.type);
 
-  await Promise.all([
-    (!science ? retrieveKnowledgeSemantic({
-      query: `${g.domain} ${g.goal} skill progression phases milestones daily activities specific`,
-      additionalQueries: [
-        `${primaryStone} ${g.domain} intervention curriculum modification coaching`,
-        `${g.complexity} learner ${g.domain} pedagogical approach evidence-based`,
-      ],
-      boostCategories: [g.domain.toLowerCase(), ...stoneTypes.map(s => s.toLowerCase())],
-      boostKeywords: [g.domain.toLowerCase(), primaryStone.toLowerCase()],
-      matchCount: 6,
-    }).then(s => { science = s; }).catch(() => {}) : Promise.resolve()),
-    (flags.USE_BEHAVIORAL_RAG ? (async () => {
-      try {
-        const { retrieveBehavioralPatterns } = await import('@core/rag');
-        behavioralContext = await retrieveBehavioralPatterns({
-          query:        `${g.domain} ${primaryStone} curriculum learning pattern success`,
-          stoneProfile,
-          domain:       g.domain,
-          matchCount:   2,
-        });
-      } catch { /* non-fatal */ }
-    })() : Promise.resolve()),
+  const ragTimeout = new Promise<void>(resolve => setTimeout(resolve, 10_000));
+  await Promise.race([
+    Promise.all([
+      (!science ? retrieveKnowledgeSemantic({
+        query: `${g.domain} ${g.goal} skill progression phases milestones daily activities specific`,
+        additionalQueries: [
+          `${primaryStone} ${g.domain} intervention curriculum modification coaching`,
+          `${g.complexity} learner ${g.domain} pedagogical approach evidence-based`,
+        ],
+        boostCategories: [g.domain.toLowerCase(), ...stoneTypes.map(s => s.toLowerCase())],
+        boostKeywords: [g.domain.toLowerCase(), primaryStone.toLowerCase()],
+        matchCount: 6,
+      }).then(s => { science = s; }).catch(() => {}) : Promise.resolve()),
+      (flags.USE_BEHAVIORAL_RAG ? (async () => {
+        try {
+          const { retrieveBehavioralPatterns } = await import('@core/rag');
+          behavioralContext = await retrieveBehavioralPatterns({
+            query:        `${g.domain} ${primaryStone} curriculum learning pattern success`,
+            stoneProfile,
+            domain:       g.domain,
+            matchCount:   2,
+          });
+        } catch { /* non-fatal */ }
+      })() : Promise.resolve()),
+    ]),
+    ragTimeout,
   ]);
 
   const behavioralBlock = behavioralContext
@@ -952,9 +956,6 @@ TOOL USE INSTRUCTIONS:
       max_tokens:   12000,
     });
     content = result.finalText;
-    if (result.toolCalls.length > 0) {
-      console.debug(`[Agent 3 tools] ${result.toolCalls.map(t => t.name).join(', ')}`);
-    }
   } else if (flags.USE_CLAUDE_FOR_CURRICULUM) {
     const result = await callStrategicWithThinking({
       messages:     callMessages,
@@ -962,9 +963,6 @@ TOOL USE INSTRUCTIONS:
       max_tokens:   12000,
     });
     content = result.content;
-    if (result.thinking) {
-      console.debug('[Agent 3 thinking]', result.thinking.slice(0, 200) + '…');
-    }
   } else {
     const result = await callReasoning({
       messages:        callMessages,
@@ -976,7 +974,12 @@ TOOL USE INSTRUCTIONS:
   }
   if (!content) throw new Error('Agent 3: No response received from model');
 
-  const raw = JSON.parse(repairJSON(content)) as unknown;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(repairJSON(content)) as unknown;
+  } catch (e) {
+    throw new Error(`Agent 3: invalid JSON — ${(e as Error).message}\nFirst 200 chars: ${content.slice(0, 200)}`);
+  }
   const v2  = validateAndNormalizeV2(raw, context);
 
   // Attach Sprint 1 metadata so buildLegacyAgent3Output can propagate them to Roadmap

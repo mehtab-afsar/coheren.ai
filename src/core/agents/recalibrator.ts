@@ -397,8 +397,11 @@ Your job: analyse a pre-computed performance snapshot and produce a stone-aware,
 
 export async function recalibrateCurriculum(
   input: Agent5Input
-): Promise<Agent5Output> {
+): Promise<Agent5Output | null> {
   const { context, roadmap, stoneProfile, completedTasks, currentDay } = input;
+
+  // Don't generate tasks past the goal completion date
+  if (currentDay >= roadmap.totalDays) return null;
 
   // --- Compress sprint history (no-op when < 28 tasks) ---
   const { recentTasks, snapshot } = await compress(completedTasks, stoneProfile);
@@ -489,7 +492,12 @@ Return JSON only.`;
   });
   if (!response) throw new Error('Agent 5 returned no response');
 
-  const parsed = JSON.parse(response) as Agent5Output;
+  let parsed: Agent5Output;
+  try {
+    parsed = JSON.parse(response) as Agent5Output;
+  } catch (e) {
+    throw new Error(`Agent 5: invalid JSON — ${(e as Error).message}`);
+  }
   return validateAndNormalize(parsed, signals, currentDay, nextStart, nextEnd, sprintNumber);
 }
 
@@ -854,7 +862,12 @@ TOOL USE INSTRUCTIONS:
     response = singleResponse;
   }
 
-  const parsed = JSON.parse(response) as Record<string, unknown>;
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(response) as Record<string, unknown>;
+  } catch (e) {
+    throw new Error(`Agent 5 Weekly: invalid JSON — ${(e as Error).message}`);
+  }
 
   // Normalize checkpointAnalysis
   const ca = (parsed.checkpointAnalysis as Record<string, unknown>) ?? {};

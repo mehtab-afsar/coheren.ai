@@ -150,8 +150,6 @@ export async function runShadowPipeline(options: {
   // Persist to in-memory store only
   shadowStore.set(shadowId, result);
 
-  console.debug(`[ShadowPipeline] Done in ${((performance.now() - startTime) / 1000).toFixed(1)}s — id: ${shadowId}`);
-
   return result;
 }
 

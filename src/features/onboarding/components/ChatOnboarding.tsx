@@ -29,6 +29,15 @@ import { track } from '@lib/analytics';
 
 // Groq client now imported from groq-client.ts with auto-fallback
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms)
+    ),
+  ]);
+}
+
 // Helper function to parse daily time commitment to minutes
 function parseDailyTimeToMinutes(dailyTime: string | unknown): number {
   if (!dailyTime) return 30; // Default 30 minutes
@@ -633,18 +642,22 @@ The system will automatically detect when the data is complete and transition to
 
       // Run Agent 1 & 2 — pass everything from chat so Agent 2 won't re-ask it
       const [agentsResult] = await Promise.all([
-        runOnboardingAgents(
-        collectedData.goal,
-        timelineDays,
-        dailyMinutes,
-        collectedData.behavioralFlags,
-        {
-          skillLevel: collectedData.skillLevel || undefined,
-          energyPattern: collectedData.energyPattern || undefined,
-          category: collectedData.category || undefined,
-          practiceEnvironment: collectedData.practiceEnvironment || undefined,
-        }
-      ),
+        withTimeout(
+          runOnboardingAgents(
+            collectedData.goal,
+            timelineDays,
+            dailyMinutes,
+            collectedData.behavioralFlags,
+            {
+              skillLevel: collectedData.skillLevel || undefined,
+              energyPattern: collectedData.energyPattern || undefined,
+              category: collectedData.category || undefined,
+              practiceEnvironment: collectedData.practiceEnvironment || undefined,
+            }
+          ),
+          30_000,
+          'Goal analysis'
+        ),
         streamCoachVoice(),
       ]);
       // Remove streaming message if nothing was produced
@@ -1004,18 +1017,22 @@ The system will automatically detect when the data is complete and transition to
     try {
 
       // Run Agent 3 & 4 to generate roadmap and first task
-      const { roadmap: agentRoadmap, firstTask, stoneProfile } = await generateCompleteRoadmap(
-        collectedData.goal,
-        timelineDays,
-        dailyMinutes,
-        answers,
-        collectedData.category || undefined,
-        collectedData.skillLevel || 'beginner',
-        collectedData.behavioralFlags,
-        preComputedStoneProfile,
-        undefined,
-        undefined,
-        collectedData.practiceEnvironment || undefined,
+      const { roadmap: agentRoadmap, firstTask, stoneProfile } = await withTimeout(
+        generateCompleteRoadmap(
+          collectedData.goal,
+          timelineDays,
+          dailyMinutes,
+          answers,
+          collectedData.category || undefined,
+          collectedData.skillLevel || 'beginner',
+          collectedData.behavioralFlags,
+          preComputedStoneProfile,
+          undefined,
+          undefined,
+          collectedData.practiceEnvironment || undefined,
+        ),
+        30_000,
+        'Curriculum generation'
       );
 
       // Store agent roadmap for later use (preview + task generation)

@@ -585,6 +585,32 @@ function validateAndNormalize(
     : dailyTimeAvailable;
   const estimatedMinutes = Math.min(rawMin, dailyTimeAvailable);
 
+  // Segments (Learn / Practice / Review blocks)
+  const rawSegments = Array.isArray(task.segments) ? task.segments : [];
+  let segments: import('@types-app/agents').TaskSegment[] | undefined;
+  if (rawSegments.length > 0) {
+    segments = rawSegments.map((s: unknown) => {
+      const seg = (typeof s === 'object' && s !== null ? s : {}) as Record<string, unknown>;
+      return {
+        label:       typeof seg.label       === 'string' ? seg.label       : 'Practice',
+        duration:    typeof seg.duration    === 'number' ? seg.duration    : Math.round(estimatedMinutes / rawSegments.length),
+        description: typeof seg.description === 'string' ? seg.description : '',
+        tip:         typeof seg.tip         === 'string' ? seg.tip         : undefined,
+      };
+    });
+    // Validate segment sum — redistribute if off by > 10%
+    const segSum = segments.reduce((s, seg) => s + seg.duration, 0);
+    if (segSum > 0 && Math.abs(segSum - estimatedMinutes) / estimatedMinutes > 0.10) {
+      const scale = estimatedMinutes / segSum;
+      segments = segments.map((seg, i) => ({
+        ...seg,
+        duration: i === segments!.length - 1
+          ? Math.max(1, estimatedMinutes - segments!.slice(0, -1).reduce((s, sg) => s + Math.max(1, Math.round(sg.duration * scale)), 0))
+          : Math.max(1, Math.round(seg.duration * scale)),
+      }));
+    }
+  }
+
   // coachTips (new) — fall back to tips (old) if present
   const coachTips = Array.isArray(task.coachTips)
     ? (task.coachTips as unknown[]).filter((t): t is string => typeof t === 'string')
@@ -611,6 +637,7 @@ function validateAndNormalize(
       title:           typeof task.title       === 'string' ? task.title       : 'Today\'s Practice',
       description:     typeof task.description === 'string' ? task.description : '',
       estimatedMinutes,
+      segments,
       steps,
       tips: coachTips,
       successCriteria: {
@@ -779,7 +806,12 @@ async function generateAssessmentQuestions(
 
   if (!content) throw new Error('Agent 4 Assessment: No response from model');
 
-  const raw = JSON.parse(repairJSON(content)) as AssessmentLLMOutput;
+  let raw: AssessmentLLMOutput;
+  try {
+    raw = JSON.parse(repairJSON(content)) as AssessmentLLMOutput;
+  } catch (e) {
+    throw new Error(`Agent 4 Assessment: invalid JSON — ${(e as Error).message}`);
+  }
 
   // Validate
   if (!Array.isArray(raw.assessmentQuestions) || raw.assessmentQuestions.length === 0) {
@@ -1046,7 +1078,11 @@ export async function generateTask(
       { messages: callMessages, temperature: 0.5, max_tokens: 2500, tools: [GENERATE_TASK_TOOL], tool_name: 'generate_daily_task' },
       'economy'
     );
-    raw = JSON.parse(args) as unknown;
+    try {
+      raw = JSON.parse(args) as unknown;
+    } catch (e) {
+      throw new Error(`Agent 4 (tool): invalid JSON — ${(e as Error).message}`);
+    }
   } else {
     const { content } = await callEconomy({
       messages: callMessages,
@@ -1055,7 +1091,11 @@ export async function generateTask(
       response_format: { type: 'json_object' },
     });
     if (!content) throw new Error('Agent 4: No response from model');
-    raw = JSON.parse(repairJSON(content)) as unknown;
+    try {
+      raw = JSON.parse(repairJSON(content)) as unknown;
+    } catch (e) {
+      throw new Error(`Agent 4 (reasoning): invalid JSON — ${(e as Error).message}`);
+    }
   }
 
   let result = validateAndNormalize(raw, dayNumber, phase.phaseNumber, week, dailyTimeAvailable);
@@ -1066,6 +1106,22 @@ export async function generateTask(
     result.task.resources = {
       primary: primaryResource,
       supplementary: result.task.resources?.supplementary ?? [],
+    };
+  } else if (!result.task.resources?.primary) {
+    // No validated resource — add a searchable tip so the user isn't left empty-handed
+    const searchTitle = encodeURIComponent(result.task.title);
+    result.task.tips = [
+      ...result.task.tips,
+      `Search YouTube for "${result.task.title}" to find supporting videos and tutorials.`,
+    ];
+    result.task.resources = {
+      primary: null,
+      supplementary: [{
+        type: 'article',
+        title: `Search: ${result.task.title}`,
+        url: `https://www.youtube.com/results?search_query=${searchTitle}`,
+        description: 'Find relevant videos and tutorials for this task.',
+      }],
     };
   }
 

@@ -290,6 +290,11 @@ export async function generateQuestions(
     throw new Error('Agent 2 Mode 1: No response received');
   }
 
-  const raw = JSON.parse(content) as unknown;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(content) as unknown;
+  } catch (e) {
+    throw new Error(`Agent 2 Mode 1 (questions): invalid JSON — ${(e as Error).message}`);
+  }
   return validateOutput(raw, context);
 }

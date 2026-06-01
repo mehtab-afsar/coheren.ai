@@ -381,7 +381,11 @@ Return JSON:
       { messages: callMessages, temperature: 0.2, max_tokens: 1000, tools: [EXTRACT_PRELIMINARY_TOOL], tool_name: 'extract_preliminary_stones' },
       'reasoning'
     );
-    raw = JSON.parse(args) as StoneRound2Output;
+    try {
+      raw = JSON.parse(args) as StoneRound2Output;
+    } catch (e) {
+      throw new Error(`Agent 2 preliminary (tool): invalid JSON — ${(e as Error).message}`);
+    }
   } else {
     const { content } = await callReasoning({
       messages: callMessages,
@@ -390,7 +394,11 @@ Return JSON:
       response_format: { type: 'json_object' },
     });
     if (!content) throw new Error('Agent 2 preliminary extraction: No response');
-    raw = JSON.parse(content) as StoneRound2Output;
+    try {
+      raw = JSON.parse(content) as StoneRound2Output;
+    } catch (e) {
+      throw new Error(`Agent 2 preliminary (reasoning): invalid JSON — ${(e as Error).message}`);
+    }
   }
 
   // Validate preliminary stones
@@ -583,7 +591,11 @@ export async function extractStones(
       { messages: callMessages, temperature: 0.2, max_tokens: 1200, tools: [EXTRACT_STONES_TOOL], tool_name: 'extract_stone_profile' },
       'reasoning'
     );
-    raw = JSON.parse(args) as unknown;
+    try {
+      raw = JSON.parse(args) as unknown;
+    } catch (e) {
+      throw new Error(`Agent 2 Mode 2 (tool): invalid JSON — ${(e as Error).message}`);
+    }
   } else {
     const { content } = await callReasoning({
       messages: callMessages,
@@ -592,7 +604,11 @@ export async function extractStones(
       response_format: { type: 'json_object' },
     });
     if (!content) throw new Error('Agent 2 Mode 2: No response received');
-    raw = JSON.parse(content) as unknown;
+    try {
+      raw = JSON.parse(content) as unknown;
+    } catch (e) {
+      throw new Error(`Agent 2 Mode 2 (reasoning): invalid JSON — ${(e as Error).message}`);
+    }
   }
 
   return validateOutput(raw, enrichment?.readinessProfile, linguisticSignals, changeStage);

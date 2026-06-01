@@ -28,6 +28,14 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 )
 
+window.addEventListener('unhandledrejection', (event) => {
+  if (env.SENTRY_DSN) {
+    Sentry.captureException(event.reason);
+  } else {
+    console.error('[Unhandled rejection]', event.reason);
+  }
+});
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker

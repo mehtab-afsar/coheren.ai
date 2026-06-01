@@ -112,9 +112,14 @@ export default function RoadmapView() {
 
   if (!roadmap && phases.length === 0) {
     return (
-      <div style={{ padding: '40px 0', textAlign: 'center' }}>
-        <Map size={32} color={ap.textTertiary} />
-        <p style={{ color: ap.textTertiary, marginTop: 12, fontSize: 14 }}>No roadmap data yet.</p>
+      <div style={{ padding: '48px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+        <div style={{ width: 56, height: 56, borderRadius: '50%', background: ap.surfaceAlt, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Map size={28} color={ap.textTertiary} />
+        </div>
+        <p style={{ color: ap.textPrimary, fontWeight: 600, fontSize: 16, margin: 0 }}>Your plan isn't ready yet</p>
+        <p style={{ color: ap.textSecondary, fontSize: 14, margin: 0, maxWidth: 280, lineHeight: 1.5 }}>
+          Something went wrong while building your roadmap. Go back to Today and your plan will be generated automatically.
+        </p>
       </div>
     );
   }

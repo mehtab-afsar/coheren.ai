@@ -1078,6 +1078,8 @@ export const useStore = create<AppStore>()(
     }),
     {
       name: 'consist-storage',
+      version: 1,
+      migrate: (persistedState) => persistedState,
     }
   )
 );

@@ -19,6 +19,8 @@
     "supabase:stop": "supabase stop",
     "supabase:restart": "supabase restart",
     "supabase:logs": "supabase logs",
+    "type-check": "tsc --noEmit",
+    "ci": "npm run lint && npm run type-check && npm run test && npm run test:e2e:smoke",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",

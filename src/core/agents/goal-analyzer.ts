@@ -517,7 +517,11 @@ export async function analyzeGoal(context: AgentContext): Promise<Agent1Output> 
       { messages: callMessages, temperature: 0.2, max_tokens: 1500, tools: [ANALYZE_GOAL_TOOL], tool_name: 'analyze_goal' },
       'reasoning'
     );
-    raw = JSON.parse(args) as unknown;
+    try {
+      raw = JSON.parse(args) as unknown;
+    } catch (e) {
+      throw new Error(`Agent 1: invalid JSON from tool call — ${(e as Error).message}`);
+    }
   } else {
     const { content } = await callReasoning({
       messages: callMessages,
@@ -526,7 +530,11 @@ export async function analyzeGoal(context: AgentContext): Promise<Agent1Output> 
       response_format: { type: 'json_object' },
     });
     if (!content) throw new Error('Agent 1: No response received from model');
-    raw = JSON.parse(content) as unknown;
+    try {
+      raw = JSON.parse(content) as unknown;
+    } catch (e) {
+      throw new Error(`Agent 1: invalid JSON from reasoning — ${(e as Error).message}`);
+    }
   }
 
   return validateAndNormalize(raw, context.goal);

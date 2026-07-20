@@ -162,6 +162,89 @@ export async function injectAuthState(page: Page, jwt: string, simUser: SimUser,
   }, { accessToken: jwt, userId: simUser.id, email: simUser.email, authKey: SUPABASE_AUTH_KEY, store: storeState });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers for the REAL onboarding flow (match the production schema exactly).
+// daily_tasks stores task body in a `content` JSONB column; goals use created_at.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ActiveGoalRoadmap {
+  userId: string;
+  goalId: string;
+  roadmapId: string;
+  createdAt: string;
+}
+
+/**
+ * Look up the most recent goal + its roadmap for a user id. Polls because the
+ * onboarding persists the goal/roadmap in a fire-and-forget background write.
+ */
+export async function getActiveGoalRoadmap(userId: string, timeoutMs = 30_000): Promise<ActiveGoalRoadmap | null> {
+  const db = adminClient();
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const { data: goal } = await db
+      .from('user_goals')
+      .select('id, created_at, status')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (goal) {
+      const { data: roadmap } = await db
+        .from('roadmaps')
+        .select('id')
+        .eq('goal_id', goal.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (roadmap) {
+        return { userId, goalId: goal.id, roadmapId: roadmap.id, createdAt: goal.created_at as string };
+      }
+    }
+    await new Promise(r => setTimeout(r, 2_000));
+  }
+  return null;
+}
+
+/** Pin the goal's created_at so App.tsx computes a deterministic currentDay from page.clock. */
+export async function pinGoalCreatedAt(goalId: string, iso: string): Promise<void> {
+  const db = adminClient();
+  await db.from('user_goals').update({ created_at: iso }).eq('id', goalId);
+}
+
+/** Count tasks present for a given day (real schema). */
+export async function countTasksForDay(roadmapId: string, dayNumber: number): Promise<number> {
+  const db = adminClient();
+  const { count } = await db
+    .from('daily_tasks')
+    .select('id', { count: 'exact', head: true })
+    .eq('roadmap_id', roadmapId)
+    .eq('day_number', dayNumber);
+  return count ?? 0;
+}
+
+/** Seed a minimal real-shaped daily_task for a day (fallback when the agent hasn't generated it). */
+export async function seedRealDailyTask(roadmapId: string, userId: string, dayNumber: number, title: string): Promise<void> {
+  const db = adminClient();
+  await db.from('daily_tasks').insert({
+    roadmap_id: roadmapId,
+    user_id: userId,
+    day_number: dayNumber,
+    title,
+    content: {
+      description: 'Continue building your habit today.',
+      type: 'practice',
+      duration: 20,
+      steps: ['Get ready', 'Do the core 20-minute block', 'Note how it felt'],
+      tips: ['Consistency over intensity'],
+      successCriteria: 'Completed the 20-minute block',
+    },
+    is_completed: false,
+    skipped: false,
+  });
+}
+
 /** Build a Zustand store state for a user on day N of their plan. */
 export function buildDayNStoreState(simUser: SimUser, dayNumber: number, extraState?: object) {
   return {

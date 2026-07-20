@@ -942,6 +942,8 @@ The system will automatically detect when the data is complete and transition to
       successCriteria: agentTask.task.successCriteria.primary,
       coachTips: agentTask.task.coachTips ?? [],
       requiresPrep: agentTask.task.requiresPrep,
+      // Carry the study resources so the video shows on Day 1 before any reload.
+      resources: agentTask.task.resources,
     });
 
     const initialTasks = [toStoreTask(firstTask, 1)];

@@ -47,16 +47,11 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
     setAnswers(newAnswers);
 
     if (currentStone.question.type === 'multiple_choice' || currentStone.question.type === 'yes_no') {
-      // Show comment field briefly, auto-advance after 2s if no comment typed
+      // Reveal the optional comment field and focus it. The user advances
+      // explicitly via Enter or the Done button (see on-screen hint) — never
+      // on a timer, so a slow typist is never skipped past their answer.
       setShowCommentFor(currentStone.stoneId);
       setTimeout(() => commentInputRef.current?.focus(), 100);
-
-      autoAdvanceTimerRef.current = setTimeout(() => {
-        const comment = comments[currentStone.stoneId] ?? '';
-        if (!comment.trim()) {
-          doAdvance(newAnswers, comments);
-        }
-      }, 2000);
     }
   };
 

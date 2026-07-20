@@ -263,6 +263,7 @@ export default function CoachThread({ isOpen, onClose }: CoachThreadProps) {
             flexShrink: 0,
           }}>
             <input
+              data-testid="weekly-checkin-input"
               value={checkInInput}
               onChange={e => setCheckInInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleCheckInSend(); } }}

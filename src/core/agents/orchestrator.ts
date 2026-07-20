@@ -397,6 +397,9 @@ export async function runCheckpointRecalibration(
   );
 
 
+  if (!recalibration) {
+    throw new Error('Recalibration returned null');
+  }
   return recalibration;
 }
 

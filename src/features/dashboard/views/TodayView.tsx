@@ -34,7 +34,7 @@ export default function TodayView({
     completionRate,
   } = useStore();
 
-  const { isMobile } = useBreakpoint();
+  const { isMobile, isWide, isXWide } = useBreakpoint();
   const { startSession, updateElapsed, endSession } = useFocusSession();
   const completeTask = useStore((state) => state.completeTask);
   const completeAssessment = useStore((state) => state.completeAssessment);
@@ -797,8 +797,13 @@ export default function TodayView({
           </div>
         )}
 
-        {/* List tasks — always shown */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacing.xl }}>
+        {/* List tasks — responsive grid so secondary tasks fill width on wide screens */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: isXWide ? 'repeat(3, 1fr)' : isWide ? 'repeat(2, 1fr)' : '1fr',
+          gap: tokens.spacing.xl,
+          alignItems: 'start',
+        }}>
           {listTasks.map((task) => {
             const isCompleting = completingTaskId === task.id;
             const hasFocus = hasFocusMode(task);
@@ -857,6 +862,8 @@ export default function TodayView({
                 <div style={{ display: 'flex', gap: tokens.spacing.xl, alignItems: 'flex-start' }}>
                   {/* Checkbox */}
                   <button
+                    data-testid="task-complete-btn"
+                    aria-label={task.completed ? 'Task completed' : 'Complete task'}
                     onClick={e => {
                       e.stopPropagation();
                       if (!task.completed) {
@@ -1008,6 +1015,8 @@ export default function TodayView({
                     {!task.completed && (
                       <div onClick={e => e.stopPropagation()}>
                         <button
+                          data-testid="task-skip-btn"
+                          aria-label="Skip task"
                           onClick={e => handleSkipTask(task.id, e)}
                           disabled={skippingTaskId === task.id}
                           style={{

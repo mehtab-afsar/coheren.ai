@@ -99,6 +99,9 @@ export default function TaskFeedbackModal({
             {MOODS.map(({ emoji, value }) => (
               <button
                 key={value}
+                data-testid="mood-option"
+                data-mood={value}
+                aria-label={`Difficulty ${value}`}
                 onClick={() => setMood(value)}
                 style={{
                   flex: 1, padding: '10px 4px',
@@ -135,6 +138,7 @@ export default function TaskFeedbackModal({
 
           {/* Done button */}
           <button
+            data-testid="feedback-submit"
             onClick={handleSubmit}
             disabled={mood === null}
             style={{

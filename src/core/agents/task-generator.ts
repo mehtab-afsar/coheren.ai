@@ -29,7 +29,8 @@ import type { GroqTool } from '@lib/ai-router';
 import { flags } from '@config/feature-flags';
 import { retrieveKnowledgeSemantic, retrieveKnowledgeHybrid } from '@core/rag/semantic-retriever';
 import { getSimilarTaskPatterns } from '@lib/sprintMemory';
-import { getResourcesForTask } from '@lib/resourceRetriever';
+import { getResourcesForTask, getEmbeddableVideoFallback } from '@lib/resourceRetriever';
+import { isEmbeddableVideoUrl } from '@lib/youtube';
 import { planSession, serializeBlueprint } from './session-planner';
 
 // ─── Stone Delivery Rules ─────────────────────────────────────────────────────
@@ -1100,15 +1101,21 @@ export async function generateTask(
 
   let result = validateAndNormalize(raw, dayNumber, phase.phaseNumber, week, dailyTimeAvailable);
 
-  // Assign primary resource fetched before the LLM call.
-  // The agent was already instructed to reference it — set it on the result now.
-  if (primaryResource) {
+  // Assign the primary resource. Guarantee it is a real, embeddable video so the
+  // study card always plays something — never a dead "Search" link when a library
+  // video exists for this goal.
+  const isEmbeddablePrimary = primaryResource?.type === 'video' && isEmbeddableVideoUrl(primaryResource.url);
+  const embeddable = isEmbeddablePrimary
+    ? primaryResource
+    : (getEmbeddableVideoFallback(goalText ?? result.task.title, dailyTimeAvailable) ?? primaryResource);
+
+  if (embeddable) {
     result.task.resources = {
-      primary: primaryResource,
+      primary: embeddable,
       supplementary: result.task.resources?.supplementary ?? [],
     };
   } else if (!result.task.resources?.primary) {
-    // No validated resource — add a searchable tip so the user isn't left empty-handed
+    // No validated resource anywhere — add a searchable tip so the user isn't left empty-handed
     const searchTitle = encodeURIComponent(result.task.title);
     result.task.tips = [
       ...result.task.tips,
@@ -1121,6 +1128,7 @@ export async function generateTask(
         title: `Search: ${result.task.title}`,
         url: `https://www.youtube.com/results?search_query=${searchTitle}`,
         description: 'Find relevant videos and tutorials for this task.',
+        why: 'No validated resource was found — use this search to discover supporting materials.',
       }],
     };
   }

@@ -161,9 +161,9 @@ export default function ProgressView() {
   void totalWeeks; // used in checkpoint logic
 
   const nextCheckpointDay = Array.from({ length: 200 }, (_, i) => i + currentDay + 1)
-    .find(d => shouldTriggerCheckpoint(d, 14)) ?? (currentDay + 14);
+    .find(d => shouldTriggerCheckpoint(d, 7)) ?? (currentDay + 7);
   const daysToCheckpoint = nextCheckpointDay - currentDay;
-  const checkpointToday = shouldTriggerCheckpoint(currentDay, 14);
+  const checkpointToday = shouldTriggerCheckpoint(currentDay, 7);
 
   // Coach message type display
   const coachTypeLabels: Record<string, string> = {

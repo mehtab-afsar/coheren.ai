@@ -4,7 +4,7 @@ import type { OnboardingState, GoalCategory } from '@types-app/index.js';
 import { generateTasksForDay, generateTasksFromAIPlan } from '@shared/utils/taskGenerator.js';
 import type { User } from '@supabase/supabase-js';
 import { getCurrentUser } from '@lib/supabase';
-import { updateTaskCompletion, updateTaskSkip, updateProfile, saveTaskFeedback, syncDailyTasksToDB, deleteUserData } from '@lib/database';
+import { updateTaskCompletion, updateTaskSkip, updateProfile, saveTaskFeedback, syncDailyTasksToDB, deleteUserData, calculateStreak } from '@lib/database';
 import type { Agent3Output, Agent2ProfileOutput, DailyTask, TaskStep, AssessmentQuestion, AssessmentResult } from '@types-app/agents.js';
 import { runTaskGenerator } from '@core/agents';
 import { callEconomyStream } from '@lib/ai-router';
@@ -163,6 +163,8 @@ interface WeekPerformance {
 }
 
 interface Roadmap {
+  /** DB roadmap row id — used to recompute the authoritative streak from the calendar. */
+  id?: string;
   title: string;
   category: GoalCategory;
   duration: number;
@@ -237,6 +239,8 @@ interface AppStore extends OnboardingState {
   skipTask: (taskId: string, reason?: 'time' | 'health' | 'difficulty' | 'external') => Promise<void>;
   canAdvanceDay: () => boolean;
   advanceDay: () => boolean;
+  /** Recompute currentDay from the calendar (roadmap.startDate). The single writer of currentDay besides boot. */
+  syncCalendarDay: () => void;
   generateNextDayTasks: () => void;
   pregenerateTasksForDay: (day: number) => Promise<void>;
   /** Speculative variant selection — keyed by day number (Item 7). */
@@ -387,28 +391,38 @@ export const useStore = create<AppStore>()(
             ? (completedToday / todaysTasks.length) * 100
             : 0;
 
-          // Update streak if all today's tasks are done
-          const allDone = todaysTasks.length > 0 && todaysTasks.every((t) => t.completed);
-          const newStreak = allDone ? state.streak + 1 : state.streak;
-
-          // Fire streak milestone analytics
-          if (newStreak > state.streak && ([7, 14, 30, 60] as number[]).includes(newStreak)) {
-            track({ event: 'streak_milestone', properties: { streak: newStreak, milestone: newStreak as 7 | 14 | 30 | 60 } });
-          }
-
-          // Update streak in profile if user is authenticated
-          if (state.user && newStreak > state.streak) {
-            updateProfile(state.user.id, {
-              persona_traits: {
-                ...(state.universalProfile as Record<string, unknown>),
-                streak: newStreak,
-                lastCheckIn: new Date().toISOString()
-              }
-            }).catch(err => console.error('Failed to update streak:', err));
-          }
-
-          return { tasks, completionRate, streak: newStreak };
+          // NOTE: streak is NOT incremented here. It is calendar-based and the DB
+          // (calculateStreak) is the single source of truth — recomputed below.
+          return { tasks, completionRate };
         });
+
+        // Recompute the authoritative, calendar-based streak from the DB.
+        const post = get();
+        const roadmapId = post.roadmap?.id;
+        const todaysTasks = post.tasks.filter((t) => t.day === post.currentDay);
+        const allDone = todaysTasks.length > 0 && todaysTasks.every((t) => t.completed);
+        if (allDone && roadmapId) {
+          try {
+            const freshStreak = await calculateStreak(roadmapId);
+            const prevStreak = post.streak;
+            set({ streak: freshStreak });
+
+            if (freshStreak > prevStreak && ([7, 14, 30, 60] as number[]).includes(freshStreak)) {
+              track({ event: 'streak_milestone', properties: { streak: freshStreak, milestone: freshStreak as 7 | 14 | 30 | 60 } });
+            }
+            if (post.user && freshStreak !== prevStreak) {
+              updateProfile(post.user.id, {
+                persona_traits: {
+                  ...(post.universalProfile as Record<string, unknown>),
+                  streak: freshStreak,
+                  lastCheckIn: new Date().toISOString(),
+                },
+              }).catch(err => console.error('Failed to update streak:', err));
+            }
+          } catch (err) {
+            console.error('Failed to recompute streak:', err);
+          }
+        }
       },
 
       setTaskFeedback: async (taskId, difficultyRating, feedbackTags, userComment, actualDuration) => {
@@ -548,26 +562,40 @@ export const useStore = create<AppStore>()(
         const today = new Date().toISOString().split('T')[0];
         const state = get();
 
-        // Track weekly performance when completing week 7, 14, 21, etc.
-        const currentWeek = Math.ceil(state.currentDay / 7);
-        const nextDay = state.currentDay + 1;
-        const nextWeek = Math.ceil(nextDay / 7);
+        // Track weekly performance when crossing a week boundary.
+        // The day number itself is derived from the calendar (syncCalendarDay) —
+        // never incremented by hand — so a reload can't fight it.
+        const beforeWeek = Math.ceil(state.currentDay / 7);
 
-        if (nextWeek > currentWeek) {
-          // Completed a week, track performance
+        set({ lastCheckInDate: today, completionRate: 0 });
+        get().syncCalendarDay();
+
+        const afterWeek = Math.ceil(get().currentDay / 7);
+        if (afterWeek > beforeWeek) {
           get().trackWeekPerformance();
         }
 
-        set((state) => ({
-          currentDay: state.currentDay + 1,
-          lastCheckInDate: today,
-          completionRate: 0 // Reset completion rate for new day
-        }));
-
-        // Generate next day's tasks
+        // Generate the (new) current day's tasks if not present
         get().generateNextDayTasks();
 
         return true;
+      },
+
+      syncCalendarDay: () => {
+        const state = get();
+        const startDate = state.roadmap?.startDate;
+        if (!startDate) return;
+        // Total days is unit-ambiguous on roadmap.duration: the onboarding path stores
+        // it in MONTHS while App.tsx's DB-load stores it in DAYS. agentRoadmapV2.totalDays
+        // is always in days, so prefer it; otherwise treat small values (≤ 24) as months.
+        const rawDur = state.roadmap?.duration ?? 0;
+        const durationDays = state.agentRoadmapV2?.totalDays
+          ?? (rawDur > 0 ? (rawDur <= 24 ? rawDur * 30 : rawDur) : 365);
+        const daysSinceStart = Math.floor((Date.now() - new Date(startDate).getTime()) / 86400000);
+        const calendarDay = Math.min(Math.max(daysSinceStart + 1, 1), durationDays);
+        if (calendarDay !== state.currentDay) {
+          set({ currentDay: calendarDay });
+        }
       },
 
       completeAssessment: (taskId, results) => {

@@ -83,6 +83,7 @@ export default function CheckpointScreen({
 
   return (
     <motion.div
+      data-testid="checkpoint-screen"
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
@@ -191,6 +192,7 @@ export default function CheckpointScreen({
               </span>
             </div>
             <input
+              data-testid="checkpoint-confidence"
               type="range" min="1" max="10" value={confidence}
               onChange={e => setConfidence(parseInt(e.target.value))}
               style={{ width: '100%', height: 6, borderRadius: 99, cursor: 'pointer',
@@ -212,6 +214,8 @@ export default function CheckpointScreen({
               {TIME_OPTIONS.map(({ value, label }) => (
                 <button
                   key={value}
+                  data-testid="checkpoint-time"
+                  data-value={value}
                   onClick={() => setTimeManagement(value)}
                   style={{
                     padding: '9px 4px', borderRadius: 10, fontSize: 12, fontWeight: 500, cursor: 'pointer',
@@ -251,6 +255,7 @@ export default function CheckpointScreen({
 
       {/* CTA */}
       <button
+        data-testid="checkpoint-submit"
         onClick={recalibrationResult ? handleSubmit : handleSubmit}
         disabled={isRecalibrating}
         style={{

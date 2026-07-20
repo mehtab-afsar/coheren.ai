@@ -14,8 +14,40 @@ import { supabase } from './supabase';
 import { embedQuery } from './jina-client';
 import { env } from '@config/env';
 import { getResourcesForGoal } from './resourceLibrary';
+import { timeToSeconds, minutesToTimestamp, isEmbeddableVideoUrl } from './youtube';
 import type { TaskResource } from '@types-app/agents';
 import type { ResourceLink } from './resourceLibrary';
+
+/**
+ * The user only has so many minutes to study. The "Learn" portion of a session is
+ * ~40% of the daily budget, so cap the watch window to that. Returns a clamped budget.
+ */
+function watchBudgetFor(dailyMinutes: number): number {
+  const raw = Math.round((dailyMinutes || 30) * 0.4);
+  return Math.max(5, Math.min(raw, dailyMinutes || 30));
+}
+
+/**
+ * Attach a crop window sized to the watch budget. If the resource is longer than the
+ * budget, set watchFrom/watchTo so ResourceCard plays a brief, sized clip and labels it.
+ * `lengthMin` is the resource's full length in minutes (null/0 = unknown).
+ */
+function withWatchWindow(resource: TaskResource, lengthMin: number | null, watchBudget: number): TaskResource {
+  if (!lengthMin || lengthMin <= 0) {
+    // Unknown length — still communicate the planned watch time.
+    return { ...resource, watchMinutes: watchBudget };
+  }
+  if (lengthMin > watchBudget) {
+    return {
+      ...resource,
+      watchFrom: '0:00',
+      watchTo: minutesToTimestamp(watchBudget),
+      watchMinutes: watchBudget,
+    };
+  }
+  // Already short enough — watch the whole thing.
+  return { ...resource, watchMinutes: Math.round(lengthMin) };
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -135,7 +167,10 @@ export async function getResourcesForTask(
     );
 
     const candidates = fitting.length > 0 ? fitting : rows;
-    const [primary, ...rest] = candidates.map(mapToTaskResource);
+    const watchBudget = watchBudgetFor(params.durationAvailable);
+    const [primary, ...rest] = candidates.map(row =>
+      withWatchWindow(mapToTaskResource(row), row.duration_minutes, watchBudget)
+    );
 
     return {
       primary:       primary ?? null,
@@ -146,6 +181,24 @@ export async function getResourcesForTask(
   }
 }
 
+/**
+ * Find a guaranteed-embeddable YouTube video for a goal from the static library,
+ * sized to the daily budget. Used as a last resort so the study card always has a
+ * real, playable video rather than a dead "Search" link.
+ */
+export function getEmbeddableVideoFallback(goalText: string, dailyMinutes: number): TaskResource | null {
+  const watchBudget = watchBudgetFor(dailyMinutes);
+  // Try the goal text first; if it matches no category (e.g. an unusual goal),
+  // fall back to an evergreen "study/learning" video so the card is never empty.
+  const links = getResourcesForGoal(goalText);
+  const fitting = links.find(l => l.type === 'video' && isEmbeddableVideoUrl(l.url));
+  const evergreen = fitting ? null : getResourcesForGoal('study').find(l => l.type === 'video' && isEmbeddableVideoUrl(l.url));
+  const videoLink = fitting ?? evergreen;
+  if (!videoLink) return null;
+  const lengthMin = videoLink.duration ? Math.round(timeToSeconds(videoLink.duration) / 60) : null;
+  return withWatchWindow(resourceLinkToTaskResource(videoLink), lengthMin, watchBudget);
+}
+
 function staticFallback(
   params: ResourceRetrievalParams,
 ): { primary: TaskResource | null; supplementary: TaskResource[] } {
@@ -154,7 +207,11 @@ function staticFallback(
 
   if (links.length === 0) return { primary: null, supplementary: [] };
 
-  const [first, ...rest] = links.map(resourceLinkToTaskResource);
+  const watchBudget = watchBudgetFor(params.durationAvailable);
+  const [first, ...rest] = links.map(link => {
+    const lengthMin = link.duration ? Math.round(timeToSeconds(link.duration) / 60) : null;
+    return withWatchWindow(resourceLinkToTaskResource(link), lengthMin, watchBudget);
+  });
   return {
     primary:       first ?? null,
     supplementary: rest.slice(0, 2),

@@ -76,8 +76,6 @@ export async function runShadowPipeline(options: {
 
   const { input } = options;
   const shadowId = crypto.randomUUID();
-  const startTime = performance.now();
-
   const context: AgentContext = {
     userId: 'shadow',
     goal: input.goal,

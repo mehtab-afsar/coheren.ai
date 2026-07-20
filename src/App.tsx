@@ -58,9 +58,13 @@ function App() {
         // Always read live step (not stale closure) to avoid token-refresh reset
         const liveStep = useStore.getState().step;
         const liveTasks = useStore.getState().tasks;
+        const liveGoalId = (useStore.getState().currentGoal as { id?: string } | null)?.id;
 
-        // If already on dashboard with data loaded, skip re-fetching (handles token refreshes)
-        if (liveStep === 2 && liveTasks.length > 0) {
+        // If already on dashboard with data AND the DB ids are hydrated, skip re-fetching
+        // (handles token refreshes). If currentGoal.id is missing — e.g. right after the
+        // value-first onboarding — fall through to the full load so the calendar day,
+        // roadmap.id and currentGoal.id all get reconciled from the DB.
+        if (liveStep === 2 && liveTasks.length > 0 && liveGoalId) {
           return;
         }
 
@@ -107,6 +111,7 @@ function App() {
             const endDate = new Date(new Date(startDate).getTime() + durationDays * 86400000).toISOString();
 
             const roadmapForStore = {
+              id: roadmapRow.id,
               title: goals.title,
               // Map description keywords to valid GoalCategory for task generation
               category: (() => {
@@ -171,8 +176,10 @@ function App() {
             // Calculate streak from DB
             const streak = await calculateStreak(roadmapRow.id).catch(() => 0);
 
-            // Load currentGoal into store
+            // Load currentGoal into store. The id is required for the weekly
+            // checkpoint (useCheckpoint reads currentGoal.id to fetch sprint feedback).
             const currentGoal = {
+              id: goals.id,
               category: roadmapForStore.category,
               specificGoal: goals.description ?? '',
             };

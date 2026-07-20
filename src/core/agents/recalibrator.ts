@@ -561,7 +561,7 @@ function validateAndNormalize(
 /**
  * Determine if a checkpoint should trigger (every N days)
  */
-export function shouldTriggerCheckpoint(currentDay: number, checkpointInterval: number = 14): boolean {
+export function shouldTriggerCheckpoint(currentDay: number, checkpointInterval: number = 7): boolean {
   return currentDay > 0 && currentDay % checkpointInterval === 0;
 }
 

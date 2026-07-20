@@ -73,12 +73,12 @@ export function useCheckpoint() {
           const goalId = (currentGoal as { id?: string }).id;
           if (!goalId) return;
 
-          // Fetch last 14 days of feedback
-          const recentFeedback = await getRecentFeedback(goalId, 14);
+          // Fetch the last sprint's feedback (weekly = 7 days)
+          const recentFeedback = await getRecentFeedback(goalId, CHECKPOINT_INTERVAL);
 
           // Calculate performance metrics
           const completedCount = recentFeedback.filter(f => f.completion_status === 'completed').length;
-          const totalTasks = 14;
+          const totalTasks = CHECKPOINT_INTERVAL;
           const avgDifficulty = recentFeedback.length > 0
             ? recentFeedback.reduce((sum, f) => sum + f.difficulty_score, 0) / recentFeedback.length
             : 3;

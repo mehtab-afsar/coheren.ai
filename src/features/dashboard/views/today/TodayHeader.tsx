@@ -45,7 +45,7 @@ export default function TodayHeader({
       </h1>
 
       {/* Context line — Day · Week · Phase */}
-      <p style={{
+      <p data-testid="today-context" style={{
         fontFamily: 'var(--c-font-body)',
         fontSize: 13,
         fontWeight: 400,

@@ -64,20 +64,20 @@
     --c-text-secondary: #444444;
     --c-text-tertiary:  #888888;
     --c-text-quaternary: #bbbbbb;
-    --c-text-accent:    #667eea;
+    --c-text-accent:    #7c3aed;
 
     /* Accent palette */
-    --c-accent-purple:      #667eea;
-    --c-accent-purple-soft: rgba(102, 126, 234, 0.10);
-    --c-accent-purple-border: rgba(102, 126, 234, 0.25);
+    --c-accent-purple:      #7c3aed;
+    --c-accent-purple-soft: rgba(124, 58, 237, 0.10);
+    --c-accent-purple-border: rgba(124, 58, 237, 0.25);
     --c-accent-blue:   #4a90e2;
     --c-accent-green:  #22c55e;
     --c-accent-amber:  #f59e0b;
     --c-accent-red:    #ef4444;
 
     /* Gradients */
-    --c-gradient-purple: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    --c-gradient-blue:   linear-gradient(135deg, #4a90e2 0%, #667eea 100%);
+    --c-gradient-purple: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+    --c-gradient-blue:   linear-gradient(135deg, #4a90e2 0%, #7c3aed 100%);
     --c-gradient-green:  linear-gradient(135deg, #22c55e 0%, #4a90e2 100%);
     --c-gradient-soft:   linear-gradient(180deg, rgba(102, 126, 234, 0.02) 0%, rgba(255, 255, 255, 0) 100%);
 

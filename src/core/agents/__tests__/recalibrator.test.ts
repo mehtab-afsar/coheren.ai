@@ -222,19 +222,19 @@ describe('computeSignals — signal field correctness', () => {
 // ─── shouldTriggerCheckpoint ─────────────────────────────────────────────────
 
 describe('shouldTriggerCheckpoint', () => {
-  it('returns true on multiples of the default interval (14)', () => {
+  it('returns true on multiples of the default interval (7 — weekly)', () => {
+    expect(shouldTriggerCheckpoint(7)).toBe(true);
     expect(shouldTriggerCheckpoint(14)).toBe(true);
-    expect(shouldTriggerCheckpoint(28)).toBe(true);
-    expect(shouldTriggerCheckpoint(42)).toBe(true);
+    expect(shouldTriggerCheckpoint(21)).toBe(true);
     expect(shouldTriggerCheckpoint(84)).toBe(true);
   });
 
   it('returns false on non-multiples', () => {
     expect(shouldTriggerCheckpoint(1)).toBe(false);
-    expect(shouldTriggerCheckpoint(7)).toBe(false);
+    expect(shouldTriggerCheckpoint(6)).toBe(false);
+    expect(shouldTriggerCheckpoint(8)).toBe(false);
     expect(shouldTriggerCheckpoint(13)).toBe(false);
-    expect(shouldTriggerCheckpoint(15)).toBe(false);
-    expect(shouldTriggerCheckpoint(27)).toBe(false);
+    expect(shouldTriggerCheckpoint(20)).toBe(false);
   });
 
   it('returns false for day 0', () => {

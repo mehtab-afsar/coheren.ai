@@ -168,6 +168,11 @@ export default function FocusCard({
         padding: isMobile ? '24px 20px' : '32px 28px',
         marginBottom: 16,
         boxShadow: 'var(--c-shadow-raised)',
+        // Keep the focus/study card a comfortable reading width even on wide screens
+        // (a full-width embedded video would be oversized); the task grid below fills the page.
+        maxWidth: isMobile ? '100%' : 960,
+        marginLeft: 'auto',
+        marginRight: 'auto',
       }}
     >
       {/* ── Section label + streak ── */}
@@ -476,6 +481,8 @@ export default function FocusCard({
         gap: 8,
       }}>
         <button
+          data-testid="task-complete-btn"
+          aria-label="Mark task done"
           onClick={() => onMarkDone(task)}
           disabled={isCompleting}
           onMouseEnter={() => setDoneHover(true)}

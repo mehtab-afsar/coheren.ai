@@ -70,7 +70,7 @@ export const dt = {
 
 // ── Resolved raw values (use where CSS variables aren't supported, e.g. Framer Motion) ──
 export const dtRaw = {
-  accentPurple: '#667eea',
+  accentPurple: '#7c3aed',
   accentBlue:   '#4a90e2',
   accentGreen:  '#51cf66',
   accentAmber:  '#ffa94d',

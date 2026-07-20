@@ -96,7 +96,7 @@ function computeStats(logs: AgentLogRow[]): AgentStats[] {
 export default function AgentHealthDashboard() {
   const user = useStore(s => s.user);
   const roadmap = useStore(s => s.roadmap);
-  const agentRoadmap = useStore(s => s.agentRoadmap);
+  const agentRoadmapV2 = useStore(s => s.agentRoadmapV2);
   const currentGoal = useStore(s => s.currentGoal) as { specificGoal?: string; category?: string } | null;
 
   const [logs, setLogs] = useState<AgentLogRow[]>([]);
@@ -161,8 +161,8 @@ export default function AgentHealthDashboard() {
         },
       });
 
-      // Build live AgentRoadmapV2 from store
-      const liveRoadmapV2 = (agentRoadmap as unknown as import('@core/store/useStore').AgentRoadmapV2 | null);
+      // Compare against the canonical V2 roadmap (not the legacy agentRoadmap)
+      const liveRoadmapV2 = agentRoadmapV2;
       if (liveRoadmapV2 && Array.isArray(liveRoadmapV2.months)) {
         setDiffReport(diffRoadmaps(liveRoadmapV2, result.roadmap));
       } else {

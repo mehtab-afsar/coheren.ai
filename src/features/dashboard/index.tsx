@@ -235,10 +235,14 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* Page content */}
+        {/* Page content — fills available width up to a comfortable max; views lay
+            out multi-column on wide screens so there's no dead gutter space.
+            Today uses the widest canvas (task grid); reading-heavy views use a
+            slightly tighter max so single-column content doesn't over-stretch. */}
         <div style={{
-          maxWidth: 780, margin: '0 auto',
-          padding: isMobile ? '20px 16px' : '28px 36px',
+          maxWidth: currentView === 'today' ? 1280 : 1120,
+          margin: '0 auto',
+          padding: isMobile ? '20px 16px' : '28px 40px',
           animation: 'apFadeIn 0.3s ease',
         }}>
           {/* Difficulty prompt — inline coach card (only on Today view) */}

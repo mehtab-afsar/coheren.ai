@@ -114,21 +114,21 @@ export function expireStaleCheckpoints(): void {
 /**
  * Check if a given day is a checkpoint day
  */
-export function isCheckpointDay(dayNumber: number, checkpointInterval: number = 14): boolean {
+export function isCheckpointDay(dayNumber: number, checkpointInterval: number = 7): boolean {
   return dayNumber > 0 && dayNumber % checkpointInterval === 0;
 }
 
 /**
  * Get the next checkpoint day
  */
-export function getNextCheckpointDay(currentDay: number, checkpointInterval: number = 14): number {
+export function getNextCheckpointDay(currentDay: number, checkpointInterval: number = 7): number {
   return Math.ceil(currentDay / checkpointInterval) * checkpointInterval;
 }
 
 /**
  * Get which sprint number this checkpoint belongs to
  */
-export function getSprintNumber(checkpointDay: number, checkpointInterval: number = 14): number {
+export function getSprintNumber(checkpointDay: number, checkpointInterval: number = 7): number {
   return checkpointDay / checkpointInterval;
 }
 
@@ -290,7 +290,7 @@ export function shouldTriggerRecalibration(
   dayNumber: number,
   avgDifficulty: number,
   completionRate: number,
-  checkpointInterval: number = 14
+  checkpointInterval: number = 7
 ): boolean {
   // Always trigger at checkpoint days
   if (isCheckpointDay(dayNumber, checkpointInterval)) {

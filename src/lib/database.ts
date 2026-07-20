@@ -124,7 +124,7 @@ export async function createRoadmap(goalId: string, roadmap: Agent3Output, stone
       phases: roadmap.roadmap.phases,   // store the phases array directly
       config: {
         pedagogical_principles: 'scaffolding, progressive_overload, spacing_effect',
-        checkpoint_interval: 14,
+        checkpoint_interval: 7,
         domain_pedagogy: roadmap.domainPedagogy ?? null,
         total_weeks: roadmap.roadmap.phases?.reduce((acc: number, p: { weeks: number[] }) => acc + (p.weeks?.length ?? 0), 0) ?? null,
         // Full agent outputs for cross-device restore
@@ -270,6 +270,7 @@ export async function saveTasks(roadmapId: string, tasks: Array<Record<string, u
       tips: task.tips || [],
       successCriteria: task.successCriteria,
       scheduledFor: task.scheduledFor,
+      segments: task.segments || [],
       resources: task.resources || null,
     },
     is_completed: task.completed || false,
@@ -639,6 +640,7 @@ export async function syncDailyTasksToDB(
     tips?: string[];
     successCriteria?: string;
     scheduledFor?: string;
+    segments?: unknown;
     resources?: unknown;
     completed?: boolean;
     skipped?: boolean;
@@ -663,6 +665,7 @@ export async function syncDailyTasksToDB(
       tips: t.tips || [],
       successCriteria: t.successCriteria,
       scheduledFor: t.scheduledFor,
+      segments: t.segments || [],
       resources: t.resources || null,
     },
     is_completed: t.completed || false,

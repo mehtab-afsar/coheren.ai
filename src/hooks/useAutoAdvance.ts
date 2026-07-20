@@ -22,7 +22,7 @@ function maybePregenerateNext() {
 }
 
 export function useAutoAdvance() {
-  const { canAdvanceDay, advanceDay } = useStore();
+  const { syncCalendarDay } = useStore();
 
   useEffect(() => {
     const STORAGE_KEY = 'coheren_last_active_date';
@@ -31,8 +31,10 @@ export function useAutoAdvance() {
 
     if (lastActiveDate && lastActiveDate !== today) {
       const missed = daysBetween(lastActiveDate, today);
-      if (missed >= 1 && canAdvanceDay()) {
-        advanceDay();
+      if (missed >= 1) {
+        // Calendar is the source of truth — recompute the absolute day, which
+        // correctly accounts for any number of missed days.
+        syncCalendarDay();
         maybePregenerateNext();
       }
     }
@@ -45,10 +47,8 @@ export function useAutoAdvance() {
         const nowDate = new Date().toISOString().split('T')[0];
         const stored = localStorage.getItem(STORAGE_KEY);
         if (stored && stored !== nowDate) {
-          if (canAdvanceDay()) {
-            advanceDay();
-            maybePregenerateNext();
-          }
+          syncCalendarDay();
+          maybePregenerateNext();
           localStorage.setItem(STORAGE_KEY, nowDate);
         }
       }

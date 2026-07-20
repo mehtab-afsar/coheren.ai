@@ -14,6 +14,8 @@ export default defineConfig({
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    // Never let a single action hang forever (default is 0 = unlimited).
+    actionTimeout: 15_000,
     // Suppress console noise in tests
     bypassCSP: true,
   },

@@ -21,6 +21,7 @@ import type { Agent1Output, AgentContext, GoalClarificationOutput } from '@types
 import { callReasoning, callWithTools } from '@lib/ai-router';
 import type { GroqTool } from '@lib/ai-router';
 import { flags } from '@config/feature-flags';
+import { assessFeasibility } from './feasibility';
 
 const SYSTEM_PROMPT = `You are Agent 1: Goal Analyzer — a precision intelligence module.
 
@@ -310,7 +311,11 @@ export function buildClarifications(analysis: Agent1Output): GoalClarificationOu
     g.realismChecks.timeRealism === 'Unrealistic' ||
     g.realismChecks.effortRealism === 'Unrealistic';
 
-  // Build reality check if timeline/effort is flagged as unrealistic
+  // Build reality check if timeline/effort is flagged as unrealistic.
+  // When the deterministic feasibility anchor is present, lead with its real numbers
+  // (hours you have vs hours typically needed) + a concrete rescope, instead of the
+  // soft LLM "typical timeline" sentence.
+  const fa = g.feasibility;
   const realityCheck = realismUnrealistic
     ? {
         triggered: true,
@@ -319,8 +324,12 @@ export function buildClarifications(analysis: Agent1Output): GoalClarificationOu
           g.realismChecks.timeRealism === 'Unrealistic'
             ? 'Your timeline looks very aggressive'
             : 'The effort required may exceed your current plan',
-        detail: `Based on typical progress for ${g.category}, ${g.typicalTimeline.realistic} is usually needed. Your plan targets ${g.horizon.toLowerCase()}.`,
-        suggestedAdjustment: `We'll focus on solid fundamentals first and adjust milestones so you see real progress every week.`,
+        detail: fa
+          ? `At this pace you'll have ~${fa.availableHours}h before your deadline. Basic competence in ${fa.skillLabel} usually takes ~${fa.requiredHours}h — about ${Math.max(1, Math.round(fa.requiredHours / Math.max(1, fa.availableHours)))}× more than you've allowed.`
+          : `Based on typical progress for ${g.category}, ${g.typicalTimeline.realistic} is usually needed. Your plan targets ${g.horizon.toLowerCase()}.`,
+        suggestedAdjustment: fa?.rescopedGoalSuggestion
+          ? `A realistic first target: ${fa.rescopedGoalSuggestion}. We'll build toward that and expand once it's in reach.`
+          : `We'll focus on solid fundamentals first and adjust milestones so you see real progress every week.`,
         typicalTimeline: g.typicalTimeline.realistic,
       }
     : null;
@@ -537,5 +546,34 @@ export async function analyzeGoal(context: AgentContext): Promise<Agent1Output> 
     }
   }
 
-  return validateAndNormalize(raw, context.goal);
+  const output = validateAndNormalize(raw, context.goal);
+  return applyFeasibilityAnchor(output, context);
+}
+
+/**
+ * Overlay a deterministic time-to-competence anchor on the LLM's realism opinion.
+ *
+ * The LLM's `timeRealism` is a mood at temperature 0.2; this computes hours available
+ * (days × minutes) vs a coarse hours-to-competence anchor and can only *tighten* the
+ * verdict, never loosen it — if the math says the timeline is a fantasy, we force
+ * `timeRealism='Unrealistic'` regardless of what the model said, and attach the real
+ * numbers + a concrete rescope so the onboarding reality-check can show them.
+ */
+function applyFeasibilityAnchor(output: Agent1Output, context: AgentContext): Agent1Output {
+  const g = output.goalAnalysis;
+  const feasibility = assessFeasibility({
+    goalText: context.goal,
+    timelineDays: context.timeline,
+    dailyMinutes: context.dailyTimeAvailable,
+  });
+  g.feasibility = feasibility;
+
+  // The anchor can only make the verdict stricter, never softer.
+  if (feasibility.verdict === 'unrealistic') {
+    g.realismChecks.timeRealism = 'Unrealistic';
+  } else if (feasibility.verdict === 'tight' && g.realismChecks.timeRealism === 'Realistic') {
+    g.realismChecks.timeRealism = 'Optimistic';
+  }
+
+  return output;
 }

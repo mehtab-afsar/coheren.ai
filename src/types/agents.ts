@@ -64,6 +64,20 @@ export interface RealismChecks {
   effortRealism: RealismLevel;
 }
 
+/**
+ * Deterministic time-to-competence feasibility (computed in code, not LLM-opined).
+ * See src/core/agents/feasibility.ts. Attached to GoalAnalysis so the onboarding
+ * reality-check can show real numbers + a concrete rescope.
+ */
+export interface FeasibilityAnchor {
+  availableHours: number;
+  requiredHours: number;
+  ratio: number;
+  verdict: 'comfortable' | 'tight' | 'unrealistic';
+  skillLabel: string;
+  rescopedGoalSuggestion?: string;
+}
+
 export interface GoalAnalysis {
   // Core classification
   goal: string;                   // Normalized goal statement
@@ -84,6 +98,9 @@ export interface GoalAnalysis {
 
   // Realism assessment
   realismChecks: RealismChecks;
+
+  /** Deterministic time-to-competence anchor (code-computed; overrides timeRealism when unrealistic). */
+  feasibility?: FeasibilityAnchor;
 
   // Extracted constraints and risks
   constraintsDetected: string[];  // e.g. "working full-time", "no gym access"
@@ -145,6 +162,8 @@ export interface Stone {
   trigger: string;         // What specifically causes this stone e.g. "momentum drops at week 2"
   severity: StoneSeverity;
   riskImpact: number;      // 0–1: how damaging this stone is to goal success
+  /** true when severity came from a validated scale (measured), not LLM inference. See scales.ts. */
+  measured?: boolean;
 }
 
 export interface StoneProfile {

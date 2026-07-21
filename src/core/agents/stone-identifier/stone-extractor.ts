@@ -27,6 +27,7 @@ import { flags } from '@config/feature-flags';
 import { STONE_DESCRIPTIONS, STONE_TO_CATEGORY, ALL_STONE_TYPES } from './stone-taxonomy';
 import { aggregateLinguisticSignals, linguisticSignalsToStonePriors } from './linguistic-analyzer';
 import { interpretReadiness } from './interview-engine';
+import { lowConfidenceSeverityFromRuler } from './scales';
 
 // ─── Tool Schemas ─────────────────────────────────────────────────────────────
 
@@ -314,6 +315,21 @@ function validateOutput(
   if (readinessProfile)  p.readinessProfile  = readinessProfile;
   if (linguisticSignals) p.linguisticSignals = linguisticSignals;
   if (changeStage)       p.changeStage       = changeStage;
+
+  // ── Deterministic severity for scale-backed stones ────────────────────────
+  // LowConfidence is backed by a real measure — the self-efficacy ruler collected in
+  // onboarding (1–10). When it carries signal, its severity is COMPUTED from the score
+  // (see scales.ts), not left to the LLM's label. Un-scaled stones stay LLM-inferred.
+  if (readinessProfile && typeof readinessProfile.selfEfficacy === 'number') {
+    const measured = lowConfidenceSeverityFromRuler(readinessProfile.selfEfficacy);
+    if (measured) {
+      const lc = p.stones.find(s => s.type === 'LowConfidence');
+      if (lc) {
+        lc.severity = measured;
+        lc.measured = true;
+      }
+    }
+  }
 
   return parsed;
 }

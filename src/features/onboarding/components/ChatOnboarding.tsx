@@ -685,10 +685,27 @@ The system will automatically detect when the data is complete and transition to
           : 3;
 
         if (rc) {
-          const realisticTime = calculateRealisticTimeline(rc.typicalTimeline, dailyMinutes);
+          // Prefer the deterministic feasibility anchor (real hours math) over the
+          // LLM's soft "typical timeline" string when it's available.
+          const fa = ag.feasibility;
+          let realisticTime: string;
+          if (fa && fa.requiredHours > 0) {
+            const daysNeeded = (fa.requiredHours * 60) / Math.max(dailyMinutes, 10);
+            const monthsNeeded = Math.max(1, Math.round(daysNeeded / 30));
+            realisticTime = monthsNeeded <= 11
+              ? `around ${monthsNeeded} month${monthsNeeded !== 1 ? 's' : ''}`
+              : `roughly ${Math.round(monthsNeeded / 12)} year${Math.round(monthsNeeded / 12) !== 1 ? 's' : ''}`;
+          } else {
+            realisticTime = calculateRealisticTimeline(rc.typicalTimeline, dailyMinutes);
+          }
+
           const msg1 = `One thing I want to flag before we build your plan — ${rc.headline.toLowerCase()}.`;
-          const msg2 = `At ${dailyMinutes} min/day, ${ag.category} goals like this typically take **${realisticTime}**. You're targeting ${durationInMonths} month${durationInMonths !== 1 ? 's' : ''}.`;
-          const msg3 = `You can adjust to a more realistic timeline, or push forward as an intensive sprint knowing the bar is high. What feels right to you?`;
+          const msg2 = fa
+            ? `At ${dailyMinutes} min/day you'll have about **${fa.availableHours} hours** before your deadline. ${fa.skillLabel.charAt(0).toUpperCase() + fa.skillLabel.slice(1)} usually needs ~${fa.requiredHours}h for basic competence — so a realistic timeline here is **${realisticTime}**.`
+            : `At ${dailyMinutes} min/day, ${ag.category} goals like this typically take **${realisticTime}**. You're targeting ${durationInMonths} month${durationInMonths !== 1 ? 's' : ''}.`;
+          const msg3 = fa?.rescopedGoalSuggestion
+            ? `We can aim at a sharper first target — ${fa.rescopedGoalSuggestion} — and expand from there, or push forward as an intensive sprint knowing the bar is high. What feels right?`
+            : `You can adjust to a more realistic timeline, or push forward as an intensive sprint knowing the bar is high. What feels right to you?`;
 
           setMessages(prev => [...prev, { id: `realism-1-${Date.now()}`, role: 'ai', content: msg1, timestamp: new Date() }]);
           await new Promise(r => setTimeout(r, 700));

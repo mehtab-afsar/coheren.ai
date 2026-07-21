@@ -188,15 +188,24 @@ export async function getResourcesForTask(
  */
 export function getEmbeddableVideoFallback(goalText: string, dailyMinutes: number): TaskResource | null {
   const watchBudget = watchBudgetFor(dailyMinutes);
-  // Try the goal text first; if it matches no category (e.g. an unusual goal),
-  // fall back to an evergreen "study/learning" video so the card is never empty.
   const links = getResourcesForGoal(goalText);
   const fitting = links.find(l => l.type === 'video' && isEmbeddableVideoUrl(l.url));
-  const evergreen = fitting ? null : getResourcesForGoal('study').find(l => l.type === 'video' && isEmbeddableVideoUrl(l.url));
-  const videoLink = fitting ?? evergreen;
-  if (!videoLink) return null;
-  const lengthMin = videoLink.duration ? Math.round(timeToSeconds(videoLink.duration) / 60) : null;
-  return withWatchWindow(resourceLinkToTaskResource(videoLink), lengthMin, watchBudget);
+  if (fitting) {
+    const lengthMin = fitting.duration ? Math.round(timeToSeconds(fitting.duration) / 60) : null;
+    return withWatchWindow(resourceLinkToTaskResource(fitting), lengthMin, watchBudget);
+  }
+  // No curated video for THIS topic. Return an honest topic-specific search link
+  // (ResourceCard renders it as a "Search YouTube" card) rather than substituting
+  // an unrelated evergreen "study" video and pretending it's on-topic.
+  const query = goalText.trim();
+  if (!query) return null;
+  return {
+    type: 'video',
+    title: `Find a video: ${query}`,
+    url: `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
+    description: `We don't have a hand-picked video for this one yet — search YouTube for a good "${query}" tutorial.`,
+    why: 'A relevant tutorial you choose beats a generic off-topic one.',
+  };
 }
 
 function staticFallback(

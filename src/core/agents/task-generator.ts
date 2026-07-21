@@ -26,6 +26,7 @@ import type {
 } from '@types-app/agents';
 import { callEconomy, callReasoning, callWithTools } from '@lib/ai-router';
 import type { GroqTool } from '@lib/ai-router';
+import { STONE_PERSONALITIES } from './stone-identifier/stone-taxonomy';
 import { dailyTaskOutputSchema, safeValidate } from './schemas';
 import { flags } from '@config/feature-flags';
 import { retrieveKnowledgeSemantic, retrieveKnowledgeHybrid } from '@core/rag/semantic-retriever';
@@ -201,6 +202,20 @@ function buildSystemPrompt(
     .filter(Boolean)
     .join('\n');
 
+  // Evidence-based interventions (cited research) for the significant stones — pulled
+  // from STONE_PERSONALITIES so the LLM grounds delivery in real techniques, not just
+  // the terse local rules. Only High/Critical stones (keeps the prompt focused).
+  const interventions = stones
+    .filter(s => s.severity === 'High' || s.severity === 'Critical')
+    .map(s => {
+      const persona = STONE_PERSONALITIES[s.type];
+      if (!persona) return '';
+      const picks = persona.evidence_based_interventions.slice(0, 3).map(i => `  • ${i}`).join('\n');
+      return `${s.type} — "${persona.coreBelief}" (${persona.validated_scale}):\n${picks}`;
+    })
+    .filter(Boolean)
+    .join('\n');
+
   return `You are Agent 4: Daily Task Generator for Coheren AI.
 
 Your job: Generate ONE specific, step-by-step task for today's curriculum day.
@@ -208,6 +223,7 @@ Your job: Generate ONE specific, step-by-step task for today's curriculum day.
 ${domainCtx ? `── DOMAIN CONTEXT ──\n${domainCtx}\n` : ''}
 ── STONE-AWARE DELIVERY RULES ──
 ${stoneRules || 'No special delivery adjustments required.'}
+${interventions ? `\n── EVIDENCE-BASED TECHNIQUES (weave into steps/tips where natural) ──\n${interventions}\n` : ''}
 
 ── DOMAIN + STONE TIEBREAKER ──
 If domain is Career AND FearOfFailure is an active stone:
@@ -521,6 +537,18 @@ function validateTaskQuality(task: DailyTask['task'], dailyTimeAvailable?: numbe
   const tipCount = task.tips?.length ?? 0;
   if (tipCount < 2) {
     issues.push(`Only ${tipCount} tips — minimum 2 required`);
+  }
+
+  // whyThisMatters (the identity-motivation line) must be present — it defaults to
+  // '' when the model omits it, silently dropping our best motivational touch.
+  if (!task.whyThisMatters || task.whyThisMatters.trim().length === 0) {
+    issues.push('Missing whyThisMatters (identity-motivation line)');
+  }
+
+  // The 30-30-40 segments the prompt promises must actually exist. (Post-normalize
+  // they always sum to the duration; the real failure mode is the model omitting them.)
+  if (!task.segments || task.segments.length < 3) {
+    issues.push(`Missing 30-30-40 segments (got ${task.segments?.length ?? 0})`);
   }
 
   // Success criteria must be concrete
@@ -889,7 +917,7 @@ const GENERATE_TASK_TOOL: GroqTool = {
               },
             },
           },
-          required: ['title', 'estimatedMinutes', 'steps', 'successCriteria', 'coachTips'],
+          required: ['title', 'estimatedMinutes', 'steps', 'successCriteria', 'coachTips', 'whyThisMatters', 'segments'],
         },
       },
       required: ['task'],
@@ -1177,7 +1205,10 @@ export async function generateTask(
       }
       const retryResult = validateAndNormalize(retryRaw, dayNumber, phase.phaseNumber, week, dailyTimeAvailable);
       const retryValidation = validateTaskQuality(retryResult.task, dailyTimeAvailable);
-      if (retryValidation.valid || retryResult.task.steps.length > result.task.steps.length) {
+      // Adopt the retry only if it actually passes, OR is strictly better (fewer
+      // quality issues). Previously "more steps" could adopt a still-broken retry —
+      // or, worse, keep the original known-bad task. Now we never ship the worse one.
+      if (retryValidation.valid || retryValidation.issues.length < validation.issues.length) {
         result = retryResult;
       }
     } catch {

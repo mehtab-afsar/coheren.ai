@@ -41,7 +41,7 @@ jobs:
     env:
       VITE_SUPABASE_URL: http://127.0.0.1:54321
       VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-      VITE_GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      # Provider keys are no longer read client-side (routed through the ai-proxy edge fn).
 
     steps:
       - uses: actions/checkout@v4

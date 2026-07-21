@@ -104,7 +104,7 @@ const DEFAULTS: FeatureFlags = {
   USE_RECALIBRATION:  true,
   LOG_AGENT_RUNS:     false, // Off by default — enable via VITE_FF_LOG_AGENT_RUNS=true in prod
   PUSH_NOTIFICATIONS: true,
-  DEBUG_PANEL:        true,
+  DEBUG_PANEL:        false, // Off in prod — the agent-health panel exposes internal latency/errors
   PREGENERATE_TASKS:  true,
   COMPRESS_SPRINT_HISTORY:        true,
   PIPELINE_CHECKPOINTS:           true,
@@ -133,7 +133,7 @@ const DEFAULTS: FeatureFlags = {
   USE_RAG_METADATA_FILTERS:       true,  // On by default — requires metadata columns migration
   USE_COLBERT_RERANKING:          false, // Off by default — enable after Jina cross-encoder validation
   USE_HYDE_QUERIES:               false, // Off by default — enable after soak
-  USE_RAPTOR_INDEX:               true,  // On — L1 summaries live after rag:raptor run
+  USE_RAPTOR_INDEX:               false, // Off unless `npm run rag:raptor` has ingested L1 summaries — otherwise it only ×1.5 over-fetches. Semantic RAG works without it.
 
   // Sprint 1: Agent 2 Improvements
   USE_ADAPTIVE_INTERVIEW:         true,  // On — adaptive interview engine active

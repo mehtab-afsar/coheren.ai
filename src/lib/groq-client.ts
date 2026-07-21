@@ -19,6 +19,9 @@ if (!env.GROQ_ENABLED) {
 // server-side. `apiKey` here is a dummy — proxyFetch attaches the user's JWT.
 const groq = new Groq({
   apiKey: 'proxy',
+  // Must include Groq's /openai/v1 base: the SDK appends /chat/completions, and
+  // the gateway forwards <rest> to https://api.groq.com/<rest>. So this resolves
+  // to https://api.groq.com/openai/v1/chat/completions. Dropping /openai/v1 → 404.
   baseURL: `${env.AI_PROXY_URL}/groq/openai/v1`,
   fetch: proxyFetch,
   dangerouslyAllowBrowser: true,

@@ -56,9 +56,9 @@ interface FeatureFlags {
   USE_BEHAVIORAL_RAG: boolean;
   /** Replace hardcoded stone matrices with LLM tool-use loops in Agent 3 + 5. Default: false — shadow-test before enabling. */
   USE_AGENT_TOOL_CALLING: boolean;
-  /** Use Claude claude-sonnet-4-6 with extended thinking for Agent 3 curriculum design. Default: false — requires VITE_ANTHROPIC_API_KEY. */
+  /** Use Claude claude-sonnet-4-6 with extended thinking for Agent 3 curriculum design. Default: false — requires Claude enabled (VITE_CLAUDE_ENABLED). */
   USE_CLAUDE_FOR_CURRICULUM: boolean;
-  /** Use Claude claude-sonnet-4-6 with native tool use for Agent 5 recalibration. Default: false — requires USE_AGENT_TOOL_CALLING + VITE_ANTHROPIC_API_KEY. */
+  /** Use Claude claude-sonnet-4-6 with native tool use for Agent 5 recalibration. Default: false — requires USE_AGENT_TOOL_CALLING + VITE_CLAUDE_ENABLED. */
   USE_CLAUDE_FOR_RECALIBRATION: boolean;
   /** Enable stone resolution (severity < 0.2) and emergence (new skip patterns) after each sprint. Default: false. */
   DYNAMIC_STONE_EVOLUTION: boolean;
@@ -122,8 +122,8 @@ const DEFAULTS: FeatureFlags = {
   USE_AGENT_MEMORY:               false, // Off by default — enable after sprint_memories migration
   USE_BEHAVIORAL_RAG:             false, // Off by default — enable after behaviorEmbedder wired
   USE_AGENT_TOOL_CALLING:         false, // Off by default — shadow-test before enabling
-  USE_CLAUDE_FOR_CURRICULUM:      false, // Off by default — requires VITE_ANTHROPIC_API_KEY
-  USE_CLAUDE_FOR_RECALIBRATION:   false, // Off by default — requires USE_AGENT_TOOL_CALLING + VITE_ANTHROPIC_API_KEY
+  USE_CLAUDE_FOR_CURRICULUM:      false, // Off by default — requires Claude enabled (VITE_CLAUDE_ENABLED)
+  USE_CLAUDE_FOR_RECALIBRATION:   false, // Off by default — requires USE_AGENT_TOOL_CALLING + VITE_CLAUDE_ENABLED
   DYNAMIC_STONE_EVOLUTION:        true,  // On — stone resolution + emergence active
   USE_SPRINT_MEMORY_IN_ALL_AGENTS: false, // Off — enable after USE_AGENT_MEMORY stable
   USE_DYNAMIC_RESOURCES:          true,  // On — static library fallback active immediately

@@ -79,7 +79,7 @@ export default function SwipeableCard({
         // Colour hint: red left = skip, purple right = cinema
         el.style.borderLeftColor =
           x < -18 ? 'rgba(239,68,68,0.8)'
-          : x > 18 ? '#7c3aed'
+          : x > 18 ? '#C4552D'
           : '';
       }
     };

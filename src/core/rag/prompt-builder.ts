@@ -1,5 +1,5 @@
 /**
- * CONSIST RAG - Prompt Builder
+ * Coheren RAG - Prompt Builder
  * Builds science-backed prompts for Groq AI coaching
  */
 

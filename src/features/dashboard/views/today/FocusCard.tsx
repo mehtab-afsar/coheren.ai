@@ -4,38 +4,33 @@ import { useState } from 'react';
 import type { Task } from '@core/store/useStore';
 import { useBreakpoint } from '@hooks/useBreakpoint';
 import ResourceCard from '../../components/ResourceCard';
+import { extractYouTubeFromText } from '@lib/youtube';
 
 // ─── Inline YouTube Mini Player ───────────────────────────────────────────────
 
-const YT_REGEX = /https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})[^\s]*/;
+function StepInstruction({ text }: { text: string }) {
+  const [playing, setPlaying] = useState(false);
+  const found = extractYouTubeFromText(text);
 
-function extractYouTubeId(text: string): { id: string; cleaned: string } | null {
-  const m = text.match(YT_REGEX);
-  if (!m) return null;
+  if (!found) {
+    return <span style={{ flex: 1, fontSize: 14, color: 'var(--c-text-primary)', lineHeight: 1.5 }}>{text}</span>;
+  }
+
+  // Strip the URL from the display text so the sentence reads cleanly above the player.
   const cleaned = text
-    .replace(m[0], '')
+    .replace(found.match, '')
     .replace(/\s+at\s*$/, '')
     .replace(/\s{2,}/g, ' ')
     .trim()
     .replace(/[.'"]$/, '');
-  return { id: m[1], cleaned };
-}
 
-function StepInstruction({ text }: { text: string }) {
-  const [playing, setPlaying] = useState(false);
-  const parsed = extractYouTubeId(text);
-
-  if (!parsed) {
-    return <span style={{ flex: 1, fontSize: 14, color: 'var(--c-text-primary)', lineHeight: 1.5 }}>{text}</span>;
-  }
-
-  const embedSrc = `https://www.youtube.com/embed/${parsed.id}?autoplay=1&rel=0`;
+  const embedSrc = `https://www.youtube.com/embed/${found.id}?autoplay=1&rel=0`;
 
   return (
     <div style={{ flex: 1 }}>
-      {parsed.cleaned && (
+      {cleaned && (
         <span style={{ fontSize: 14, color: 'var(--c-text-primary)', lineHeight: 1.5, display: 'block', marginBottom: 10 }}>
-          {parsed.cleaned}
+          {cleaned}
         </span>
       )}
 

@@ -62,7 +62,7 @@ export function Testimonials() {
         <div className="max-w-3xl w-full flex flex-col items-center gap-10">
 
           {/* Label */}
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-500">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-clay-500">
             What people are saying
           </p>
 

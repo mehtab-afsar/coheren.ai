@@ -1,5 +1,5 @@
 /**
- * CONSIST RAG - Knowledge Base
+ * Coheren RAG - Knowledge Base
  * Static knowledge from habit science frameworks for AI coaching.
  * This provides immediate science-backed context without requiring
  * the full PDF extraction pipeline.
@@ -582,7 +582,7 @@ import { retrieveKnowledgeSemantic } from './semantic-retriever';
  * Fallback path: static keyword scoring (always available, zero latency)
  *
  * The fallback fires automatically when:
- *   - VITE_JINA_API_KEY is not set
+ *   - the Jina embedding call fails
  *   - knowledge_chunks table is empty (before first ingestion)
  *   - Supabase returns no matches above the similarity threshold
  *   - Any network error occurs

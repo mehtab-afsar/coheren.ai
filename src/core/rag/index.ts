@@ -1,5 +1,5 @@
 /**
- * CONSIST RAG — Main Export
+ * Coheren RAG — Main Export
  *
  * Retrieval priority:
  *   1. retrieveKnowledgeWithFallback() — async, semantic (Jina + pgvector) with static fallback
@@ -36,9 +36,6 @@ export { type KnowledgeChunk, getBm25Candidates } from './knowledge-base';
 
 // Behavioral RAG — queries sprint_memories for what actually worked
 export { retrieveUserHistory, retrieveBehavioralPatterns } from './behavioral-retriever';
-
-// Reranker — Jina cross-encoder second-stage reranking
-export { rerankChunks, rerankStrings } from './reranker';
 
 // ─── Imports ──────────────────────────────────────────────────────────────────
 

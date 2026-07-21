@@ -117,7 +117,7 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
                   height: '100%',
                   borderRadius: 2,
                   background: i <= currentStoneIndex
-                    ? 'linear-gradient(90deg, #7c3aed, #a78bfa)'
+                    ? 'linear-gradient(90deg, #C4552D, #DDA189)'
                     : 'transparent',
                 }}
               />
@@ -196,8 +196,8 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
                         gap: 12,
                         padding: '14px 16px',
                         borderRadius: 14,
-                        border: isSelected ? '2px solid #7c3aed' : '2px solid #f3f4f6',
-                        background: isSelected ? 'rgba(124,58,237,0.04)' : '#fafafa',
+                        border: isSelected ? '2px solid #C4552D' : '2px solid #f3f4f6',
+                        background: isSelected ? 'rgba(196, 85, 45,0.04)' : '#fafafa',
                         cursor: 'pointer',
                         textAlign: 'left',
                         transition: 'all 0.2s ease',
@@ -205,8 +205,8 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
                       }}
                       onMouseEnter={e => {
                         if (!isSelected) {
-                          e.currentTarget.style.borderColor = '#c4b5fd';
-                          e.currentTarget.style.background = 'rgba(124,58,237,0.02)';
+                          e.currentTarget.style.borderColor = '#E3B9A5';
+                          e.currentTarget.style.background = 'rgba(196, 85, 45,0.02)';
                         }
                       }}
                       onMouseLeave={e => {
@@ -220,7 +220,7 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
                         width: 20,
                         height: 20,
                         borderRadius: '50%',
-                        border: isSelected ? '6px solid #7c3aed' : '2px solid #d1d5db',
+                        border: isSelected ? '6px solid #C4552D' : '2px solid #d1d5db',
                         background: '#fff',
                         flexShrink: 0,
                         marginTop: 1,
@@ -258,12 +258,12 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
                         flex: 1,
                         padding: '16px 20px',
                         borderRadius: 14,
-                        border: isSelected ? '2px solid #7c3aed' : '2px solid #f3f4f6',
-                        background: isSelected ? 'rgba(124,58,237,0.04)' : '#fafafa',
+                        border: isSelected ? '2px solid #C4552D' : '2px solid #f3f4f6',
+                        background: isSelected ? 'rgba(196, 85, 45,0.04)' : '#fafafa',
                         cursor: 'pointer',
                         fontSize: 15,
                         fontWeight: 600,
-                        color: isSelected ? '#7c3aed' : '#374151',
+                        color: isSelected ? '#C4552D' : '#374151',
                         textTransform: 'capitalize',
                         transition: 'all 0.2s ease',
                         outline: 'none',
@@ -304,7 +304,7 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
                         background: '#fafafa',
                         outline: 'none',
                       }}
-                      onFocus={e => { e.currentTarget.style.borderColor = '#7c3aed'; }}
+                      onFocus={e => { e.currentTarget.style.borderColor = '#C4552D'; }}
                       onBlur={e => { e.currentTarget.style.borderColor = '#e5e7eb'; }}
                     />
                     <button
@@ -313,7 +313,7 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
                         padding: '10px 16px',
                         borderRadius: 10,
                         border: 'none',
-                        background: '#7c3aed',
+                        background: '#C4552D',
                         color: '#fff',
                         fontSize: 13,
                         fontWeight: 600,
@@ -354,7 +354,7 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
                     lineHeight: 1.6,
                     boxSizing: 'border-box',
                   }}
-                  onFocus={e => { e.currentTarget.style.borderColor = '#7c3aed'; e.currentTarget.style.background = '#fff'; }}
+                  onFocus={e => { e.currentTarget.style.borderColor = '#C4552D'; e.currentTarget.style.background = '#fff'; }}
                   onBlur={e => { e.currentTarget.style.borderColor = '#f3f4f6'; e.currentTarget.style.background = '#fafafa'; }}
                 />
               </div>
@@ -374,9 +374,9 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
                           width: 48,
                           height: 48,
                           borderRadius: 12,
-                          border: isSelected ? '2px solid #7c3aed' : '2px solid #f3f4f6',
-                          background: isSelected ? 'rgba(124,58,237,0.08)' : '#fafafa',
-                          color: isSelected ? '#7c3aed' : '#374151',
+                          border: isSelected ? '2px solid #C4552D' : '2px solid #f3f4f6',
+                          background: isSelected ? 'rgba(196, 85, 45,0.08)' : '#fafafa',
+                          color: isSelected ? '#C4552D' : '#374151',
                           fontSize: 16,
                           fontWeight: 700,
                           cursor: 'pointer',
@@ -414,13 +414,13 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
                 gap: 6,
                 padding: '12px 24px',
                 borderRadius: 12,
-                background: isAnswered ? 'linear-gradient(135deg, #7c3aed, #a78bfa)' : '#e5e7eb',
+                background: isAnswered ? 'linear-gradient(135deg, #C4552D, #DDA189)' : '#e5e7eb',
                 color: '#fff',
                 border: 'none',
                 fontSize: 14,
                 fontWeight: 600,
                 cursor: isAnswered ? 'pointer' : 'default',
-                boxShadow: isAnswered ? '0 4px 14px rgba(124,58,237,0.3)' : 'none',
+                boxShadow: isAnswered ? '0 4px 14px rgba(196, 85, 45,0.3)' : 'none',
                 transition: 'all 0.2s ease',
               }}
             >

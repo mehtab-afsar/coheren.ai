@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { seedDashboard, DASHBOARD_STORE_STATE } from './helpers';
+import { seedDashboard } from './helpers';
 
 test.describe('TodayView Tasks', () => {
   test.beforeEach(async ({ page }) => {
@@ -93,7 +93,7 @@ test.describe('TodayView Tasks', () => {
     }
   });
 
-  test('resource link opens in new tab when URL is valid', async ({ page, context }) => {
+  test('resource link opens in new tab when URL is valid', async ({ page }) => {
     // Look for an external link in the task resource section
     const resourceLink = page.locator('a[href*="youtube"], a[href*="http"]').first();
     const hasLink = await resourceLink.isVisible({ timeout: 5000 }).catch(() => false);

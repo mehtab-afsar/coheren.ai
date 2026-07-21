@@ -26,6 +26,7 @@ import type {
 } from '@types-app/agents';
 import { callEconomy, callReasoning, callWithTools } from '@lib/ai-router';
 import type { GroqTool } from '@lib/ai-router';
+import { dailyTaskOutputSchema, safeValidate } from './schemas';
 import { flags } from '@config/feature-flags';
 import { retrieveKnowledgeSemantic, retrieveKnowledgeHybrid } from '@core/rag/semantic-retriever';
 import { getSimilarTaskPatterns } from '@lib/sprintMemory';
@@ -549,6 +550,12 @@ function validateAndNormalize(
   week: number,
   dailyTimeAvailable: number,
 ): DailyTask {
+  // Boundary contract: validate the raw LLM output against the zod schema. Non-throwing —
+  // a mismatch is logged (drift observability) and we fall through to the coercion below,
+  // which fills safe defaults. (The pipeline also has quality-gate retry + a deterministic
+  // fallback, so genuinely-broken output still degrades gracefully.)
+  safeValidate(dailyTaskOutputSchema, raw, 'agent4-task');
+
   const parsed = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
   const task   = (typeof parsed.task === 'object' && parsed.task !== null
     ? parsed.task : {}) as Record<string, unknown>;

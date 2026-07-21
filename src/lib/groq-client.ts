@@ -9,13 +9,18 @@
 
 import Groq from 'groq-sdk';
 import { env } from '@config/env';
+import { proxyFetch } from './ai-proxy-fetch';
 
-if (!env.GROQ_API_KEY) {
-  console.warn('⚠️  VITE_GROQ_API_KEY is not set. Groq AI features will not work until this is configured.');
+if (!env.GROQ_ENABLED) {
+  console.warn('⚠️  Groq is disabled (VITE_GROQ_ENABLED=false). Groq AI features will not work until enabled.');
 }
 
+// Requests go to the ai-proxy edge function, which injects the real Groq key
+// server-side. `apiKey` here is a dummy — proxyFetch attaches the user's JWT.
 const groq = new Groq({
-  apiKey: env.GROQ_API_KEY || 'placeholder-key',
+  apiKey: 'proxy',
+  baseURL: `${env.AI_PROXY_URL}/groq/openai/v1`,
+  fetch: proxyFetch,
   dangerouslyAllowBrowser: true,
   maxRetries: 0, // Disable SDK-level retries — our callWithRetry handles this
 });

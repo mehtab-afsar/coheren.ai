@@ -152,8 +152,8 @@ export default function TodayView({
   })();
 
   const userName = universalProfile?.name ?? roadmap?.title ?? 'there';
-  const currentGoalTitle = useStore(s => s.currentGoal?.specificGoal) ?? roadmap?.title;
-  const goalSubtitle = currentGoalTitle ? `Day ${currentDay} of your ${currentGoalTitle.toLowerCase()} journey` : undefined;
+  // Clean, tight context line (the old "Day N of your <full goal sentence> journey" read awkwardly).
+  const goalSubtitle = `Day ${currentDay} · Week ${Math.ceil(currentDay / 7)}`;
 
   const formatDuration = (minutes: number) => {
     if (minutes < 60) return `${minutes} min`;
@@ -248,7 +248,7 @@ export default function TodayView({
             {focusTask.segments && focusTask.segments.length > 0 ? (() => {
               const SEG_COLORS = [
                 { border: 'rgba(14,165,233,0.2)', bg: 'rgba(14,165,233,0.06)', bgDone: 'rgba(14,165,233,0.13)', pill: '#0ea5e9' },
-                { border: 'rgba(124,58,237,0.2)', bg: ap.accentSoft, bgDone: ap.accentMid, pill: ap.accent },
+                { border: 'rgba(196, 85, 45,0.2)', bg: ap.accentSoft, bgDone: ap.accentMid, pill: ap.accent },
                 { border: 'rgba(16,185,129,0.2)', bg: 'rgba(16,185,129,0.05)', bgDone: 'rgba(16,185,129,0.12)', pill: '#10b981' },
               ];
               const total = focusTask.segments!.length;
@@ -532,14 +532,14 @@ export default function TodayView({
         <div style={{
           marginBottom: tokens.spacing['2xl'],
           padding: tokens.spacing.xl,
-          background: 'linear-gradient(135deg, rgba(124,58,237,0.06) 0%, rgba(99,102,241,0.03) 100%)',
-          border: '1px solid rgba(124,58,237,0.15)',
-          borderLeft: '3px solid #7c3aed',
+          background: 'linear-gradient(135deg, rgba(196, 85, 45,0.06) 0%, rgba(196, 85, 45,0.03) 100%)',
+          border: '1px solid rgba(196, 85, 45,0.15)',
+          borderLeft: '3px solid #C4552D',
           borderRadius: tokens.borderRadius.lg,
           animation: 'milestoneIn 0.4s cubic-bezier(0.4,0,0.2,1)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, marginBottom: '6px' }}>
-            <Sparkles size={15} color="#7c3aed" strokeWidth={1.8} />
+            <Sparkles size={15} color="#C4552D" strokeWidth={1.8} />
             <span style={{ fontSize: tokens.typography.sizes.base, fontWeight: tokens.typography.weights.medium, color: tokens.colors.text.primary }}>
               Welcome back — ease back in.
             </span>
@@ -555,14 +555,14 @@ export default function TodayView({
                 </span>
                 <button
                   onClick={() => setEaseBackMode(false)}
-                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: tokens.typography.sizes.xs, fontWeight: tokens.typography.weights.medium, color: '#7c3aed', textDecoration: 'underline', textUnderlineOffset: '2px' }}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: tokens.typography.sizes.xs, fontWeight: tokens.typography.weights.medium, color: '#C4552D', textDecoration: 'underline', textUnderlineOffset: '2px' }}
                 >
                   Show all {incompleteTasks.length} tasks
                 </button>
               </>
             )}
             {(!easeBackMode || incompleteTasks.length <= 1) && (
-              <span style={{ fontSize: tokens.typography.sizes.xs, color: '#7c3aed', fontWeight: tokens.typography.weights.medium }}>
+              <span style={{ fontSize: tokens.typography.sizes.xs, color: '#C4552D', fontWeight: tokens.typography.weights.medium }}>
                 ✓ Showing all {incompleteTasks.length} {incompleteTasks.length === 1 ? 'task' : 'tasks'} today
               </span>
             )}
@@ -822,14 +822,14 @@ export default function TodayView({
                 style={{
                   ...card.standard,
                   backgroundColor: task.completed
-                    ? 'rgba(124,58,237,0.03)'
+                    ? 'rgba(196, 85, 45,0.03)'
                     : tokens.colors.surface,
                   padding: tokens.spacing['2xl'],
                   boxShadow: task.completed ? 'none' : '0 2px 8px rgba(0,0,0,0.06)',
-                  border: `1px solid ${task.completed ? 'rgba(124,58,237,0.12)' : tokens.colors.borderLight}`,
+                  border: `1px solid ${task.completed ? 'rgba(196, 85, 45,0.12)' : tokens.colors.borderLight}`,
                   borderLeft: task.completed
-                    ? '4px solid rgba(124,58,237,0.2)'
-                    : '4px solid rgba(124,58,237,0.35)',
+                    ? '4px solid rgba(196, 85, 45,0.2)'
+                    : '4px solid rgba(196, 85, 45,0.35)',
                   borderRadius: tokens.borderRadius.lg,
                   opacity: task.completed ? 0.65 : 1,
                   transition: 'all 0.3s cubic-bezier(0.4,0,0.2,1)',
@@ -845,9 +845,9 @@ export default function TodayView({
                 onMouseEnter={e => {
                   if (!task.completed && !isCompleting) {
                     e.currentTarget.style.transform = 'translateY(-4px)';
-                    e.currentTarget.style.boxShadow = '0 16px 32px rgba(124,58,237,0.18)';
-                    e.currentTarget.style.borderColor = 'rgba(124,58,237,0.5)';
-                    e.currentTarget.style.borderLeftColor = '#7c3aed';
+                    e.currentTarget.style.boxShadow = '0 16px 32px rgba(196, 85, 45,0.18)';
+                    e.currentTarget.style.borderColor = 'rgba(196, 85, 45,0.5)';
+                    e.currentTarget.style.borderLeftColor = '#C4552D';
                   }
                 }}
                 onMouseLeave={e => {
@@ -855,7 +855,7 @@ export default function TodayView({
                     e.currentTarget.style.transform = 'translateY(0)';
                     e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)';
                     e.currentTarget.style.borderColor = tokens.colors.borderLight;
-                    e.currentTarget.style.borderLeftColor = 'rgba(124,58,237,0.35)';
+                    e.currentTarget.style.borderLeftColor = 'rgba(196, 85, 45,0.35)';
                   }
                 }}
               >
@@ -916,9 +916,9 @@ export default function TodayView({
                       {/* Type badge — solid gradient pill */}
                       {(() => {
                         const typeGradients: Record<string, { bg: string; shadow: string; label: string }> = {
-                          practice:   { bg: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', shadow: 'rgba(124,58,237,0.35)', label: 'Practice' },
+                          practice:   { bg: 'linear-gradient(135deg, #C4552D 0%, #A8451F 100%)', shadow: 'rgba(196, 85, 45,0.35)', label: 'Practice' },
                           learning:   { bg: 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)', shadow: 'rgba(14,165,233,0.35)', label: 'Learning' },
-                          reflection: { bg: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', shadow: 'rgba(124,58,237,0.35)', label: 'Reflect' },
+                          reflection: { bg: 'linear-gradient(135deg, #C4552D 0%, #A8451F 100%)', shadow: 'rgba(196, 85, 45,0.35)', label: 'Reflect' },
                         };
                         const g = typeGradients[task.type] ?? { bg: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)', shadow: 'rgba(107,114,128,0.35)', label: task.type };
                         return (
@@ -974,7 +974,7 @@ export default function TodayView({
                         {task.segments.map((seg, i) => {
                           const segColors = [
                             { bg: 'rgba(14,165,233,0.07)', border: 'rgba(14,165,233,0.2)', pill: '#0ea5e9', pillText: '#fff', icon: <BookOpen size={11} strokeWidth={2} color="#0ea5e9" /> },
-                            { bg: 'rgba(124,58,237,0.07)', border: 'rgba(124,58,237,0.2)', pill: '#7c3aed', pillText: '#fff', icon: <Zap size={11} strokeWidth={2} color="#7c3aed" /> },
+                            { bg: 'rgba(196, 85, 45,0.07)', border: 'rgba(196, 85, 45,0.2)', pill: '#C4552D', pillText: '#fff', icon: <Zap size={11} strokeWidth={2} color="#C4552D" /> },
                             { bg: 'rgba(16,185,129,0.07)', border: 'rgba(16,185,129,0.2)', pill: '#10b981', pillText: '#fff', icon: <Brain size={11} strokeWidth={2} color="#10b981" /> },
                           ];
                           const c = segColors[i % segColors.length];
@@ -1159,19 +1159,19 @@ export default function TodayView({
                               alignItems: 'center',
                               gap: '6px',
                               padding: '9px 18px',
-                              background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+                              background: 'linear-gradient(135deg, #C4552D 0%, #A8451F 100%)',
                               color: '#fff',
                               border: 'none',
                               borderRadius: tokens.borderRadius.md,
                               fontSize: tokens.typography.sizes.sm,
                               fontWeight: tokens.typography.weights.medium,
                               cursor: 'pointer',
-                              boxShadow: '0 4px 14px rgba(124,58,237,0.35)',
+                              boxShadow: '0 4px 14px rgba(196, 85, 45,0.35)',
                               transition: 'all 0.2s ease',
                               letterSpacing: '-0.01em',
                             }}
-                            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(124,58,237,0.45)'; }}
-                            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(124,58,237,0.35)'; }}
+                            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(196, 85, 45,0.45)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(196, 85, 45,0.35)'; }}
                           >
                             <Zap size={13} strokeWidth={2} />
                             Deep Focus
@@ -1193,8 +1193,8 @@ export default function TodayView({
             borderRadius: tokens.borderRadius.xl,
             padding: `${tokens.spacing['4xl']} ${tokens.spacing['3xl']}`,
             textAlign: 'center',
-            border: '1px solid rgba(124,58,237,0.25)',
-            boxShadow: '0 8px 32px rgba(124,58,237,0.15)',
+            border: '1px solid rgba(196, 85, 45,0.25)',
+            boxShadow: '0 8px 32px rgba(196, 85, 45,0.15)',
             position: 'relative',
             overflow: 'hidden',
           }}>
@@ -1206,7 +1206,7 @@ export default function TodayView({
               transform: 'translate(-50%, -50%)',
               width: '200px',
               height: '200px',
-              background: 'radial-gradient(circle, rgba(124,58,237,0.2) 0%, transparent 70%)',
+              background: 'radial-gradient(circle, rgba(196, 85, 45,0.2) 0%, transparent 70%)',
               pointerEvents: 'none',
             }} />
             {/* Icon */}
@@ -1217,18 +1217,18 @@ export default function TodayView({
               width: '56px',
               height: '56px',
               borderRadius: '50%',
-              background: 'rgba(124,58,237,0.2)',
-              border: '1px solid rgba(124,58,237,0.35)',
+              background: 'rgba(196, 85, 45,0.2)',
+              border: '1px solid rgba(196, 85, 45,0.35)',
               marginBottom: tokens.spacing.lg,
               position: 'relative',
             }}>
-              <Sparkles size={24} color="#a78bfa" strokeWidth={1.5} />
+              <Sparkles size={24} color="#DDA189" strokeWidth={1.5} />
             </div>
             {/* Heading */}
             <h3 style={{
               fontSize: tokens.typography.sizes.xl,
               fontWeight: tokens.typography.weights.semibold,
-              color: '#e9d8fd',
+              color: '#F5E4DA',
               margin: 0,
               marginBottom: tokens.spacing.sm,
               letterSpacing: '-0.02em',
@@ -1259,14 +1259,14 @@ export default function TodayView({
                   gap: '6px',
                   padding: `${tokens.spacing.sm} ${tokens.spacing.lg}`,
                   borderRadius: tokens.borderRadius.full,
-                  background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+                  background: 'linear-gradient(135deg, #C4552D 0%, #A8451F 100%)',
                   border: 'none',
                   color: '#fff',
                   fontSize: tokens.typography.sizes.sm,
                   fontWeight: tokens.typography.weights.medium,
                   cursor: 'pointer',
                   letterSpacing: '-0.01em',
-                  boxShadow: '0 4px 16px rgba(124,58,237,0.4)',
+                  boxShadow: '0 4px 16px rgba(196, 85, 45,0.4)',
                 }}
               >
                 Review Goals <ArrowRight size={14} strokeWidth={2} />
@@ -1279,9 +1279,9 @@ export default function TodayView({
                   gap: '6px',
                   padding: `${tokens.spacing.sm} ${tokens.spacing.lg}`,
                   borderRadius: tokens.borderRadius.full,
-                  background: 'rgba(124,58,237,0.12)',
-                  border: '1px solid rgba(124,58,237,0.3)',
-                  color: '#a78bfa',
+                  background: 'rgba(196, 85, 45,0.12)',
+                  border: '1px solid rgba(196, 85, 45,0.3)',
+                  color: '#DDA189',
                   fontSize: tokens.typography.sizes.sm,
                   fontWeight: tokens.typography.weights.medium,
                   cursor: 'pointer',
@@ -1306,9 +1306,9 @@ export default function TodayView({
         if (upcomingDays.length === 0) return null;
 
         const TYPE_COLORS: Record<string, { color: string; bg: string }> = {
-          practice:   { color: '#a78bfa', bg: 'rgba(124,58,237,0.08)' },
+          practice:   { color: '#DDA189', bg: 'rgba(196, 85, 45,0.08)' },
           learning:   { color: '#38bdf8', bg: 'rgba(56,189,248,0.08)' },
-          reflection: { color: '#c4b5fd', bg: 'rgba(124,58,237,0.06)' },
+          reflection: { color: '#E3B9A5', bg: 'rgba(196, 85, 45,0.06)' },
           review:     { color: '#fbbf24', bg: 'rgba(251,191,36,0.08)' },
           challenge:  { color: '#f97316', bg: 'rgba(249,115,22,0.08)' },
           retrieval:  { color: '#38bdf8', bg: 'rgba(56,189,248,0.08)' },
@@ -1384,7 +1384,7 @@ export default function TodayView({
           <TaskFeedbackModal
             isOpen={true}
             taskTitle={feedbackTask.title}
-            estimatedMinutes={feedbackTask.duration}
+            /* This path isn't a timed focus session, so real duration is unknown (undefined). */
             onSubmit={(feedback) => submitFeedback(pendingFeedbackTaskId, feedback)}
             onClose={dismissFeedback}
           />
@@ -1399,10 +1399,12 @@ export default function TodayView({
           timeSpentSeconds={focusSeconds}
           newStreak={streak}
           onComplete={(mood, reflection) => {
+            // Capture the REAL measured session length before endSession() resets the timer.
+            const measuredMinutes = focusSeconds > 0 ? Math.max(1, Math.round(focusSeconds / 60)) : undefined;
             handleCompleteTask(heroTask.id, window.innerWidth / 2, window.innerHeight / 2);
             endSession();
             if (setTaskFeedback) {
-              setTaskFeedback(heroTask.id, mood, undefined, reflection || undefined, undefined);
+              setTaskFeedback(heroTask.id, mood, undefined, reflection || undefined, measuredMinutes);
             }
             setShowFocusComplete(false);
             setFocusTaskId(null);

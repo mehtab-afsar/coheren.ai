@@ -4,7 +4,7 @@ import { getRecentFeedback, updateRoadmapStoneProfile, loadThresholdAdjustments,
 import { track } from '@lib/analytics';
 import { handleCheckpoint } from '@core/agents/orchestrator';
 import { recalibrateWeek, computeSignals, adaptThresholds, DEFAULT_THRESHOLDS } from '@core/agents/recalibrator';
-import { isCheckpointDay } from '@lib/checkpointHelpers';
+import { isCheckpointDay, buildAssessmentSummary } from '@lib/checkpointHelpers';
 import { flags } from '@config/feature-flags';
 import { updateStoneSeverities } from '@lib/stoneUpdater';
 import { embedAndSaveSprintMemory } from '@lib/sprintMemory';
@@ -206,6 +206,17 @@ export function useCheckpoint() {
         const signals = computeSignals(taskFeedback, dailyMinutes, thresholds);
         const prevStatus = signals.status;
 
+        // Quiz/assessment summary for the recent sprint window (assessmentResults
+        // live on the store tasks, not the DB feedback rows). This reconnects the
+        // measure→recalibrate loop on the LIVE weekly path.
+        const sprintWindowStart = currentDay - (recentDays - 1);
+        const assessmentSummary = buildAssessmentSummary(
+          tasks.filter(t => {
+            const d = t.dayNumber ?? t.day;
+            return d != null && d >= sprintWindowStart && d <= currentDay;
+          }),
+        );
+
         const result = await recalibrateWeek({
           context: { goal: goalText, timeline: timelineDays, dailyMinutes },
           roadmap: agentRoadmapV2,
@@ -215,6 +226,7 @@ export function useCheckpoint() {
           weekNumber: Math.ceil(currentDay / 7),
           weeklyCheckInAnswers,
           thresholds,
+          assessmentSummary,
         });
 
         // If stone evolution produced an updated profile, apply it now (overrides updateStoneSeverities above)

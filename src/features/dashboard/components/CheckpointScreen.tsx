@@ -55,8 +55,9 @@ export default function CheckpointScreen({
   const [submitted, setSubmitted] = useState(false);
 
   const completionRate = Math.round((completedTasks / totalTasks) * 100);
-  const weekStart = (sprintNumber - 1) * 14 + 1;
-  const weekEnd = weekStart + 13;
+  // Checkpoints fire weekly (every 7 days), so a sprint spans 7 days — not 14.
+  const weekStart = (sprintNumber - 1) * 7 + 1;
+  const weekEnd = weekStart + 6;
 
   const performanceLabel = avgDifficulty > 3.5 ? 'Challenging' : avgDifficulty < 2.5 ? 'Too easy' : 'Well balanced';
 
@@ -94,7 +95,7 @@ export default function CheckpointScreen({
         <div style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
           padding: '4px 12px',
-          background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+          background: 'linear-gradient(135deg, #C4552D 0%, #A8451F 100%)',
           borderRadius: 99, marginBottom: 12,
         }}>
           <Sparkles size={12} color="#fff" strokeWidth={2} />
@@ -126,7 +127,7 @@ export default function CheckpointScreen({
         <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {statBullets.map((bullet, i) => (
             <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-              <span style={{ color: '#7c3aed', fontSize: 14, lineHeight: 1.5, flexShrink: 0 }}>·</span>
+              <span style={{ color: '#C4552D', fontSize: 14, lineHeight: 1.5, flexShrink: 0 }}>·</span>
               <span style={{ fontSize: 14, color: tokens.colors.text.secondary, lineHeight: 1.5 }}>{bullet}</span>
             </li>
           ))}
@@ -136,12 +137,12 @@ export default function CheckpointScreen({
       {/* What I'm changing (AI message) */}
       {recalibrationResult ? (
         <div style={{
-          background: '#f5f3ff', border: '1px solid rgba(124,58,237,0.15)',
+          background: '#FBF3EE', border: '1px solid rgba(196, 85, 45,0.15)',
           borderRadius: 16, padding: '18px 20px', marginBottom: 20,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
-            <Sparkles size={13} color="#7c3aed" strokeWidth={2} />
-            <p style={{ fontSize: 11, fontWeight: 700, color: '#7c3aed', letterSpacing: '0.07em', textTransform: 'uppercase', margin: 0 }}>
+            <Sparkles size={13} color="#C4552D" strokeWidth={2} />
+            <p style={{ fontSize: 11, fontWeight: 700, color: '#C4552D', letterSpacing: '0.07em', textTransform: 'uppercase', margin: 0 }}>
               What I'm changing
             </p>
           </div>
@@ -156,12 +157,12 @@ export default function CheckpointScreen({
         </div>
       ) : !submitted ? (
         <div style={{
-          background: '#f5f3ff', border: '1px solid rgba(124,58,237,0.12)',
+          background: '#FBF3EE', border: '1px solid rgba(196, 85, 45,0.12)',
           borderRadius: 16, padding: '16px 20px', marginBottom: 20,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
-            <Sparkles size={13} color="#7c3aed" strokeWidth={2} />
-            <p style={{ fontSize: 11, fontWeight: 700, color: '#7c3aed', letterSpacing: '0.07em', textTransform: 'uppercase', margin: 0 }}>
+            <Sparkles size={13} color="#C4552D" strokeWidth={2} />
+            <p style={{ fontSize: 11, fontWeight: 700, color: '#C4552D', letterSpacing: '0.07em', textTransform: 'uppercase', margin: 0 }}>
               What I'm changing
             </p>
           </div>
@@ -187,7 +188,7 @@ export default function CheckpointScreen({
               <label style={{ fontSize: 13, color: tokens.colors.text.primary, fontWeight: 500 }}>
                 Confidence with skills learned
               </label>
-              <span style={{ fontSize: 16, fontWeight: 700, color: '#7c3aed', minWidth: 36, textAlign: 'right' }}>
+              <span style={{ fontSize: 16, fontWeight: 700, color: '#C4552D', minWidth: 36, textAlign: 'right' }}>
                 {confidence}/10
               </span>
             </div>
@@ -196,7 +197,7 @@ export default function CheckpointScreen({
               type="range" min="1" max="10" value={confidence}
               onChange={e => setConfidence(parseInt(e.target.value))}
               style={{ width: '100%', height: 6, borderRadius: 99, cursor: 'pointer',
-                background: `linear-gradient(to right, #7c3aed ${(confidence - 1) / 9 * 100}%, #e5e7eb ${(confidence - 1) / 9 * 100}%)`,
+                background: `linear-gradient(to right, #C4552D ${(confidence - 1) / 9 * 100}%, #e5e7eb ${(confidence - 1) / 9 * 100}%)`,
                 outline: 'none', appearance: 'none' as const }}
             />
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
@@ -219,9 +220,9 @@ export default function CheckpointScreen({
                   onClick={() => setTimeManagement(value)}
                   style={{
                     padding: '9px 4px', borderRadius: 10, fontSize: 12, fontWeight: 500, cursor: 'pointer',
-                    border: timeManagement === value ? '2px solid #7c3aed' : `1px solid ${tokens.colors.border}`,
-                    backgroundColor: timeManagement === value ? 'rgba(124,58,237,0.08)' : 'transparent',
-                    color: timeManagement === value ? '#7c3aed' : tokens.colors.text.secondary,
+                    border: timeManagement === value ? '2px solid #C4552D' : `1px solid ${tokens.colors.border}`,
+                    backgroundColor: timeManagement === value ? 'rgba(196, 85, 45,0.08)' : 'transparent',
+                    color: timeManagement === value ? '#C4552D' : tokens.colors.text.secondary,
                     transition: 'all 0.15s',
                   }}
                 >
@@ -261,13 +262,13 @@ export default function CheckpointScreen({
         style={{
           width: '100%', padding: '15px',
           borderRadius: 14, border: 'none',
-          background: isRecalibrating ? '#e5e7eb' : 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+          background: isRecalibrating ? '#e5e7eb' : 'linear-gradient(135deg, #C4552D 0%, #A8451F 100%)',
           color: isRecalibrating ? '#9ca3af' : '#fff',
           fontSize: 15, fontWeight: 600,
           cursor: isRecalibrating ? 'not-allowed' : 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
           letterSpacing: '-0.01em', transition: 'all 0.15s',
-          boxShadow: isRecalibrating ? 'none' : '0 4px 20px rgba(124,58,237,0.3)',
+          boxShadow: isRecalibrating ? 'none' : '0 4px 20px rgba(196, 85, 45,0.3)',
         }}
       >
         {isRecalibrating ? (

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const SUPABASE_AUTH_KEY = 'sb-127-auth-token';
+const _SUPABASE_AUTH_KEY = 'sb-127-auth-token';
 
 function mockSupabaseRoutes(page: Parameters<typeof test>[1] extends infer P ? P extends { page: infer Q } ? Q : never : never) {
   return Promise.all([

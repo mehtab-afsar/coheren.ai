@@ -16,8 +16,8 @@ export default function CoachSummary({ summary }: CoachSummaryProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: 0.4 }}
       style={{
-        background: 'rgba(124,58,237,0.04)',
-        border: `1px ${summary.trim() ? 'solid' : 'dashed'} rgba(124,58,237,0.15)`,
+        background: 'rgba(196, 85, 45,0.04)',
+        border: `1px ${summary.trim() ? 'solid' : 'dashed'} rgba(196, 85, 45,0.15)`,
         borderRadius: 20,
         padding: 20,
         display: 'flex',
@@ -29,19 +29,19 @@ export default function CoachSummary({ summary }: CoachSummaryProps) {
         width: 34,
         height: 34,
         borderRadius: 10,
-        background: 'rgba(124,58,237,0.12)',
+        background: 'rgba(196, 85, 45,0.12)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         flexShrink: 0,
       }}>
-        <Brain size={17} color="#7c3aed" />
+        <Brain size={17} color="#C4552D" />
       </div>
 
       <div style={{ flex: 1 }}>
         <p style={{
           fontSize: 10,
-          color: '#7c3aed',
+          color: '#C4552D',
           fontWeight: 600,
           letterSpacing: '0.1em',
           textTransform: 'uppercase',

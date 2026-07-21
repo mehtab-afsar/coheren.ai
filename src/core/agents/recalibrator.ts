@@ -62,6 +62,8 @@ export interface Agent5WeeklyInput {
   };
   /** Per-user adaptive thresholds — from roadmaps.config. Defaults applied inside recalibrateWeek. */
   thresholds?: ThresholdAdjustments;
+  /** Per-day quiz/assessment summary (built via buildAssessmentSummary) so recalibration responds to how the user scored. */
+  assessmentSummary?: string;
 }
 // Minimal interface to avoid circular import with @core/store/useStore
 interface Task {
@@ -398,7 +400,7 @@ Your job: analyse a pre-computed performance snapshot and produce a stone-aware,
 export async function recalibrateCurriculum(
   input: Agent5Input
 ): Promise<Agent5Output | null> {
-  const { context, roadmap, stoneProfile, completedTasks, currentDay } = input;
+  const { context, roadmap, stoneProfile, completedTasks, currentDay, assessmentSummary } = input;
 
   // Don't generate tasks past the goal completion date
   if (currentDay >= roadmap.totalDays) return null;
@@ -469,7 +471,7 @@ ${roadmapSummary}
 - Avg time overage: ${signals.avgTimeOverage > 0 ? '+' : ''}${signals.avgTimeOverage.toFixed(0)} min/session
 - Struggling areas (rated 4-5): ${signals.strugglingAreas.join(', ') || 'none'}
 - Mastering areas (rated 1-2): ${signals.masteringAreas.join(', ') || 'none'}
-
+${assessmentSummary ? `\n### Assessment / Quiz Results\n${assessmentSummary}\nWeight demonstrated misconceptions and low quiz scores when deciding what to re-teach or slow the pace on.\n` : ''}
 ### Stone Directive for ${status}
 ${stoneDirective}
 ${ragContext}
@@ -605,7 +607,7 @@ Your job: analyse a pre-computed performance snapshot and weekly check-in answer
 8. Return ONLY valid JSON. No markdown, no code blocks.`;
 
 export async function recalibrateWeek(input: Agent5WeeklyInput): Promise<Agent5WeeklyOutput> {
-  const { context, roadmap, stoneProfile, completedTasks, currentDay, weekNumber, weeklyCheckInAnswers, thresholds = DEFAULT_THRESHOLDS } = input;
+  const { context, roadmap, stoneProfile, completedTasks, currentDay, weekNumber, weeklyCheckInAnswers, thresholds = DEFAULT_THRESHOLDS, assessmentSummary } = input;
 
   // Pre-compute signals using per-user adaptive thresholds
   const signals = computeSignals(completedTasks, context.dailyMinutes, thresholds);
@@ -703,7 +705,7 @@ ${roadmapSummary}
 - Consecutive skips (max streak): ${signals.consecutiveSkips}
 - Struggling areas (rated 4-5): ${signals.strugglingAreas.join(', ') || 'none'}
 - Mastering areas (rated 1-2): ${signals.masteringAreas.join(', ') || 'none'}
-
+${assessmentSummary ? `\n### Assessment / Quiz Results\n${assessmentSummary}\nWeight demonstrated misconceptions and low quiz scores when deciding what to re-teach or slow the pace on.\n` : ''}
 ### Stone Directive for ${status}
 ${stoneDirective}
 ${ragContext}

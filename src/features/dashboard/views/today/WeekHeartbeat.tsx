@@ -50,18 +50,18 @@ export default function WeekHeartbeat({ currentDay, tasks }: WeekHeartbeatProps)
             <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
               <span style={{
                 fontSize: 9, letterSpacing: '0.04em',
-                color: isToday ? '#7c3aed' : '#9ca3af',
+                color: isToday ? '#C4552D' : '#9ca3af',
                 fontWeight: isToday ? 700 : 400,
               }}>
                 {label}
               </span>
               <div style={{
                 width: 18, height: 18, borderRadius: 5,
-                backgroundColor: isCompleted ? '#7c3aed'
-                  : isToday ? 'rgba(124,58,237,0.12)'
+                backgroundColor: isCompleted ? '#C4552D'
+                  : isToday ? 'rgba(196, 85, 45,0.12)'
                   : isFuture ? 'rgba(0,0,0,0.04)'
                   : 'rgba(0,0,0,0.06)',
-                border: isToday ? '2px solid #7c3aed' : isFuture ? '1px solid rgba(0,0,0,0.06)' : 'none',
+                border: isToday ? '2px solid #C4552D' : isFuture ? '1px solid rgba(0,0,0,0.06)' : 'none',
                 transition: 'background 200ms ease',
               }} />
             </div>

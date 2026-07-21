@@ -142,7 +142,7 @@ export default function CoachView() {
           color: 'var(--c-text-tertiary)',
           margin: 0,
         }}>
-          Insights, adjustments, and observations from your AI coach.
+          Notes, insights, and plan adjustments from Coheren as you progress.
         </p>
       </div>
 

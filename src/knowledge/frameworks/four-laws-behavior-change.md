@@ -133,7 +133,7 @@ To build good habits, make each step easier. To break bad habits, make each step
 
 **Key Insight:** Small habits compound into remarkable results over time.
 
-## Application in CONSIST
+## Application in Coheren
 
 ### Task Design
 - **Obvious**: Clear daily tasks with specific times

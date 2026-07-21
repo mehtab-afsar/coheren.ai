@@ -11,19 +11,26 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
+import { env } from '@config/env';
+import { proxyFetch } from './ai-proxy-fetch';
 
 const CLAUDE_SONNET = 'claude-sonnet-4-6';
 
-function getApiKey(): string {
-  return (import.meta.env.VITE_ANTHROPIC_API_KEY as string | undefined) ?? '';
-}
-
 export function isClaudeAvailable(): boolean {
-  return Boolean(getApiKey());
+  // Availability is a secret-free feature flag; the real key lives in the edge
+  // function. (Previously read the Anthropic key from the browser env, which shipped it.)
+  return env.CLAUDE_ENABLED;
 }
 
 function makeClient(): Anthropic {
-  return new Anthropic({ apiKey: getApiKey(), dangerouslyAllowBrowser: true });
+  // Routes through ai-proxy (which injects the real x-api-key). `apiKey` is a
+  // dummy; proxyFetch attaches the user's JWT and strips the SDK's x-api-key.
+  return new Anthropic({
+    apiKey: 'proxy',
+    baseURL: `${env.AI_PROXY_URL}/anthropic`,
+    fetch: proxyFetch,
+    dangerouslyAllowBrowser: true,
+  });
 }
 
 // ── Shared types ──────────────────────────────────────────────────────────────

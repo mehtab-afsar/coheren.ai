@@ -10,7 +10,7 @@ import TaskTypeBreakdown from './progress/TaskTypeBreakdown';
 import { useFeedbackMetrics } from '../hooks/useFeedbackMetrics';
 
 // ── Ring Progress ────────────────────────────────────────────────────────────
-function RingProgress({ pct, size = 120, stroke = 9, color = '#7c3aed' }: {
+function RingProgress({ pct, size = 120, stroke = 9, color = '#C4552D' }: {
   pct: number; size?: number; stroke?: number; color?: string;
 }) {
   const r = (size - stroke * 2) / 2;
@@ -182,7 +182,7 @@ export default function InsightsView() {
     .slice(0, 30);
 
   // ── Ring color ─────────────────────────────────────────────────────────────
-  const ringColor = overallCompletion >= 80 ? '#22c55e' : overallCompletion >= 50 ? '#7c3aed' : '#f97316';
+  const ringColor = overallCompletion >= 80 ? '#22c55e' : overallCompletion >= 50 ? '#C4552D' : '#f97316';
 
   // ── Week delta ─────────────────────────────────────────────────────────────
   const weekDelta = prevWeekCompletion !== null ? weeklyCompletion - prevWeekCompletion : null;
@@ -341,7 +341,7 @@ export default function InsightsView() {
             width: `${weeklyCompletion}%`,
             background: weeklyCompletion === 100
               ? 'linear-gradient(90deg, #22c55e, #4ade80)'
-              : 'linear-gradient(90deg, #7c3aed, #6d28d9)',
+              : 'linear-gradient(90deg, #C4552D, #A8451F)',
             transition: 'width 0.8s cubic-bezier(0.16,1,0.3,1)',
           }} />
         </div>
@@ -399,10 +399,10 @@ export default function InsightsView() {
             color="#f97316"
           />
           <RecordChip
-            icon={<Trophy size={15} color="#7c3aed" strokeWidth={2} />}
+            icon={<Trophy size={15} color="#C4552D" strokeWidth={2} />}
             label={`best week · Wk ${bestWeek.number}`}
             value={`${bestWeek.percentage}%`}
-            color="#7c3aed"
+            color="#C4552D"
           />
           <RecordChip
             icon={<Clock size={15} color="#22c55e" strokeWidth={2} />}

@@ -31,7 +31,7 @@ export default function ShareableCard({ streak, tasksCompleted, hoursInvested, d
 
     // Purple radial glow top-right
     const radial = ctx.createRadialGradient(640, 120, 0, 640, 120, 400);
-    radial.addColorStop(0, 'rgba(167,139,250,0.18)');
+    radial.addColorStop(0, 'rgba(221, 161, 137,0.18)');
     radial.addColorStop(1, 'transparent');
     ctx.fillStyle = radial;
     ctx.fillRect(0, 0, 800, 480);
@@ -48,7 +48,7 @@ export default function ShareableCard({ streak, tasksCompleted, hoursInvested, d
     ctx.fillText(domainText, 48, 130);
 
     // Divider line
-    ctx.strokeStyle = 'rgba(167,139,250,0.15)';
+    ctx.strokeStyle = 'rgba(221, 161, 137,0.15)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(48, 158);
@@ -67,7 +67,7 @@ export default function ShareableCard({ streak, tasksCompleted, hoursInvested, d
 
       // Value
       ctx.font = `bold 56px -apple-system, system-ui, sans-serif`;
-      ctx.fillStyle = '#c4b5fd';
+      ctx.fillStyle = '#E3B9A5';
       ctx.fillText(stat.value, x, 270);
 
       // Label
@@ -77,7 +77,7 @@ export default function ShareableCard({ streak, tasksCompleted, hoursInvested, d
     });
 
     // Bottom divider
-    ctx.strokeStyle = 'rgba(167,139,250,0.12)';
+    ctx.strokeStyle = 'rgba(221, 161, 137,0.12)';
     ctx.beginPath();
     ctx.moveTo(48, 370);
     ctx.lineTo(752, 370);
@@ -186,7 +186,7 @@ export default function ShareableCard({ streak, tasksCompleted, hoursInvested, d
               justifyContent: 'center',
               gap: '8px',
               padding: `${tokens.spacing.md} ${tokens.spacing.lg}`,
-              backgroundColor: '#7c3aed',
+              backgroundColor: '#C4552D',
               color: '#fff',
               border: 'none',
               borderRadius: tokens.borderRadius.md,

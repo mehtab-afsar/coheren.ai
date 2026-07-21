@@ -97,10 +97,10 @@ export const FloatingNav = ({
                 onClick={item.onClick}
                 className={cn(
                   "group relative px-3 py-1.5 text-sm text-neutral-500 transition-colors duration-200",
-                  "rounded-full hover:text-violet-600",
+                  "rounded-full hover:text-clay-600",
                 )}
               >
-                <span className="absolute inset-0 rounded-full bg-violet-50 opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+                <span className="absolute inset-0 rounded-full bg-clay-50 opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
                 <span className="relative">{item.name}</span>
               </button>
             ))}
@@ -112,12 +112,12 @@ export const FloatingNav = ({
               onClick={ctaDropdown ? () => setCtaOpen(v => !v) : onCtaClick}
               className={cn(
                 "group relative rounded-full border border-neutral-200 px-4 py-1.5 text-sm font-medium text-black flex items-center gap-1",
-                "transition-all duration-200 hover:border-violet-300 hover:text-violet-700 hover:shadow-[0_0_12px_rgba(139,92,246,0.2)]",
-                ctaOpen && "border-violet-300 text-violet-700",
+                "transition-all duration-200 hover:border-clay-300 hover:text-clay-700 hover:shadow-[0_0_12px_rgba(206, 107, 69,0.2)]",
+                ctaOpen && "border-clay-300 text-clay-700",
               )}
             >
               <span>{ctaLabel}</span>
-              <span className="absolute inset-x-0 -bottom-px mx-auto h-px w-1/2 bg-gradient-to-r from-transparent via-violet-500 to-transparent transition-opacity duration-200 group-hover:opacity-100 opacity-60" />
+              <span className="absolute inset-x-0 -bottom-px mx-auto h-px w-1/2 bg-gradient-to-r from-transparent via-clay-500 to-transparent transition-opacity duration-200 group-hover:opacity-100 opacity-60" />
             </button>
 
             {/* CTA dropdown */}
@@ -134,7 +134,7 @@ export const FloatingNav = ({
                     <button
                       key={i}
                       onClick={() => { item.onClick(); setCtaOpen(false); }}
-                      className="w-full px-4 py-2.5 text-sm text-left text-neutral-700 hover:text-violet-700 hover:bg-violet-50 transition-colors"
+                      className="w-full px-4 py-2.5 text-sm text-left text-neutral-700 hover:text-clay-700 hover:bg-clay-50 transition-colors"
                     >
                       {item.label}
                     </button>
@@ -146,7 +146,7 @@ export const FloatingNav = ({
 
           {/* Hamburger — mobile only */}
           <button
-            className="sm:hidden p-1.5 rounded-full text-slate-600 hover:text-violet-600 transition-colors"
+            className="sm:hidden p-1.5 rounded-full text-slate-600 hover:text-clay-600 transition-colors"
             onClick={() => setMenuOpen(v => !v)}
             aria-label="Toggle menu"
           >
@@ -169,7 +169,7 @@ export const FloatingNav = ({
                   <button
                     key={idx}
                     onClick={() => { item.onClick(); setMenuOpen(false); }}
-                    className="px-6 py-3 text-sm text-neutral-600 hover:text-violet-600 hover:bg-violet-50 text-left transition-colors"
+                    className="px-6 py-3 text-sm text-neutral-600 hover:text-clay-600 hover:bg-clay-50 text-left transition-colors"
                   >
                     {item.name}
                   </button>
@@ -183,8 +183,8 @@ export const FloatingNav = ({
                         onClick={() => { item.onClick(); setMenuOpen(false); }}
                         className={`w-full rounded-full py-2.5 text-sm font-medium transition-colors ${
                           i === 0
-                            ? 'bg-violet-600 text-white hover:bg-violet-700'
-                            : 'border border-violet-200 text-violet-700 hover:bg-violet-50'
+                            ? 'bg-clay-600 text-white hover:bg-clay-700'
+                            : 'border border-clay-200 text-clay-700 hover:bg-clay-50'
                         }`}
                       >
                         {item.label}
@@ -194,7 +194,7 @@ export const FloatingNav = ({
                 ) : (
                   <button
                     onClick={() => { onCtaClick?.(); setMenuOpen(false); }}
-                    className="mx-4 mb-2 rounded-full bg-violet-600 py-2.5 text-sm font-medium text-white hover:bg-violet-700 transition-colors"
+                    className="mx-4 mb-2 rounded-full bg-clay-600 py-2.5 text-sm font-medium text-white hover:bg-clay-700 transition-colors"
                   >
                     {ctaLabel}
                   </button>

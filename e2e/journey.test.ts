@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { seedDashboard, DASHBOARD_STORE_STATE } from './helpers';
+import { seedDashboard } from './helpers';
 
 test.describe('RoadmapView / Journey', () => {
   test.beforeEach(async ({ page }) => {

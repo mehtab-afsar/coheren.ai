@@ -254,11 +254,12 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
   const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
   useEffect(() => {
     if (!isGeneratingPlan) { setLoadingMsgIndex(0); return; }
+    const maxIndex = LOADING_MESSAGES.length - 1;
     const id = setInterval(() => {
-      setLoadingMsgIndex(i => Math.min(i + 1, LOADING_MESSAGES.length - 1));
+      setLoadingMsgIndex(i => Math.min(i + 1, maxIndex));
     }, 4000);
     return () => clearInterval(id);
-  }, [isGeneratingPlan]);
+  }, [isGeneratingPlan, LOADING_MESSAGES.length]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -1032,6 +1033,7 @@ The system will automatically detect when the data is complete and transition to
           undefined,
           undefined,
           collectedData.practiceEnvironment || undefined,
+          goalAnalysis || undefined, // reuse Agent 1 output — don't re-run it
         ),
         30_000,
         'Curriculum generation'
@@ -1451,14 +1453,14 @@ The system will automatically detect when the data is complete and transition to
             <div className="relative z-10 flex items-center gap-2.5 p-10">
               <div style={{
                 width: 32, height: 32, borderRadius: 9,
-                background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
-                boxShadow: '0 2px 10px rgba(124, 58, 237, 0.4)',
+                background: 'linear-gradient(135deg, #C4552D, #A8451F)',
+                boxShadow: '0 2px 10px rgba(196, 85, 45, 0.4)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 <span style={{
                   fontSize: '12px',
                   fontWeight: 800,
-                  color: '#e9d8fd',
+                  color: '#F5E4DA',
                   letterSpacing: '-0.02em',
                   fontFamily: 'monospace'
                 }}>
@@ -1477,21 +1479,21 @@ The system will automatically detect when the data is complete and transition to
                   shape="sphere"
                   type="random"
                   colorBack="#060612"
-                  colorFront="#4c1d95"
+                  colorFront="#7A2E14"
                   pxSize={2}
                   speed={0.9}
                   style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
                 />
                 <div style={{
                   position: 'absolute', inset: 0, borderRadius: '50%',
-                  boxShadow: 'inset 0 0 0 1px rgba(167, 139, 250, 0.15)',
-                  background: 'radial-gradient(circle at 68% 28%, rgba(167, 139, 250, 0.08) 0%, transparent 60%)',
+                  boxShadow: 'inset 0 0 0 1px rgba(221, 161, 137, 0.15)',
+                  background: 'radial-gradient(circle at 68% 28%, rgba(221, 161, 137, 0.08) 0%, transparent 60%)',
                 }} />
               </div>
               <div style={{
                 position: 'absolute',
                 width: 480, height: 140, borderRadius: '50%',
-                background: 'radial-gradient(ellipse, rgba(124, 58, 237, 0.18) 0%, transparent 70%)',
+                background: 'radial-gradient(ellipse, rgba(196, 85, 45, 0.18) 0%, transparent 70%)',
                 filter: 'blur(24px)', pointerEvents: 'none',
               }} />
               <div style={{ textAlign: 'center' }}>
@@ -1503,9 +1505,10 @@ The system will automatically detect when the data is complete and transition to
                 </p>
               </div>
               <div className="flex items-center gap-6">
-                {[['10k+', 'Goals built'], ['91%', 'Completion rate'], ['4.9', 'Avg rating']].map(([val, lbl]) => (
+                {/* Honest value props — no fabricated usage metrics. */}
+                {[['Science-backed', 'Behavioral research'], ['One task', 'A day'], ['Free', 'To start']].map(([val, lbl]) => (
                   <div key={lbl} style={{ textAlign: 'center' }}>
-                    <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 18, fontWeight: 500, letterSpacing: '-0.03em', margin: 0 }}>{val}</p>
+                    <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 15, fontWeight: 500, letterSpacing: '-0.03em', margin: 0 }}>{val}</p>
                     <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: 11, margin: '2px 0 0', fontWeight: 300 }}>{lbl}</p>
                   </div>
                 ))}
@@ -1592,13 +1595,13 @@ The system will automatically detect when the data is complete and transition to
                       borderRadius: 11, border: 'none',
                       cursor: authLoading ? 'not-allowed' : 'pointer',
                       fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em',
-                      background: authLoading ? '#ede9fe' : 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-                      color: authLoading ? '#6d28d9' : '#fff',
-                      boxShadow: authLoading ? 'none' : '0 4px 18px rgba(124, 58, 237, 0.35)',
+                      background: authLoading ? '#F9EDE6' : 'linear-gradient(135deg, #C4552D 0%, #A8451F 100%)',
+                      color: authLoading ? '#A8451F' : '#fff',
+                      boxShadow: authLoading ? 'none' : '0 4px 18px rgba(196, 85, 45, 0.35)',
                       transition: 'all 0.15s',
                     }}
-                    onMouseEnter={(e) => { if (!authLoading) { e.currentTarget.style.boxShadow = '0 6px 24px rgba(124, 58, 237, 0.5)'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
-                    onMouseLeave={(e) => { e.currentTarget.style.boxShadow = authLoading ? 'none' : '0 4px 18px rgba(124, 58, 237, 0.35)'; e.currentTarget.style.transform = 'none'; }}
+                    onMouseEnter={(e) => { if (!authLoading) { e.currentTarget.style.boxShadow = '0 6px 24px rgba(196, 85, 45, 0.5)'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
+                    onMouseLeave={(e) => { e.currentTarget.style.boxShadow = authLoading ? 'none' : '0 4px 18px rgba(196, 85, 45, 0.35)'; e.currentTarget.style.transform = 'none'; }}
                   >
                     {authLoading
                       ? (authGateMode === 'signup' ? 'Creating account...' : 'Signing in...')
@@ -1610,7 +1613,7 @@ The system will automatically detect when the data is complete and transition to
                   {authGateMode === 'signup' ? 'Already have an account? ' : "Don't have an account? "}
                   <button
                     onClick={() => { setAuthGateMode(authGateMode === 'signup' ? 'login' : 'signup'); setAuthError(null); }}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#7c3aed', padding: 0 }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#C4552D', padding: 0 }}
                   >
                     {authGateMode === 'signup' ? 'Sign in' : 'Sign up free'}
                   </button>
@@ -1649,9 +1652,9 @@ const authGateInputStyle: React.CSSProperties = {
 };
 
 function applyAuthGateFocus(el: HTMLInputElement) {
-  el.style.borderColor = '#7c3aed';
+  el.style.borderColor = '#C4552D';
   el.style.background = '#fff';
-  el.style.boxShadow = '0 0 0 3px rgba(124, 58, 237, 0.08)';
+  el.style.boxShadow = '0 0 0 3px rgba(196, 85, 45, 0.08)';
 }
 
 function applyAuthGateBlur(el: HTMLInputElement) {

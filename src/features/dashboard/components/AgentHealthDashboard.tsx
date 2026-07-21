@@ -197,8 +197,8 @@ export default function AgentHealthDashboard() {
                 padding: '4px 12px',
                 borderRadius: 6,
                 border: '1px solid',
-                borderColor: timeRange === range ? '#7c3aed' : '#e2e8f0',
-                background: timeRange === range ? '#7c3aed' : 'white',
+                borderColor: timeRange === range ? '#C4552D' : '#e2e8f0',
+                background: timeRange === range ? '#C4552D' : 'white',
                 color: timeRange === range ? 'white' : '#64748b',
                 fontSize: 13,
                 fontWeight: 500,
@@ -316,13 +316,13 @@ export default function AgentHealthDashboard() {
       {flags.SHADOW_PIPELINE && (
         <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid #e2e8f0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-            <h3 style={{ fontSize: 15, fontWeight: 600, color: '#7c3aed', margin: 0 }}>Shadow Pipeline</h3>
+            <h3 style={{ fontSize: 15, fontWeight: 600, color: '#C4552D', margin: 0 }}>Shadow Pipeline</h3>
             <button
               onClick={handleRunShadow}
               disabled={shadowRunning}
               style={{
                 padding: '6px 16px', borderRadius: 8, border: 'none',
-                background: shadowRunning ? '#e2e8f0' : '#7c3aed', color: 'white',
+                background: shadowRunning ? '#e2e8f0' : '#C4552D', color: 'white',
                 fontSize: 13, fontWeight: 600, cursor: shadowRunning ? 'not-allowed' : 'pointer',
               }}
             >
@@ -335,9 +335,9 @@ export default function AgentHealthDashboard() {
             </div>
           )}
           {diffReport && (
-            <div style={{ padding: 16, background: '#f5f3ff', borderRadius: 10, border: '1px solid #c4b5fd' }}>
+            <div style={{ padding: 16, background: '#FBF3EE', borderRadius: 10, border: '1px solid #E3B9A5' }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: '#1a1a2e', marginBottom: 8 }}>Diff Report</div>
-              <div style={{ fontSize: 13, color: '#4c1d95', fontFamily: 'monospace', marginBottom: 8 }}>{diffReport.summary}</div>
+              <div style={{ fontSize: 13, color: '#7A2E14', fontFamily: 'monospace', marginBottom: 8 }}>{diffReport.summary}</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12, color: '#64748b' }}>
                 <div>Live days: {diffReport.totalDays.live} → Shadow days: {diffReport.totalDays.shadow}</div>
                 <div>Phase count diff: {diffReport.phaseCountDiff > 0 ? `+${diffReport.phaseCountDiff}` : diffReport.phaseCountDiff}</div>
@@ -351,7 +351,7 @@ export default function AgentHealthDashboard() {
               </div>
               <button
                 onClick={() => setDiffReport(null)}
-                style={{ marginTop: 8, padding: '3px 10px', borderRadius: 6, border: '1px solid #c4b5fd', background: 'white', color: '#7c3aed', fontSize: 11, cursor: 'pointer' }}
+                style={{ marginTop: 8, padding: '3px 10px', borderRadius: 6, border: '1px solid #E3B9A5', background: 'white', color: '#C4552D', fontSize: 11, cursor: 'pointer' }}
               >
                 Dismiss
               </button>

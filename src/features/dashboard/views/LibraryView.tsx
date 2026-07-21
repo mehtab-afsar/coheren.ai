@@ -6,7 +6,7 @@ const SEVERITY_COLORS: Record<string, { bg: string; border: string; text: string
   Low:      { bg: 'rgba(34,197,94,0.06)',   border: 'rgba(34,197,94,0.20)',   text: '#16a34a' },
   Moderate: { bg: 'rgba(245,158,11,0.06)',  border: 'rgba(245,158,11,0.20)',  text: '#d97706' },
   High:     { bg: 'rgba(239,68,68,0.06)',   border: 'rgba(239,68,68,0.20)',   text: '#dc2626' },
-  Critical: { bg: 'rgba(124,58,237,0.06)',  border: 'rgba(124,58,237,0.20)', text: '#7c3aed' },
+  Critical: { bg: 'rgba(196, 85, 45,0.06)',  border: 'rgba(196, 85, 45,0.20)', text: '#C4552D' },
 };
 
 export default function LibraryView() {

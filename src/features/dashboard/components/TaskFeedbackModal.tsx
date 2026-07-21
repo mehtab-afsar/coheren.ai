@@ -6,7 +6,8 @@ import { useStore } from '@core/store/useStore';
 interface TaskFeedbackModalProps {
   isOpen: boolean;
   taskTitle: string;
-  estimatedMinutes: number;
+  /** Real measured minutes from the focus timer, or undefined when no session was timed. */
+  actualMinutes?: number;
   onSubmit: (feedback: TaskFeedback) => void;
   onClose: () => void;
 }
@@ -30,7 +31,7 @@ const MOODS = [
 export default function TaskFeedbackModal({
   isOpen,
   taskTitle,
-  estimatedMinutes,
+  actualMinutes,
   onSubmit,
   onClose,
 }: TaskFeedbackModalProps) {
@@ -43,7 +44,9 @@ export default function TaskFeedbackModal({
     if (navigator.vibrate) navigator.vibrate(50);
     onSubmit({
       difficultyRating: mood,
-      actualDuration: estimatedMinutes,
+      // Only report a real measured duration; undefined when nothing was timed
+      // (previously this hardcoded the ESTIMATE, poisoning every time-based signal).
+      actualDuration: actualMinutes,
       feedbackTags: [],
       userComment: note.trim() || undefined,
     });
@@ -106,8 +109,8 @@ export default function TaskFeedbackModal({
                 style={{
                   flex: 1, padding: '10px 4px',
                   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                  background: mood === value ? 'rgba(124,58,237,0.08)' : 'transparent',
-                  border: `2px solid ${mood === value ? '#7c3aed' : 'transparent'}`,
+                  background: mood === value ? 'rgba(196, 85, 45,0.08)' : 'transparent',
+                  border: `2px solid ${mood === value ? '#C4552D' : 'transparent'}`,
                   borderRadius: 14, cursor: 'pointer',
                   transition: 'all 150ms ease',
                   margin: '0 3px',
@@ -144,7 +147,7 @@ export default function TaskFeedbackModal({
             style={{
               width: '100%', padding: '14px',
               borderRadius: 14, border: 'none',
-              background: mood !== null ? 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)' : '#e5e7eb',
+              background: mood !== null ? 'linear-gradient(135deg, #C4552D 0%, #A8451F 100%)' : '#e5e7eb',
               color: mood !== null ? '#fff' : '#9ca3af',
               fontSize: 15, fontWeight: 600,
               cursor: mood !== null ? 'pointer' : 'not-allowed',

@@ -1,5 +1,5 @@
 /**
- * CONSIST Design System - Component Styles
+ * Coheren Design System - Component Styles
  *
  * Reusable style objects for common components.
  * All styles follow the minimalist black/white aesthetic.

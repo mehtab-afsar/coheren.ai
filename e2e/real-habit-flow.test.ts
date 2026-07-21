@@ -144,7 +144,7 @@ test.describe.serial('Real Account — Habit Flow', () => {
     await page.goto('/');
 
     // Wait for stones phase or skip to plan
-    const stonesPhase = await page.waitForFunction(() => {
+    const _stonesPhase = await page.waitForFunction(() => {
       const raw = localStorage.getItem('consist-storage');
       const state = raw ? JSON.parse(raw).state : null;
       return state?.onboardingPhase === 'stones' || state?.step === 2;
@@ -349,7 +349,7 @@ test.describe.serial('Real Account — Habit Flow', () => {
   });
 
   // ─── 9. CLEANUP ──────────────────────────────────────────────────────────────
-  test('9. Cleanup — delete test account', async ({ page }) => {
+  test('9. Cleanup — delete test account', async () => {
     // Use the Supabase admin API directly if service key is available
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (serviceKey && createdUserId) {

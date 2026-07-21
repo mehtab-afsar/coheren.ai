@@ -92,7 +92,7 @@ function formatChunks(chunks: Array<{ source: string; content: string }>): strin
  * Retrieve the most relevant knowledge chunks for a given query (or set of queries).
  *
  * Returns a formatted string ready for prompt injection, or '' if:
- *   - VITE_JINA_API_KEY is not configured
+ *   - the Jina embedding call fails
  *   - Supabase returns no results above the threshold
  *   - Any network/API error occurs
  */

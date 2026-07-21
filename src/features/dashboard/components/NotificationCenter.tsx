@@ -118,7 +118,7 @@ export default function NotificationCenter({ onClose }: Props) {
               <div key={n.id} style={{
                 padding: `${tokens.spacing.md} ${tokens.spacing.xl}`,
                 borderTop: idx === 0 ? 'none' : `1px solid ${tokens.colors.borderLight}`,
-                backgroundColor: !n.read ? 'rgba(124,58,237,0.03)' : 'transparent',
+                backgroundColor: !n.read ? 'rgba(196, 85, 45,0.03)' : 'transparent',
                 display: 'flex',
                 gap: tokens.spacing.sm,
                 alignItems: 'flex-start',
@@ -149,7 +149,7 @@ export default function NotificationCenter({ onClose }: Props) {
                   </p>
                 </div>
                 {!n.read && (
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#7c3aed', flexShrink: 0, marginTop: 6 }} />
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#C4552D', flexShrink: 0, marginTop: 6 }} />
                 )}
               </div>
             ))

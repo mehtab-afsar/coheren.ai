@@ -1,15 +1,15 @@
-# CONSIST - AI-Powered Consistency & Habit Formation App
+# Coheren - AI-Powered Consistency & Habit Formation App
 
 Your everyday ally for building consistency in anything.
 
 ## Overview
 
-CONSIST is a minimalist web app that helps users build consistency through AI-powered personalized roadmaps. Instead of forcing users to plan, CONSIST learns about them and creates adaptive micro-tasks that minimize cognitive load.
+Coheren is a minimalist web app that helps users build consistency through AI-powered personalized roadmaps. Instead of forcing users to plan, Coheren learns about them and creates adaptive micro-tasks that minimize cognitive load.
 
 ## Features Implemented (MVP)
 
 ### Complete Onboarding Flow
-1. **Welcome Screen** - Introduction to CONSIST
+1. **Welcome Screen** - Introduction to Coheren
 2. **Goal Selection** - Choose from 6 categories (Fitness, Exam, Hobby, Learning, Habit, Creative)
 3. **Specific Goal Input** - Curated suggestions or custom goals
 4. **Universal Questions** - 5 essential questions asked once for all goals

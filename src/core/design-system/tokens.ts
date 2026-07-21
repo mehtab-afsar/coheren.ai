@@ -1,5 +1,5 @@
 /**
- * CONSIST Design System - Design Tokens
+ * Coheren Design System - Design Tokens
  *
  * Premium "Focused Clarity" Design System
  * Philosophy: Effortless clarity meets intelligent luxury
@@ -17,10 +17,10 @@ export const tokens = {
   // ============================================
   colors: {
     // Primary - Royal Purple (Focus, intelligent ambition)
-    primary: '#7c3aed',
-    primaryHover: '#6d28d9',
-    primaryLight: '#a78bfa',
-    primarySubtle: '#f5f3ff',
+    primary: '#C4552D',
+    primaryHover: '#A8451F',
+    primaryLight: '#DDA189',
+    primarySubtle: '#FBF3EE',
 
     // Backgrounds - Warm, not pure white
     background: '#FFFCF9',      // Warm white
@@ -60,8 +60,8 @@ export const tokens = {
       hover: '#F8FAFC',
       hoverScale: 1.01,         // Subtle scale on hover
       disabled: '#E2E8F0',
-      focus: '#7c3aed',
-      focusRing: 'rgba(124, 58, 237, 0.1)',
+      focus: '#C4552D',
+      focusRing: 'rgba(196, 85, 45, 0.1)',
     },
 
     // Text Hierarchy

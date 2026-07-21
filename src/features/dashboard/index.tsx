@@ -63,7 +63,11 @@ export default function Dashboard() {
     }
   }, [pendingWeeklyCheckIn]);
   const [unreadCount, setUnreadCount] = useState(() => getNotifications().filter(n => !n.read).length);
-  const [showDebugPanel] = useState(() => new URLSearchParams(window.location.search).get('debug') === 'agents');
+  // Dev-only: the agent health panel exposes internal latency/errors/logs, so it is
+  // gated behind import.meta.env.DEV and never reachable in a production build.
+  const [showDebugPanel] = useState(() =>
+    import.meta.env.DEV && new URLSearchParams(window.location.search).get('debug') === 'agents'
+  );
 
   // Generate streak milestone coach messages
   useEffect(() => {
@@ -171,7 +175,21 @@ export default function Dashboard() {
                 avgDifficulty={checkpointData.avgDifficulty}
                 strugglingAreas={checkpointData.strugglingAreas}
                 masteringAreas={checkpointData.masteringAreas}
-                onComplete={() => { handleCheckpointComplete(); }}
+                onComplete={(fb) => {
+                  // Reconnect the user's reflection (previously discarded): map the
+                  // checkpoint feedback into the weekly check-in shape the recalibrator reads.
+                  handleCheckpointComplete({
+                    pacing: `Confidence ${fb.overallConfidence}/10; time felt: ${fb.timeManagement}`,
+                    hardTopics: fb.specificStruggles || '',
+                    taskTypesFeedback: fb.qualitativeFeedback || '',
+                    raw: [
+                      `confidence: ${fb.overallConfidence}/10`,
+                      `time: ${fb.timeManagement}`,
+                      fb.qualitativeFeedback,
+                      fb.specificStruggles,
+                    ].filter(Boolean) as string[],
+                  });
+                }}
                 isRecalibrating={isRecalibrating}
                 recalibrationResult={recalibrationResult}
               />

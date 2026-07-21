@@ -68,7 +68,7 @@ export function PricingSection() {
           width: "700px",
           height: "300px",
           background:
-            "radial-gradient(ellipse 60% 55% at 50% 0%, rgba(139,92,246,0.18) 0%, transparent 100%)",
+            "radial-gradient(ellipse 60% 55% at 50% 0%, rgba(206, 107, 69,0.18) 0%, transparent 100%)",
         }}
       />
 
@@ -81,7 +81,7 @@ export function PricingSection() {
           transition={{ duration: 0.6 }}
           className="text-center mb-4 sm:mb-8"
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-400 mb-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-clay-400 mb-4">
             Pricing
           </p>
           <h2
@@ -113,7 +113,7 @@ export function PricingSection() {
               {!isYearly && (
                 <motion.span
                   layoutId="pill"
-                  className="absolute inset-0 rounded-full bg-violet-600 shadow-sm"
+                  className="absolute inset-0 rounded-full bg-clay-600 shadow-sm"
                   transition={{ type: "spring", stiffness: 500, damping: 30 }}
                 />
               )}
@@ -128,12 +128,12 @@ export function PricingSection() {
               {isYearly && (
                 <motion.span
                   layoutId="pill"
-                  className="absolute inset-0 rounded-full bg-violet-600 shadow-sm"
+                  className="absolute inset-0 rounded-full bg-clay-600 shadow-sm"
                   transition={{ type: "spring", stiffness: 500, damping: 30 }}
                 />
               )}
               <span className="relative">Yearly</span>
-              <span className="relative rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-600">
+              <span className="relative rounded-full bg-clay-100 px-2 py-0.5 text-xs font-semibold text-clay-600">
                 Save 20%
               </span>
             </button>
@@ -156,15 +156,15 @@ export function PricingSection() {
                 className="relative h-full rounded-3xl mt-4"
                 style={{
                   background: plan.popular
-                    ? 'linear-gradient(135deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.25) 50%, rgba(139,92,246,0.12) 100%)'
+                    ? 'linear-gradient(135deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.25) 50%, rgba(206, 107, 69,0.12) 100%)'
                     : 'linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.18) 100%)',
                   backdropFilter: 'blur(20px)',
                   WebkitBackdropFilter: 'blur(20px)',
                   border: plan.popular
-                    ? '1px solid rgba(139,92,246,0.4)'
+                    ? '1px solid rgba(206, 107, 69,0.4)'
                     : '1px solid rgba(255,255,255,0.5)',
                   boxShadow: plan.popular
-                    ? '0 8px 32px rgba(139,92,246,0.2), inset 0 1px 0 rgba(255,255,255,0.7), inset 0 -1px 0 rgba(255,255,255,0.1)'
+                    ? '0 8px 32px rgba(206, 107, 69,0.2), inset 0 1px 0 rgba(255,255,255,0.7), inset 0 -1px 0 rgba(255,255,255,0.1)'
                     : '0 8px 32px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.7), inset 0 -1px 0 rgba(255,255,255,0.1)',
                 }}
               >
@@ -173,7 +173,7 @@ export function PricingSection() {
                   style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.35) 0%, transparent 70%)' }} />
 
                 {plan.badge && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-violet-600 px-4 py-0.5 text-xs font-semibold text-white shadow-lg">
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-clay-600 px-4 py-0.5 text-xs font-semibold text-white shadow-lg">
                     {plan.badge}
                   </span>
                 )}
@@ -202,8 +202,8 @@ export function PricingSection() {
                   <button
                     className={`w-full rounded-xl py-2.5 sm:py-3 text-sm sm:text-base font-medium transition-all duration-200 ${
                       plan.popular
-                        ? "bg-violet-600 text-white shadow-md shadow-violet-900/30 hover:bg-violet-700"
-                        : "text-gray-800 hover:text-violet-700"
+                        ? "bg-clay-600 text-white shadow-md shadow-clay-900/30 hover:bg-clay-700"
+                        : "text-gray-800 hover:text-clay-700"
                     }`}
                     style={!plan.popular ? {
                       background: 'rgba(255,255,255,0.6)',
@@ -219,7 +219,7 @@ export function PricingSection() {
                   <ul className="space-y-2.5">
                     {plan.features.map((f, fi) => (
                       <li key={fi} className="flex items-center gap-3">
-                        <span className="text-violet-500 flex-shrink-0">{f.icon}</span>
+                        <span className="text-clay-500 flex-shrink-0">{f.icon}</span>
                         <span className="text-sm text-gray-600">{f.text}</span>
                       </li>
                     ))}

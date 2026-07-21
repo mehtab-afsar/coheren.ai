@@ -10,16 +10,16 @@ interface Props {
 export default function DifficultyPrompt({ onSimplify, onExtend, onKeep }: Props) {
   return (
     <div style={{
-      background: '#f5f3ff',
-      border: '1px solid rgba(124,58,237,0.2)',
-      borderLeft: '3px solid #7c3aed',
+      background: '#FBF3EE',
+      border: '1px solid rgba(196, 85, 45,0.2)',
+      borderLeft: '3px solid #C4552D',
       borderRadius: tokens.borderRadius.lg,
       padding: '16px 18px',
       marginBottom: tokens.spacing.xl,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
-        <Sparkles size={14} color="#7c3aed" strokeWidth={2} />
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#7c3aed' }}>
+        <Sparkles size={14} color="#C4552D" strokeWidth={2} />
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#C4552D' }}>
           I noticed things have been tough lately
         </span>
       </div>
@@ -33,7 +33,7 @@ export default function DifficultyPrompt({ onSimplify, onExtend, onKeep }: Props
         <button
           onClick={onSimplify}
           style={{
-            padding: '10px 14px', backgroundColor: '#7c3aed', color: '#fff',
+            padding: '10px 14px', backgroundColor: '#C4552D', color: '#fff',
             border: 'none', borderRadius: 10, cursor: 'pointer',
             fontSize: 13, fontWeight: 500, textAlign: 'left' as const, lineHeight: 1.4,
             transition: 'opacity 0.15s',
@@ -46,14 +46,14 @@ export default function DifficultyPrompt({ onSimplify, onExtend, onKeep }: Props
         <button
           onClick={onExtend}
           style={{
-            padding: '10px 14px', backgroundColor: 'rgba(124,58,237,0.06)',
+            padding: '10px 14px', backgroundColor: 'rgba(196, 85, 45,0.06)',
             color: tokens.colors.text.primary,
-            border: '1px solid rgba(124,58,237,0.2)', borderRadius: 10,
+            border: '1px solid rgba(196, 85, 45,0.2)', borderRadius: 10,
             cursor: 'pointer', fontSize: 13, fontWeight: 500,
             textAlign: 'left' as const, lineHeight: 1.4, transition: 'all 0.15s',
           }}
-          onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(124,58,237,0.1)'}
-          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'rgba(124,58,237,0.06)'}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(196, 85, 45,0.1)'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'rgba(196, 85, 45,0.06)'}
         >
           Extend my timeline — add 1–2 more weeks
         </button>

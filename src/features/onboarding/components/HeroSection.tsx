@@ -91,7 +91,7 @@ export function HeroSection({
                 {word.split("").map((char, i) => (
                   <span key={i} style={{ display: "inline-block", overflow: "hidden", lineHeight: 1.1 }}>
                     <motion.span
-                      className="inline-block bg-gradient-to-r from-violet-600 to-indigo-500 bg-clip-text text-transparent"
+                      className="inline-block bg-gradient-to-r from-clay-600 to-amber-500 bg-clip-text text-transparent"
                       variants={{
                         hidden: { y: "105%", opacity: 0 },
                         visible: { y: "0%", opacity: 1, transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] } },

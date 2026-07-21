@@ -20,8 +20,8 @@ export default function UpcomingPreview({
   return (
     <div
       style={{
-        background: 'rgba(99,102,241,0.05)',
-        border: '1px solid rgba(99,102,241,0.15)',
+        background: 'rgba(196, 85, 45,0.05)',
+        border: '1px solid rgba(196, 85, 45,0.15)',
         borderRadius: 18,
         padding: '16px 18px',
         marginTop: 16,
@@ -83,13 +83,13 @@ export default function UpcomingPreview({
               alignItems: 'center',
               gap: 5,
               padding: '3px 10px',
-              background: 'rgba(124,58,237,0.1)',
-              border: '1px solid rgba(124,58,237,0.2)',
+              background: 'rgba(196, 85, 45,0.1)',
+              border: '1px solid rgba(196, 85, 45,0.2)',
               borderRadius: 99,
             }}
           >
-            <Target size={10} color="#a78bfa" />
-            <span style={{ fontSize: 11, color: '#a78bfa', fontWeight: 500 }}>
+            <Target size={10} color="#DDA189" />
+            <span style={{ fontSize: 11, color: '#DDA189', fontWeight: 500 }}>
               {practiceCount} practice
             </span>
           </div>
@@ -121,13 +121,13 @@ export default function UpcomingPreview({
               alignItems: 'center',
               gap: 5,
               padding: '3px 10px',
-              background: 'rgba(139,92,246,0.1)',
-              border: '1px solid rgba(139,92,246,0.2)',
+              background: 'rgba(206, 107, 69,0.1)',
+              border: '1px solid rgba(206, 107, 69,0.2)',
               borderRadius: 99,
             }}
           >
-            <MessageCircle size={10} color="#c4b5fd" />
-            <span style={{ fontSize: 11, color: '#c4b5fd', fontWeight: 500 }}>
+            <MessageCircle size={10} color="#E3B9A5" />
+            <span style={{ fontSize: 11, color: '#E3B9A5', fontWeight: 500 }}>
               {reflectionCount} reflection
             </span>
           </div>

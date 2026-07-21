@@ -689,14 +689,30 @@ export const useStore = create<AppStore>()(
             .sort((a, b) => (b.dayNumber ?? 0) - (a.dayNumber ?? 0))
             .slice(0, 5);
 
-          const previousTasksContext = recentCompleted.length > 0
+          const recentContext = recentCompleted.length > 0
             ? recentCompleted.map(t =>
                 `- Day ${t.dayNumber}: "${t.title}"` +
                 (t.completed ? ` ✓ completed` : ` ✗ skipped${t.skipReason ? ` (${t.skipReason})` : ''}`) +
                 (t.difficultyRating ? ` | difficulty: ${t.difficultyRating}/5` : '') +
                 (t.actualDuration ? ` | took ${t.actualDuration} min` : '')
               ).join('\n')
-            : undefined;
+            : '';
+
+          // Close the recalibration loop: if this week's plan was recalibrated from
+          // recent performance (weekly checkpoint), tell Agent 4 to align today's
+          // task with the adjusted focus — so recalibration actually changes the
+          // tasks the user does, not just the plan they see.
+          const currentWeekNumber = Math.ceil(nextDay / 7);
+          const recalWeek = state.agentRoadmapV2?.months
+            .flatMap(m => m.weeks)
+            .find(w => w.week === currentWeekNumber);
+          const recalDirective = recalWeek?.recalibratedFrom != null
+            ? `THIS WEEK WAS RECALIBRATED from your week-${recalWeek.recalibratedFrom} performance. `
+              + `Adjusted focus — Title: "${recalWeek.title}"; Theme: "${recalWeek.theme}". `
+              + `Generate today's task to fit this adjusted plan (respect any easing or intensification it implies).\n\n`
+            : '';
+
+          const previousTasksContext = (recalDirective + recentContext).trim() || undefined;
 
           // Kick off Agent 4 async, optimistically add a placeholder task
           const goalText = (state.currentGoal as { specificGoal?: string }).specificGoal ?? undefined;
@@ -886,30 +902,51 @@ export const useStore = create<AppStore>()(
             })
             .catch((err: unknown) => {
               console.warn(`Agent 4 failed for Day ${nextDay}, using deterministic fallback:`, err);
-              // Use phase-aware deterministic fallback (no LLM, always succeeds)
               const agentState = get();
-              const fallbackTask = generateFallbackTask(
-                nextDay,
-                agentState.agentRoadmap!,
-                agentState.stoneProfile!,
-                dailyMinutes
-              );
-              const fallbackStoreTask: Task = {
-                id: `fallback-day-${nextDay}`,
-                title: fallbackTask.task.title,
-                description: fallbackTask.task.description,
-                type: 'practice',
-                duration: fallbackTask.task.estimatedMinutes,
-                completed: false,
-                skipped: false,
-                scheduledFor: new Date().toISOString().split('T')[0],
-                day: nextDay,
-                dayNumber: nextDay,
-                steps: fallbackTask.task.steps.map((s: TaskStep) => s.instruction),
-                tips: fallbackTask.task.tips,
-                successCriteria: fallbackTask.task.successCriteria.primary,
-                coachTips: fallbackTask.task.coachTips ?? [],
-              };
+              const { agentRoadmap, stoneProfile } = agentState;
+
+              let fallbackStoreTask: Task;
+              if (agentRoadmap && stoneProfile) {
+                // Phase-aware deterministic fallback (no LLM, always succeeds)
+                const fallbackTask = generateFallbackTask(nextDay, agentRoadmap, stoneProfile, dailyMinutes);
+                fallbackStoreTask = {
+                  id: `fallback-day-${nextDay}`,
+                  title: fallbackTask.task.title,
+                  description: fallbackTask.task.description,
+                  type: 'practice',
+                  duration: fallbackTask.task.estimatedMinutes,
+                  completed: false,
+                  skipped: false,
+                  scheduledFor: new Date().toISOString().split('T')[0],
+                  day: nextDay,
+                  dayNumber: nextDay,
+                  steps: fallbackTask.task.steps.map((s: TaskStep) => s.instruction),
+                  tips: fallbackTask.task.tips,
+                  successCriteria: fallbackTask.task.successCriteria.primary,
+                  coachTips: fallbackTask.task.coachTips ?? [],
+                };
+              } else {
+                // Roadmap/profile not hydrated yet — the phase-aware fallback would
+                // throw inside this catch, leaving the placeholder stuck. Emit a
+                // minimal generic task instead so the user always sees something.
+                console.warn(`Fallback for Day ${nextDay} lacks roadmap/profile; using minimal generic task`);
+                fallbackStoreTask = {
+                  id: `fallback-day-${nextDay}`,
+                  title: `Day ${nextDay}: Keep your streak going`,
+                  description: 'Spend a few focused minutes on your goal today. Small, consistent steps compound.',
+                  type: 'practice',
+                  duration: dailyMinutes,
+                  completed: false,
+                  skipped: false,
+                  scheduledFor: new Date().toISOString().split('T')[0],
+                  day: nextDay,
+                  dayNumber: nextDay,
+                  steps: ['Warm up for 2 minutes', 'Practice the core skill for today', 'Note one thing you improved'],
+                  tips: ['Consistency beats intensity — showing up is the win today.'],
+                  successCriteria: 'You spent focused time on your goal today.',
+                  coachTips: [],
+                };
+              }
               get().setStreamingTaskDescription(null);
               set((s) => ({
                 tasks: s.tasks
@@ -1033,8 +1070,18 @@ export const useStore = create<AppStore>()(
         const goalCategory = (state.currentGoal as { category?: string }).category ?? undefined;
         const skillLevel = (state.currentGoal as { skillLevel?: 'beginner' | 'intermediate' | 'advanced' }).skillLevel ?? 'beginner';
 
+        // Respect a recalibrated week when pre-generating ahead (same loop closure as generateNextDayTasks).
+        const pregenWeek = state.agentRoadmapV2?.months
+          .flatMap(m => m.weeks)
+          .find(w => w.week === Math.ceil(day / 7));
+        const pregenRecalDirective = pregenWeek?.recalibratedFrom != null
+          ? `THIS WEEK WAS RECALIBRATED from your week-${pregenWeek.recalibratedFrom} performance. `
+            + `Adjusted focus — Title: "${pregenWeek.title}"; Theme: "${pregenWeek.theme}". `
+            + `Generate this task to fit the adjusted plan.`
+          : undefined;
+
         try {
-          const agentTask = await runTaskGenerator(day, state.agentRoadmap, state.stoneProfile, dailyMinutes, undefined, goalText, goalCategory, skillLevel);
+          const agentTask = await runTaskGenerator(day, state.agentRoadmap, state.stoneProfile, dailyMinutes, pregenRecalDirective, goalText, goalCategory, skillLevel);
           const assessmentData = agentTask as DailyTask & { assessmentQuestions?: AssessmentQuestion[]; taskType?: string };
           const taskType = (assessmentData.taskType as Task['type']) || 'practice';
 

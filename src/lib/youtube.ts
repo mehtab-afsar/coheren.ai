@@ -17,6 +17,28 @@ export function isEmbeddableVideoUrl(url: string | undefined | null): boolean {
   return getYouTubeId(url) !== null;
 }
 
+/**
+ * Find the first embeddable YouTube link inside a free-text string (e.g. a task
+ * step like "Watch https://youtu.be/abc123DEFGH at 2x speed"). Returns the video
+ * id and the exact matched substring (so callers can strip it from display text),
+ * or null if the text has no watchable YouTube URL. ID validation delegates to
+ * getYouTubeId so there is a single definition of "valid YouTube URL".
+ */
+export function extractYouTubeFromText(
+  text: string | undefined | null,
+): { id: string; match: string } | null {
+  if (!text) return null;
+  const tokens = text.match(/https?:\/\/[^\s]+/g);
+  if (!tokens) return null;
+  for (const token of tokens) {
+    // Strip trailing sentence punctuation the URL token may have swallowed.
+    const trimmed = token.replace(/[.,'")\]}]+$/, '');
+    const id = getYouTubeId(trimmed);
+    if (id) return { id, match: token };
+  }
+  return null;
+}
+
 /** Detect the YouTube search-result URLs produced by the resource sanitizer. */
 export function isYouTubeSearchUrl(url: string | undefined | null): boolean {
   return !!url && url.includes('youtube.com/results?search_query=');

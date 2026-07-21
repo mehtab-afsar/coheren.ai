@@ -16,11 +16,11 @@ export interface StreakCalendarProps {
 }
 
 const STATUS_COLORS: Record<CalendarDay['status'], string> = {
-  completed: '#7c3aed',
-  partial:   'rgba(124,58,237,0.35)',
+  completed: '#C4552D',
+  partial:   'rgba(196, 85, 45,0.35)',
   missed:    'rgba(239,68,68,0.2)',
   rest:      'rgba(0,0,0,0.05)',
-  today:     '#a78bfa',
+  today:     '#DDA189',
   future:    'rgba(0,0,0,0.04)',
 };
 
@@ -34,8 +34,8 @@ export default function StreakCalendar({ days, currentStreak, longestStreak }: S
       const style = document.createElement('style');
       style.textContent = `
         @keyframes scPulse {
-          0%, 100% { box-shadow: 0 0 0 2px rgba(167,139,250,0.4); }
-          50%       { box-shadow: 0 0 0 4px rgba(167,139,250,0.15); }
+          0%, 100% { box-shadow: 0 0 0 2px rgba(221, 161, 137,0.4); }
+          50%       { box-shadow: 0 0 0 4px rgba(221, 161, 137,0.15); }
         }
         .sc-today-cell {
           animation: scPulse 2s ease-in-out infinite;
@@ -111,7 +111,7 @@ export default function StreakCalendar({ days, currentStreak, longestStreak }: S
                 borderRadius: 6,
                 backgroundColor: STATUS_COLORS[status],
                 border: isRest ? '1px solid rgba(0,0,0,0.08)' : 'none',
-                boxShadow: isToday ? '0 0 0 2px rgba(167,139,250,0.4)'
+                boxShadow: isToday ? '0 0 0 2px rgba(221, 161, 137,0.4)'
                   : status === 'completed' ? 'inset 0 1px 2px rgba(0,0,0,0.1)'
                   : 'none',
                 transition: 'opacity 0.15s',

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useStore } from '@core/store/useStore';
+import { subscribeToPush, isPushConfigured } from '@lib/push';
 
 const MORNING_HOUR = 9;  // 9 AM
 const EVENING_HOUR = 20; // 8 PM
@@ -51,6 +52,12 @@ export function useNotifications() {
         permission = await Notification.requestPermission();
       }
       if (permission !== 'granted') return;
+
+      // Register a real Push subscription so reminders arrive even when the app
+      // is closed (the setTimeout nudges below only fire while a tab is open).
+      if (isPushConfigured()) {
+        subscribeToPush().catch(() => { /* non-fatal — falls back to in-session nudges */ });
+      }
 
       // ── Morning notification ──────────────────────────────────────────────
       const morningKey = dayKey('morning');

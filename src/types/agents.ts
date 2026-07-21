@@ -545,6 +545,13 @@ export interface Agent5Input {
   stoneProfile: Agent2ProfileOutput;
   completedTasks: CompletedTaskFeedback[];
   currentDay: number;
+  /**
+   * Per-day assessment/quiz summary (correct/total, self-score, misconceptions)
+   * built by the orchestrator from completed tasks' assessmentResults. Injected
+   * into Agent 5's prompt so recalibration can respond to how the user actually
+   * scored, not just skip/difficulty signals.
+   */
+  assessmentSummary?: string;
 }
 
 export interface Agent5Output {

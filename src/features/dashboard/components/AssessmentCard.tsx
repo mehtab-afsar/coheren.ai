@@ -13,7 +13,7 @@ interface AssessmentCardProps {
 
 const TYPE_META: Record<string, { label: string; color: string; gradient: string }> = {
   retrieval: { label: 'Quick Recall', color: '#38bdf8', gradient: 'linear-gradient(135deg, #0c4a6e, #0369a1)' },
-  challenge: { label: 'Weekly Challenge', color: '#a78bfa', gradient: 'linear-gradient(135deg, #1a0533, #2d1060)' },
+  challenge: { label: 'Weekly Challenge', color: '#DDA189', gradient: 'linear-gradient(135deg, #1a0533, #2d1060)' },
   assessment: { label: 'Phase Assessment', color: '#f59e0b', gradient: 'linear-gradient(135deg, #451a03, #78350f)' },
 };
 
@@ -21,7 +21,7 @@ const CONFIDENCE_OPTIONS: { value: ConfidenceLevel; label: string; color: string
   { value: 'guessing', label: 'Guessing', color: '#ef4444' },
   { value: 'unsure', label: 'Unsure', color: '#f97316' },
   { value: 'confident', label: 'Confident', color: '#22c55e' },
-  { value: 'certain', label: 'Certain', color: '#7c3aed' },
+  { value: 'certain', label: 'Certain', color: '#C4552D' },
 ];
 
 export default function AssessmentCard({

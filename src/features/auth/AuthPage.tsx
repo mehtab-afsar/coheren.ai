@@ -55,11 +55,11 @@ export default function AuthPage({ mode }: AuthPageProps) {
         <div className="relative z-10 flex items-center gap-2.5 p-10">
           <div style={{
             width: 30, height: 30, borderRadius: 9,
-            background: 'linear-gradient(135deg, #4c1d95, #3b0764)',
-            boxShadow: '0 2px 10px rgba(124,58,237,0.4)',
+            background: 'linear-gradient(135deg, #7A2E14, #5C2410)',
+            boxShadow: '0 2px 10px rgba(196, 85, 45,0.4)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: '#e9d8fd', letterSpacing: '-0.02em', fontFamily: 'monospace' }}>
+            <span style={{ fontSize: '11px', fontWeight: 800, color: '#F5E4DA', letterSpacing: '-0.02em', fontFamily: 'monospace' }}>
               co//
             </span>
           </div>
@@ -76,7 +76,7 @@ export default function AuthPage({ mode }: AuthPageProps) {
               shape="sphere"
               type="random"
               colorBack="#060612"
-              colorFront="#4c1d95"
+              colorFront="#7A2E14"
               pxSize={2}
               speed={0.9}
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
@@ -84,8 +84,8 @@ export default function AuthPage({ mode }: AuthPageProps) {
             {/* Subtle rim light */}
             <div style={{
               position: 'absolute', inset: 0, borderRadius: '50%',
-              boxShadow: 'inset 0 0 0 1px rgba(167,139,250,0.15)',
-              background: 'radial-gradient(circle at 68% 28%, rgba(167,139,250,0.08) 0%, transparent 60%)',
+              boxShadow: 'inset 0 0 0 1px rgba(221, 161, 137,0.15)',
+              background: 'radial-gradient(circle at 68% 28%, rgba(221, 161, 137,0.08) 0%, transparent 60%)',
             }} />
           </div>
 
@@ -94,7 +94,7 @@ export default function AuthPage({ mode }: AuthPageProps) {
             position: 'absolute',
             width: 480, height: 140,
             borderRadius: '50%',
-            background: 'radial-gradient(ellipse, rgba(124,58,237,0.15) 0%, transparent 70%)',
+            background: 'radial-gradient(ellipse, rgba(196, 85, 45,0.15) 0%, transparent 70%)',
             filter: 'blur(24px)',
             pointerEvents: 'none',
           }} />
@@ -109,11 +109,11 @@ export default function AuthPage({ mode }: AuthPageProps) {
             </p>
           </div>
 
-          {/* Stat row */}
+          {/* Value props — honest, no fabricated usage metrics. */}
           <div className="flex items-center gap-6">
-            {[['10k+', 'Goals built'], ['91%', 'Completion rate'], ['4.9', 'Avg rating']].map(([val, lbl]) => (
+            {[['Science-backed', 'Behavioral research'], ['One task', 'A day'], ['Free', 'To start']].map(([val, lbl]) => (
               <div key={lbl} style={{ textAlign: 'center' }}>
-                <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 18, fontWeight: 500, letterSpacing: '-0.03em', margin: 0 }}>{val}</p>
+                <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 15, fontWeight: 500, letterSpacing: '-0.03em', margin: 0 }}>{val}</p>
                 <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: 11, margin: '2px 0 0', fontWeight: 300 }}>{lbl}</p>
               </div>
             ))}
@@ -203,13 +203,13 @@ export default function AuthPage({ mode }: AuthPageProps) {
                   borderRadius: 11, border: 'none',
                   cursor: loading ? 'not-allowed' : 'pointer',
                   fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em',
-                  background: loading ? '#ede9fe' : 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
-                  color: loading ? '#5b21b6' : '#fff',
-                  boxShadow: loading ? 'none' : '0 4px 18px rgba(124,58,237,0.35)',
+                  background: loading ? '#F9EDE6' : 'linear-gradient(135deg, #C4552D 0%, #A8451F 100%)',
+                  color: loading ? '#8A3A1F' : '#fff',
+                  boxShadow: loading ? 'none' : '0 4px 18px rgba(196, 85, 45,0.35)',
                   transition: 'all 0.15s',
                 }}
-                onMouseEnter={(e) => { if (!loading) { e.currentTarget.style.boxShadow = '0 6px 24px rgba(124,58,237,0.5)'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
-                onMouseLeave={(e) => { e.currentTarget.style.boxShadow = loading ? 'none' : '0 4px 18px rgba(124,58,237,0.35)'; e.currentTarget.style.transform = 'none'; }}
+                onMouseEnter={(e) => { if (!loading) { e.currentTarget.style.boxShadow = '0 6px 24px rgba(196, 85, 45,0.5)'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
+                onMouseLeave={(e) => { e.currentTarget.style.boxShadow = loading ? 'none' : '0 4px 18px rgba(196, 85, 45,0.35)'; e.currentTarget.style.transform = 'none'; }}
               >
                 {loading
                   ? (isSignUp ? 'Creating account...' : 'Signing in...')
@@ -240,9 +240,9 @@ const inputStyle: React.CSSProperties = {
 };
 
 function applyFocus(el: HTMLInputElement) {
-  el.style.borderColor = '#7c3aed';
+  el.style.borderColor = '#C4552D';
   el.style.background = '#fff';
-  el.style.boxShadow = '0 0 0 3px rgba(124,58,237,0.08)';
+  el.style.boxShadow = '0 0 0 3px rgba(196, 85, 45,0.08)';
 }
 
 function applyBlur(el: HTMLInputElement) {

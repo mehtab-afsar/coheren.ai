@@ -350,6 +350,16 @@ authorization_url_path = "/oauth/consent"
 # Allow dynamic client registration
 allow_dynamic_registration = false
 
+[functions.ai-proxy]
+# The gateway verifies the JWT itself so it can return its own 401/429 JSON
+# (the platform's built-in verify_jwt returns an opaque 401).
+verify_jwt = false
+
+[functions.send-reminders]
+# Invoked by a cron schedule (service context), not an end-user JWT.
+verify_jwt = false
+# Set a schedule in the dashboard or via `supabase functions deploy send-reminders --schedule "0 * * * *"`.
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

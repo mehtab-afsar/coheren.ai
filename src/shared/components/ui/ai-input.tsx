@@ -87,7 +87,7 @@ export function AIInput({
         className={cn(
           "relative rounded-2xl transition-all duration-300",
           focused
-            ? "shadow-[0_0_0_3px_rgba(139,92,246,0.15),0_4px_24px_rgba(139,92,246,0.1)]"
+            ? "shadow-[0_0_0_3px_rgba(206, 107, 69,0.15),0_4px_24px_rgba(206, 107, 69,0.1)]"
             : "shadow-[0_2px_16px_rgba(0,0,0,0.06)]",
         )}
       >
@@ -99,7 +99,7 @@ export function AIInput({
           )}
           style={{
             background:
-              "linear-gradient(135deg, rgba(139,92,246,0.4), rgba(99,102,241,0.2), rgba(139,92,246,0.4))",
+              "linear-gradient(135deg, rgba(206, 107, 69,0.4), rgba(196, 85, 45,0.2), rgba(206, 107, 69,0.4))",
             padding: "1.5px",
             WebkitMask:
               "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
@@ -145,7 +145,7 @@ export function AIInput({
               aria-hidden
             >
               {typewriterText}
-              <span className="ml-px inline-block w-[2px] h-[1em] bg-violet-400 align-middle animate-pulse" />
+              <span className="ml-px inline-block w-[2px] h-[1em] bg-clay-400 align-middle animate-pulse" />
             </span>
           )}
 
@@ -157,7 +157,7 @@ export function AIInput({
               "ml-2 flex-shrink-0 flex items-center justify-center",
               "h-8 w-8 rounded-xl transition-all duration-200",
               inputValue
-                ? "bg-violet-600 text-white shadow-[0_2px_8px_rgba(139,92,246,0.4)] scale-100 opacity-100"
+                ? "bg-clay-600 text-white shadow-[0_2px_8px_rgba(206, 107, 69,0.4)] scale-100 opacity-100"
                 : "bg-black/[0.06] text-black/25 scale-95 opacity-100",
             )}
           >

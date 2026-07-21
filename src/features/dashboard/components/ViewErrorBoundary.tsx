@@ -77,7 +77,7 @@ export class ViewErrorBoundary extends Component<Props, State> {
             onClick={this.handleReset}
             style={{
               padding: `${tokens.spacing.sm} ${tokens.spacing.xl}`,
-              backgroundColor: '#7c3aed',
+              backgroundColor: '#C4552D',
               color: '#fff',
               border: 'none',
               borderRadius: tokens.borderRadius.md,

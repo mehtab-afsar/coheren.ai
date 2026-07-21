@@ -22,11 +22,6 @@ export default function SmartBannerSlot() {
   const currentDay = useStore((s) => s.currentDay);
   const streak = useStore((s) => s.streak);
 
-  // Derive lastCheckpointDay as a scalar (number) inside the selector so no array reference leaks out
-  const lastCheckpointDay = useStore((s) =>
-    s.tasks.reduce((max, t) => (t.completed && t.day > max ? t.day : max), 0)
-  );
-
   // Derive currentPhaseName as a scalar (string) inside the selector
   const currentPhaseName = useStore((s) => {
     const week = Math.ceil(s.currentDay / 7);
@@ -40,15 +35,22 @@ export default function SmartBannerSlot() {
   // Compute which banner to show (priority order)
   const weekNum = Math.ceil(currentDay / 7);
 
-  // plan-adjustment: disabled
-  const showPlanAdjust = false;
-  const planAdjustKey = getDismissKey('plan-adjustment', lastCheckpointDay);
+  // plan-adjustment: fires when THIS week's plan was actually recalibrated at the
+  // weekly checkpoint (recalibratedFrom set) — makes the now-closed recalibration
+  // loop visible to the user instead of an empty claim.
+  const recalibratedThisWeek = useStore((s) => {
+    const wk = Math.ceil(s.currentDay / 7);
+    return s.agentRoadmapV2?.months
+      .flatMap((m) => m.weeks)
+      .find((w) => w.week === wk)?.recalibratedFrom != null;
+  });
+  const showPlanAdjust = recalibratedThisWeek;
+  const planAdjustKey = getDismissKey('plan-adjustment', weekNum);
 
   // streak-milestone: multiples of 7, 14, 30
   const STREAK_MILESTONES = [7, 14, 30];
   const showStreakMilestone = STREAK_MILESTONES.includes(streak) && streak > 0;
   const streakMilestoneKey = getDismissKey('streak-milestone', streak);
-  const streakTopPercent = streak >= 30 ? 5 : streak >= 14 ? 15 : 30;
 
   // week-recap: first day of each week
   const showWeekRecap = currentDay > 7 && currentDay % 7 === 1;
@@ -80,12 +82,12 @@ export default function SmartBannerSlot() {
 
   const bannerConfig = {
     'plan-adjustment': {
-      bg: 'rgba(99,102,241,0.1)',
-      border: '1px solid rgba(99,102,241,0.25)',
+      bg: 'rgba(196, 85, 45,0.1)',
+      border: '1px solid rgba(196, 85, 45,0.25)',
       Icon: Sparkles,
-      iconColor: '#818cf8',
-      title: 'Your plan was just updated',
-      body: "Based on your recent progress, I've adjusted this week's focus. You're on track.",
+      iconColor: '#C4552D',
+      title: 'This week was adjusted for you',
+      body: "Based on last week's progress, I've retuned this week's focus and pace. Today's task reflects it.",
     },
     'streak-milestone': {
       bg: 'rgba(249,115,22,0.1)',
@@ -93,13 +95,13 @@ export default function SmartBannerSlot() {
       Icon: Flame,
       iconColor: '#f97316',
       title: `${streak}-day streak!`,
-      body: `You're in the top ${streakTopPercent}% of users who reach this point.`,
+      body: `${streak} days of showing up. Consistency is how habits become automatic — keep the chain going.`,
     },
     'week-recap': {
-      bg: 'rgba(124,58,237,0.1)',
-      border: '1px solid rgba(124,58,237,0.25)',
+      bg: 'rgba(196, 85, 45,0.1)',
+      border: '1px solid rgba(196, 85, 45,0.25)',
       Icon: Calendar,
-      iconColor: '#a78bfa',
+      iconColor: '#DDA189',
       title: 'New week, new chapter',
       body: `Week ${weekNum} starts today. Your focus: ${currentPhaseName}`,
     },

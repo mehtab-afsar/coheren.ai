@@ -1,5 +1,5 @@
 /**
- * CONSIST Design System
+ * Coheren Design System
  *
  * Complete design system export for consistent styling.
  * Import from here to get all design tokens and components.
@@ -17,6 +17,3 @@ export type { Colors, Typography, Spacing, BorderRadius, Shadows, Transitions } 
 // Apple design system
 export { ap } from './appleTokens';
 export { Chip, Bar, Label, Tile, Divider } from './AppleUI';
-
-// Coheren Design System (new spec)
-export { dt, dtRaw, typeScale } from './designTokens';

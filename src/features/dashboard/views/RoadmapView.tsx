@@ -267,7 +267,7 @@ export default function RoadmapView() {
         const TYPE_COLORS: Record<string, { color: string; bg: string }> = {
           practice:   { color: ap.accent,   bg: ap.accentSoft },
           learning:   { color: '#0ea5e9',   bg: 'rgba(14,165,233,0.08)' },
-          reflection: { color: '#8b5cf6',   bg: 'rgba(139,92,246,0.08)' },
+          reflection: { color: '#CE6B45',   bg: 'rgba(206, 107, 69,0.08)' },
           review:     { color: ap.amber,    bg: ap.amberSoft },
           challenge:  { color: ap.streak,   bg: ap.streakSoft },
           retrieval:  { color: '#0ea5e9',   bg: 'rgba(14,165,233,0.08)' },
@@ -689,7 +689,7 @@ export default function RoadmapView() {
                                               : ap.accentSoft,
                                             color: task.type === 'practice' ? ap.accent
                                               : task.type === 'learning' ? '#0ea5e9'
-                                              : '#8b5cf6',
+                                              : '#CE6B45',
                                             flexShrink: 0,
                                           }}>
                                             {task.type}

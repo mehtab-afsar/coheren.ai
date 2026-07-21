@@ -120,8 +120,8 @@ export default function FocusComplete({
                       height: 64,
                       borderRadius: 16,
                       border: '2px solid',
-                      borderColor: selectedMood === m.value ? 'rgba(124,58,237,0.6)' : 'rgba(255,255,255,0.08)',
-                      backgroundColor: selectedMood === m.value ? 'rgba(124,58,237,0.2)' : 'rgba(255,255,255,0.04)',
+                      borderColor: selectedMood === m.value ? 'rgba(196, 85, 45,0.6)' : 'rgba(255,255,255,0.08)',
+                      backgroundColor: selectedMood === m.value ? 'rgba(196, 85, 45,0.2)' : 'rgba(255,255,255,0.04)',
                       cursor: 'pointer',
                       fontSize: 28,
                       display: 'flex',
@@ -178,7 +178,7 @@ export default function FocusComplete({
                   lineHeight: 1.6,
                   marginBottom: 16,
                 }}
-                onFocus={e => { e.currentTarget.style.borderColor = 'rgba(124,58,237,0.5)'; }}
+                onFocus={e => { e.currentTarget.style.borderColor = 'rgba(196, 85, 45,0.5)'; }}
                 onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; }}
               />
               <div style={{ display: 'flex', gap: 10 }}>
@@ -206,14 +206,14 @@ export default function FocusComplete({
                   style={{
                     flex: 2,
                     padding: '11px 0',
-                    backgroundColor: '#7c3aed',
+                    backgroundColor: '#C4552D',
                     border: 'none',
                     borderRadius: 12,
                     fontSize: 14,
                     fontWeight: 600,
                     color: '#fff',
                     cursor: 'pointer',
-                    boxShadow: '0 4px 16px rgba(124,58,237,0.4)',
+                    boxShadow: '0 4px 16px rgba(196, 85, 45,0.4)',
                     transition: 'all 0.15s',
                   }}
                   onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; }}
@@ -237,10 +237,10 @@ export default function FocusComplete({
               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
                 <Sparkles
                   size={48}
-                  color="#a78bfa"
+                  color="#DDA189"
                   strokeWidth={1.5}
                   style={{
-                    filter: 'drop-shadow(0 0 12px rgba(167,139,250,0.7))',
+                    filter: 'drop-shadow(0 0 12px rgba(221, 161, 137,0.7))',
                     animation: 'sparkleWiggle 0.6s ease-in-out',
                   }}
                 />
@@ -250,7 +250,7 @@ export default function FocusComplete({
               </h2>
               <div style={{ display: 'flex', justifyContent: 'center', gap: 32, marginBottom: 32 }}>
                 <div>
-                  <p style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#c4b5fd', letterSpacing: '-0.02em' }}>
+                  <p style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#E3B9A5', letterSpacing: '-0.02em' }}>
                     {formatTime(timeSpentSeconds)}
                   </p>
                   <p style={{ margin: '4px 0 0', fontSize: 11, color: 'rgba(255,255,255,0.35)', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
@@ -272,14 +272,14 @@ export default function FocusComplete({
                 style={{
                   width: '100%',
                   padding: '13px 0',
-                  backgroundColor: '#7c3aed',
+                  backgroundColor: '#C4552D',
                   border: 'none',
                   borderRadius: 14,
                   fontSize: 15,
                   fontWeight: 600,
                   color: '#fff',
                   cursor: 'pointer',
-                  boxShadow: '0 4px 20px rgba(124,58,237,0.45)',
+                  boxShadow: '0 4px 20px rgba(196, 85, 45,0.45)',
                   letterSpacing: '-0.01em',
                   transition: 'all 0.15s',
                 }}

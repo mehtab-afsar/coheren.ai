@@ -68,7 +68,7 @@ function BrainDumpCard() {
         )}
         {showTags && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
-            <ScanLine className="h-3.5 w-3.5" style={{ color: '#7c3aed' }} />
+            <ScanLine className="h-3.5 w-3.5" style={{ color: '#C4552D' }} />
           </motion.div>
         )}
       </div>
@@ -99,13 +99,13 @@ function BrainDumpCard() {
                     style={{
                       width: 1,
                       height: i === 0 ? 12 : 8,
-                      backgroundColor: 'rgba(124,58,237,0.4)',
+                      backgroundColor: 'rgba(196, 85, 45,0.4)',
                       transformOrigin: 'top',
                     }}
                   />
                   <div style={{
                     width: 6, height: 6, borderRadius: '50%',
-                    backgroundColor: '#7c3aed',
+                    backgroundColor: '#C4552D',
                     flexShrink: 0,
                   }} />
                 </div>
@@ -113,9 +113,9 @@ function BrainDumpCard() {
                 {/* Tag card */}
                 <div
                   className="flex-1 flex items-center justify-between rounded-lg px-3 py-2"
-                  style={{ backgroundColor: '#f5f3ff', border: '1px solid #ede9fe' }}
+                  style={{ backgroundColor: '#FBF3EE', border: '1px solid #F9EDE6' }}
                 >
-                  <span style={{ fontSize: 10, color: '#7c3aed', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  <span style={{ fontSize: 10, color: '#C4552D', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                     {tag.label}
                   </span>
                   <span style={{ fontSize: 12, color: '#111', fontWeight: 500 }}>
@@ -165,9 +165,9 @@ function AgenticArchitectureCard() {
             {/* Icon circle */}
             <div
               className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full"
-              style={{ background: '#f5f3ff', border: '1px solid #ede9fe' }}
+              style={{ background: '#FBF3EE', border: '1px solid #F9EDE6' }}
             >
-              <Icon className="h-3.5 w-3.5" style={{ color: '#7c3aed' }} />
+              <Icon className="h-3.5 w-3.5" style={{ color: '#C4552D' }} />
             </div>
 
             {/* Name */}
@@ -179,7 +179,7 @@ function AgenticArchitectureCard() {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: i * 0.18 + 0.25, duration: 0.3 }}
               className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-              style={{ background: '#f5f3ff', border: '1px solid #ede9fe', color: '#7c3aed' }}
+              style={{ background: '#FBF3EE', border: '1px solid #F9EDE6', color: '#C4552D' }}
             >
               {badge}
             </motion.span>
@@ -193,7 +193,7 @@ function AgenticArchitectureCard() {
                 animate={{ top: ['0%', '100%'] }}
                 transition={{ delay: i * 0.18 + 0.5, duration: 0.7, repeat: Infinity, repeatDelay: PIPELINE.length * 0.18 + 1.2, ease: 'easeInOut' }}
                 className="absolute left-0 h-1.5 w-1.5 -translate-x-[2px] rounded-full"
-                style={{ backgroundColor: '#7c3aed' }}
+                style={{ backgroundColor: '#C4552D' }}
               />
             </div>
           )}
@@ -277,7 +277,7 @@ function DynamicRecalibrationCard() {
                 animate={{ rotate: 360 }}
                 transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
               >
-                <Cpu className="h-3.5 w-3.5 text-violet-400" />
+                <Cpu className="h-3.5 w-3.5 text-clay-400" />
               </motion.div>
               <span className="text-[10px]" style={{ color: '#6b7280' }}>AI analyzing failure pattern...</span>
             </div>
@@ -300,7 +300,7 @@ function DynamicRecalibrationCard() {
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ delay: delay + 0.2, duration: 0.2 }}
-                    className="h-1 w-1 rounded-full bg-violet-400"
+                    className="h-1 w-1 rounded-full bg-clay-400"
                   />
                   <span style={{ color: '#6b7280' }}>{label}</span>
                 </motion.div>
@@ -320,12 +320,12 @@ function DynamicRecalibrationCard() {
           transition={{ duration: 0.6 }}
           className="relative flex items-center justify-center"
         >
-          <RefreshCw className={`h-5 w-5 ${phase === 'analyzing' ? 'text-violet-400' : 'text-white/25'}`} />
+          <RefreshCw className={`h-5 w-5 ${phase === 'analyzing' ? 'text-clay-400' : 'text-white/25'}`} />
           {phase === 'analyzing' && (
             <motion.div
               animate={{ scale: [1, 1.8, 1], opacity: [0.4, 0, 0.4] }}
               transition={{ duration: 1, repeat: Infinity }}
-              className="absolute inset-0 rounded-full bg-violet-400/25"
+              className="absolute inset-0 rounded-full bg-clay-400/25"
             />
           )}
         </motion.div>
@@ -343,7 +343,7 @@ function DynamicRecalibrationCard() {
                 initial={{ width: '0%' }}
                 animate={{ width: '100%' }}
                 transition={{ duration: 1.3, ease: 'easeInOut' }}
-                className="h-full rounded-full bg-violet-500"
+                className="h-full rounded-full bg-clay-500"
               />
             </motion.div>
           )}
@@ -358,7 +358,7 @@ function DynamicRecalibrationCard() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             className="w-full rounded-xl px-4 py-3 relative overflow-hidden"
-            style={{ background: '#f5f3ff', border: '1px solid #ede9fe' }}
+            style={{ background: '#FBF3EE', border: '1px solid #F9EDE6' }}
           >
             {/* Success shimmer */}
             <motion.div
@@ -368,7 +368,7 @@ function DynamicRecalibrationCard() {
               className="absolute inset-y-0 w-20 bg-gradient-to-r from-transparent via-white/8 to-transparent"
             />
             <div className="flex items-center gap-2 relative z-10">
-              <CheckCircle2 className="h-4 w-4 flex-shrink-0" style={{ color: '#7c3aed' }} />
+              <CheckCircle2 className="h-4 w-4 flex-shrink-0" style={{ color: '#C4552D' }} />
               <div className="flex-1">
                 <span className="text-xs block font-medium" style={{ color: '#111' }}>Write 1 sentence</span>
                 <span className="text-[10px]" style={{ color: '#9ca3af' }}>2 min · Momentum builder</span>
@@ -378,7 +378,7 @@ function DynamicRecalibrationCard() {
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ delay: 0.35, type: "spring" }}
                 className="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap"
-                style={{ color: '#7c3aed', background: '#f5f3ff', border: '1px solid #ede9fe' }}
+                style={{ color: '#C4552D', background: '#FBF3EE', border: '1px solid #F9EDE6' }}
               >
                 streak safe ✓
               </motion.span>
@@ -398,7 +398,7 @@ function DynamicRecalibrationCard() {
           <motion.div
             animate={{ scale: [1, 1.2, 1] }}
             transition={{ duration: 2, repeat: Infinity }}
-            className="h-1.5 w-1.5 rounded-full bg-violet-400"
+            className="h-1.5 w-1.5 rounded-full bg-clay-400"
           />
           <p className="text-[10px] tracking-wide font-medium" style={{ color: '#9ca3af' }}>
             Roadmap adapted · Streak preserved
@@ -469,9 +469,9 @@ function OneFocusCard() {
             animate={{ scale: [1, 1.2, 1] }}
             transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
             className="h-6 w-6 rounded-full flex items-center justify-center"
-            style={{ background: '#f5f3ff' }}
+            style={{ background: '#FBF3EE' }}
           >
-            <Zap className="h-3 w-3" style={{ color: '#7c3aed' }} />
+            <Zap className="h-3 w-3" style={{ color: '#C4552D' }} />
           </motion.div>
           <span className="text-xs font-medium uppercase tracking-wider" style={{ color: '#9ca3af' }}>Today's focus</span>
         </motion.div>
@@ -496,7 +496,7 @@ function OneFocusCard() {
             animate={{ scale: [1, 1.3, 1], opacity: [1, 0.7, 1] }}
             transition={{ duration: 1.5, repeat: Infinity }}
             className="h-1.5 w-1.5 rounded-full"
-            style={{ background: '#7c3aed' }}
+            style={{ background: '#C4552D' }}
           />
           <span className="text-[10px]" style={{ color: '#9ca3af' }}>Est. 12 min · Day 3 of 90</span>
         </motion.div>
@@ -520,13 +520,13 @@ const SCIENCE_CARDS = [
     title: 'Stanford BJ Fogg Model',
     desc: "Built on BJ Fogg's Tiny Habits — motivation alone fails. We pair the right behavior with the right moment and make it tiny enough to always win.",
     foot: 'Motivation × Ability × Prompt',
-    dot: 'bg-violet-500',
+    dot: 'bg-clay-500',
     side: 'left',
   },
   {
-    title: '200+ Peer-Reviewed Papers',
-    desc: 'Every nudge and recalibration is derived from published research on habit formation, self-efficacy, and intrinsic motivation.',
-    stats: [['66', 'days to habit'], ['3×', 'retention'], ['91%', 'clarity']] as [string, string][],
+    title: 'Grounded in Behavioral Science',
+    desc: 'Every nudge and recalibration draws on published research on habit formation, self-efficacy, and intrinsic motivation — Fogg, Lally, Wood, Clear, Ericsson and more.',
+    stats: [['66', 'days to automaticity'], ['13', 'blocker patterns'], ['48', 'science sources']] as [string, string][],
     side: 'right',
   },
   {
@@ -536,8 +536,8 @@ const SCIENCE_CARDS = [
     side: 'left',
   },
   {
-    title: 'Real-World Testing',
-    desc: 'Stress-tested across goals from "run a marathon" to "learn ML" — in every case the AI adapted without breaking.',
+    title: 'Built for Real Goals',
+    desc: 'Designed to handle goals from "run a marathon" to "learn ML" — the plan adapts to your pace, your blockers, and the time you actually have.',
     foot: 'Fitness · Writing · Coding · Finance · Language',
     dot: 'bg-amber-500',
     side: 'right',
@@ -817,7 +817,7 @@ function CoherenDemoSection() {
           </div>
           {/* Centre: logo + name */}
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px' }}>
-            <Icons.logo style={{ width: '20px', height: '20px', color: '#7c3aed' }} />
+            <Icons.logo style={{ width: '20px', height: '20px', color: '#C4552D' }} />
             <span style={{ fontSize: '13px', fontWeight: 600, color: '#3a3028', letterSpacing: '-0.02em' }}>
               Coheren
             </span>
@@ -828,7 +828,7 @@ function CoherenDemoSection() {
             {[0, 1].map(s => (
               <motion.div
                 key={s}
-                animate={{ backgroundColor: activeScreen === s ? '#7c3aed' : 'rgba(0,0,0,0.15)', scale: activeScreen === s ? 1.2 : 1 }}
+                animate={{ backgroundColor: activeScreen === s ? '#C4552D' : 'rgba(0,0,0,0.15)', scale: activeScreen === s ? 1.2 : 1 }}
                 transition={{ duration: 0.4 }}
                 style={{ width: 6, height: 6, borderRadius: '50%' }}
               />
@@ -876,9 +876,9 @@ function CoherenDemoSection() {
                         {msg.role === 'ai' && (
                           <div style={{
                             width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-                            background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+                            background: 'linear-gradient(135deg, #C4552D, #A8451F)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            boxShadow: '0 3px 12px rgba(124,58,237,0.35)',
+                            boxShadow: '0 3px 12px rgba(196, 85, 45,0.35)',
                           }}>
                             <Icons.logo style={{ width: '16px', height: '16px', color: '#fff' }} />
                           </div>
@@ -904,7 +904,7 @@ function CoherenDemoSection() {
                               transition={{ duration: 0.85, repeat: Infinity }}
                               style={{
                                 display: 'inline-block', width: '2px', height: '14px',
-                                backgroundColor: '#7c3aed', marginLeft: '3px',
+                                backgroundColor: '#C4552D', marginLeft: '3px',
                                 verticalAlign: 'text-bottom', borderRadius: '1px',
                               }}
                             />
@@ -923,7 +923,7 @@ function CoherenDemoSection() {
                         <motion.div key={i}
                           animate={{ y: [0, -5, 0] }}
                           transition={{ duration: 0.55, repeat: Infinity, delay }}
-                          style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#c4b5fd' }}
+                          style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#E3B9A5' }}
                         />
                       ))}
                     </motion.div>
@@ -946,12 +946,12 @@ function CoherenDemoSection() {
                   <div style={{
                     padding: '8px 14px',
                     borderRadius: '11px',
-                    background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+                    background: 'linear-gradient(135deg, #C4552D, #A8451F)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'default',
-                    boxShadow: '0 3px 10px rgba(124,58,237,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
+                    boxShadow: '0 3px 10px rgba(196, 85, 45,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
                   }}>
                     <Send size={14} color="#fff" />
                   </div>
@@ -979,7 +979,7 @@ function CoherenDemoSection() {
                 }}>
                   {/* Logo */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '28px', paddingLeft: '4px' }}>
-                    <Icons.logo style={{ width: '22px', height: '22px', color: '#a78bfa' }} />
+                    <Icons.logo style={{ width: '22px', height: '22px', color: '#DDA189' }} />
                     <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' }}>Coheren</span>
                   </div>
 
@@ -989,10 +989,10 @@ function CoherenDemoSection() {
                       <div key={label} style={{
                         display: 'flex', alignItems: 'center', gap: '8px',
                         padding: '8px 10px', borderRadius: '8px',
-                        backgroundColor: active ? 'rgba(124,58,237,0.15)' : 'transparent',
-                        border: active ? '1px solid rgba(124,58,237,0.25)' : '1px solid transparent',
+                        backgroundColor: active ? 'rgba(196, 85, 45,0.15)' : 'transparent',
+                        border: active ? '1px solid rgba(196, 85, 45,0.25)' : '1px solid transparent',
                       }}>
-                        <Icon size={13} color={active ? '#a78bfa' : 'rgba(255,255,255,0.3)'} />
+                        <Icon size={13} color={active ? '#DDA189' : 'rgba(255,255,255,0.3)'} />
                         <span style={{ fontSize: '12.5px', fontWeight: active ? 600 : 400, color: active ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)', letterSpacing: '-0.01em' }}>{label}</span>
                       </div>
                     ))}
@@ -1026,12 +1026,12 @@ function CoherenDemoSection() {
                       background: 'linear-gradient(135deg, #1e0a3c 0%, #2d1060 50%, #1a0a2e 100%)',
                       borderRadius: '16px',
                       padding: '18px',
-                      boxShadow: '0 8px 32px rgba(124,58,237,0.3)',
+                      boxShadow: '0 8px 32px rgba(196, 85, 45,0.3)',
                     }}
                   >
                     <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', flexWrap: 'wrap' as const }}>
-                      <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.07em', padding: '2px 7px', borderRadius: '4px', background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff' }}>PRACTICE</span>
-                      <span style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.04em', padding: '2px 7px', borderRadius: '4px', backgroundColor: 'rgba(124,58,237,0.2)', color: '#c4b5fd', border: '1px solid rgba(124,58,237,0.3)' }}>FOUNDATION PHASE</span>
+                      <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.07em', padding: '2px 7px', borderRadius: '4px', background: 'linear-gradient(135deg, #C4552D, #A8451F)', color: '#fff' }}>PRACTICE</span>
+                      <span style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.04em', padding: '2px 7px', borderRadius: '4px', backgroundColor: 'rgba(196, 85, 45,0.2)', color: '#E3B9A5', border: '1px solid rgba(196, 85, 45,0.3)' }}>FOUNDATION PHASE</span>
                     </div>
                     <p style={{ fontSize: '14px', fontWeight: 700, color: '#fff', margin: '0 0 12px', letterSpacing: '-0.02em', lineHeight: 1.35 }}>
                       Hold the G, C, D chord shapes — no switching yet
@@ -1042,7 +1042,7 @@ function CoherenDemoSection() {
                           <span key={item} style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '99px', backgroundColor: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.1)' }}>{item}</span>
                         ))}
                       </div>
-                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#a78bfa', flexShrink: 0, marginLeft: '8px' }}>15 min</span>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#DDA189', flexShrink: 0, marginLeft: '8px' }}>15 min</span>
                     </div>
                   </motion.div>
 
@@ -1054,7 +1054,7 @@ function CoherenDemoSection() {
                     style={{ padding: '12px 14px', backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #E2DDD5' }}
                   >
                     <p style={{ fontSize: '11.5px', color: '#5a4f45', margin: 0, lineHeight: 1.6, letterSpacing: '-0.01em' }}>
-                      <span style={{ fontWeight: 600, color: '#7c3aed' }}>Coach note:</span> Don't worry about switching yet — just feel where each finger sits. Muscle memory starts here.
+                      <span style={{ fontWeight: 600, color: '#C4552D' }}>Coach note:</span> Don't worry about switching yet — just feel where each finger sits. Muscle memory starts here.
                     </p>
                   </motion.div>
 
@@ -1068,16 +1068,16 @@ function CoherenDemoSection() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: '11px', color: '#9c8f84', fontWeight: 500 }}>90-day roadmap</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <TrendingUp size={11} color="#7c3aed" />
-                        <span style={{ fontSize: '11px', color: '#7c3aed', fontWeight: 600 }}>1% complete</span>
+                        <TrendingUp size={11} color="#C4552D" />
+                        <span style={{ fontSize: '11px', color: '#C4552D', fontWeight: 600 }}>1% complete</span>
                       </div>
                     </div>
-                    <div style={{ height: '6px', backgroundColor: 'rgba(124,58,237,0.1)', borderRadius: '99px', overflow: 'hidden' }}>
+                    <div style={{ height: '6px', backgroundColor: 'rgba(196, 85, 45,0.1)', borderRadius: '99px', overflow: 'hidden' }}>
                       <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: '1%' }}
                         transition={{ duration: 0.8, delay: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                        style={{ height: '100%', background: 'linear-gradient(90deg, #7c3aed, #a78bfa)', borderRadius: '99px' }}
+                        style={{ height: '100%', background: 'linear-gradient(90deg, #C4552D, #DDA189)', borderRadius: '99px' }}
                       />
                     </div>
                     <p style={{ fontSize: '10px', color: '#b0a89e', margin: 0 }}>89 days remaining · Guitar</p>
@@ -1093,13 +1093,13 @@ function CoherenDemoSection() {
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       padding: '12px 14px',
                       borderRadius: '12px',
-                      background: 'linear-gradient(135deg, rgba(124,58,237,0.07) 0%, rgba(109,40,217,0.03) 100%)',
-                      border: '1px solid rgba(124,58,237,0.15)',
+                      background: 'linear-gradient(135deg, rgba(196, 85, 45,0.07) 0%, rgba(168, 69, 31,0.03) 100%)',
+                      border: '1px solid rgba(196, 85, 45,0.15)',
                       cursor: 'default',
                     }}
                   >
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#7c3aed', letterSpacing: '-0.01em' }}>Start today's session</span>
-                    <ChevronRight size={15} color="#7c3aed" />
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#C4552D', letterSpacing: '-0.01em' }}>Start today's session</span>
+                    <ChevronRight size={15} color="#C4552D" />
                   </motion.div>
                 </div>
               </motion.div>
@@ -1131,13 +1131,13 @@ function CoherenDemoSection() {
         <div style={{
           position: 'absolute', top: '-40px', right: '-20px',
           width: '160px', height: '160px',
-          background: 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 70%)',
+          background: 'radial-gradient(circle, rgba(196, 85, 45,0.18) 0%, transparent 70%)',
           pointerEvents: 'none',
         }} />
 
         {/* Header */}
         <div style={{ marginBottom: '20px', position: 'relative' as const }}>
-          <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(167,139,250,0.6)', textTransform: 'uppercase' as const, margin: '0 0 6px' }}>
+          <p style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(221, 161, 137,0.6)', textTransform: 'uppercase' as const, margin: '0 0 6px' }}>
             Under the hood
           </p>
           <p style={{ fontSize: '13px', fontWeight: 600, color: 'rgba(255,255,255,0.85)', margin: 0, letterSpacing: '-0.02em', lineHeight: 1.3 }}>
@@ -1163,17 +1163,17 @@ function CoherenDemoSection() {
                   display: 'flex', gap: '10px', alignItems: 'flex-start',
                   padding: '10px 10px',
                   borderRadius: '10px',
-                  backgroundColor: done ? 'rgba(124,58,237,0.08)' : 'transparent',
-                  border: done ? '1px solid rgba(124,58,237,0.2)' : '1px solid transparent',
+                  backgroundColor: done ? 'rgba(196, 85, 45,0.08)' : 'transparent',
+                  border: done ? '1px solid rgba(196, 85, 45,0.2)' : '1px solid transparent',
                   transition: 'background-color 0.4s, border-color 0.4s',
                 }}
               >
                 <div style={{
                   width: 20, height: 20, borderRadius: '50%', flexShrink: 0, marginTop: '1px',
-                  background: done ? 'linear-gradient(135deg, #7c3aed, #6d28d9)' : active ? 'rgba(124,58,237,0.2)' : 'rgba(255,255,255,0.06)',
-                  border: done ? 'none' : active ? '1px solid rgba(124,58,237,0.5)' : '1px solid rgba(255,255,255,0.1)',
+                  background: done ? 'linear-gradient(135deg, #C4552D, #A8451F)' : active ? 'rgba(196, 85, 45,0.2)' : 'rgba(255,255,255,0.06)',
+                  border: done ? 'none' : active ? '1px solid rgba(196, 85, 45,0.5)' : '1px solid rgba(255,255,255,0.1)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: done ? '0 2px 8px rgba(124,58,237,0.4)' : 'none',
+                  boxShadow: done ? '0 2px 8px rgba(196, 85, 45,0.4)' : 'none',
                   transition: 'all 0.4s',
                 }}>
                   {done ? (
@@ -1182,7 +1182,7 @@ function CoherenDemoSection() {
                     <motion.div
                       animate={{ rotate: 360 }}
                       transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
-                      style={{ width: 8, height: 8, borderRadius: '50%', border: '1.5px solid rgba(167,139,250,0.8)', borderTopColor: 'transparent' }}
+                      style={{ width: 8, height: 8, borderRadius: '50%', border: '1.5px solid rgba(221, 161, 137,0.8)', borderTopColor: 'transparent' }}
                     />
                   ) : (
                     <div style={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.2)' }} />
@@ -1192,7 +1192,7 @@ function CoherenDemoSection() {
                   <p style={{ fontSize: '12px', fontWeight: 600, color: done ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.45)', margin: '0 0 2px', letterSpacing: '-0.01em', transition: 'color 0.4s' }}>
                     {step.label}
                   </p>
-                  <p style={{ fontSize: '10.5px', color: done ? 'rgba(167,139,250,0.7)' : 'rgba(255,255,255,0.2)', margin: 0, fontFamily: 'monospace', letterSpacing: '0.01em', transition: 'color 0.4s' }}>
+                  <p style={{ fontSize: '10.5px', color: done ? 'rgba(221, 161, 137,0.7)' : 'rgba(255,255,255,0.2)', margin: 0, fontFamily: 'monospace', letterSpacing: '0.01em', transition: 'color 0.4s' }}>
                     {step.detail}
                   </p>
                 </div>
@@ -1209,7 +1209,7 @@ function CoherenDemoSection() {
         >
           {[
             { label: 'Streak', value: '8 days', icon: <Flame size={11} color="#f97316" /> },
-            { label: 'Plan',   value: '90 days', icon: <TrendingUp size={11} color="#7c3aed" /> },
+            { label: 'Plan',   value: '90 days', icon: <TrendingUp size={11} color="#C4552D" /> },
           ].map(({ label, value, icon }) => (
             <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 0' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -1300,13 +1300,13 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
         >
           {/* Section header inside the card */}
           <div className="px-8 lg:px-16 pt-8 pb-0 text-center">
-            <span className="mb-3 inline-block rounded-full border border-violet-500/30 bg-violet-500/10 px-4 py-1 text-xs font-semibold uppercase tracking-widest text-violet-400">
+            <span className="mb-3 inline-block rounded-full border border-clay-500/30 bg-clay-500/10 px-4 py-1 text-xs font-semibold uppercase tracking-widest text-clay-400">
               How It Works
             </span>
             <h2 className="mt-3 text-4xl font-light tracking-tight text-white sm:text-5xl md:text-6xl">
               Eliminate the space between
               <br />
-              <span className="bg-gradient-to-r from-violet-400 to-indigo-400 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-clay-400 to-amber-400 bg-clip-text text-transparent">
                 'want' and 'did'.
               </span>
             </h2>

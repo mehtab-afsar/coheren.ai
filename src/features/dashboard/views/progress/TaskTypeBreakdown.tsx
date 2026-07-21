@@ -6,7 +6,7 @@ interface TaskTypeBreakdownProps {
 }
 
 const TYPE_STYLES: Record<string, { color: string; bg: string; Icon: React.ComponentType<{ size?: number; color?: string }> }> = {
-  practice:   { color: '#7c3aed', bg: 'rgba(124,58,237,0.08)', Icon: Target },
+  practice:   { color: '#C4552D', bg: 'rgba(196, 85, 45,0.08)', Icon: Target },
   learning:   { color: '#0ea5e9', bg: 'rgba(14,165,233,0.08)', Icon: BookOpen },
   reflection: { color: '#f97316', bg: 'rgba(249,115,22,0.08)', Icon: MessageCircle },
 };

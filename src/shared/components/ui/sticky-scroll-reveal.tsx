@@ -63,7 +63,7 @@ export const StickyScroll = ({
                 transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
               >
                 {/* Step number */}
-                <span className="mb-6 block text-sm font-semibold uppercase tracking-[0.25em] text-violet-500">
+                <span className="mb-6 block text-sm font-semibold uppercase tracking-[0.25em] text-clay-500">
                   {String(activeCard + 1).padStart(2, "0")} / {String(content.length).padStart(2, "0")}
                 </span>
 
@@ -85,7 +85,7 @@ export const StickyScroll = ({
                       animate={{
                         width: i === activeCard ? 32 : 6,
                         opacity: i === activeCard ? 1 : 0.25,
-                        backgroundColor: i === activeCard ? "#7c3aed" : "#ffffff33",
+                        backgroundColor: i === activeCard ? "#C4552D" : "#ffffff33",
                       }}
                       transition={{ duration: 0.35 }}
                       className="h-1.5 rounded-full"

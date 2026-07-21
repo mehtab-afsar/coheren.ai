@@ -9,6 +9,38 @@
 import type { CompletedTaskFeedback } from '@types-app/agents';
 import { flags } from '@config/feature-flags';
 
+/** Minimal structural shape of an assessment result (confidence kept loose as
+ * `string` so both the strict AssessmentResult and the store Task's looser
+ * variant satisfy it). */
+interface AssessmentResultLike {
+  selfScore?: number;
+  correct?: boolean;
+  confidence: string;
+}
+
+/**
+ * Build a per-day assessment/quiz summary (correct/total, avg self-score,
+ * misconception count) from tasks that carry `assessmentResults`. Returns
+ * undefined when no task was assessed. Shared by the orchestrator (legacy
+ * recalibrateCurriculum) and the live weekly recalibrateWeek path so the quiz
+ * signal reaches whichever recalibrator runs.
+ */
+export function buildAssessmentSummary(
+  tasks: Array<{ day?: number; dayNumber?: number; assessmentResults?: AssessmentResultLike[] }>,
+): string | undefined {
+  const assessed = tasks.filter(t => t.assessmentResults && t.assessmentResults.length > 0);
+  if (assessed.length === 0) return undefined;
+  return assessed.map(t => {
+    const results = t.assessmentResults!;
+    const correct = results.filter(r => r.correct === true).length;
+    const total = results.length;
+    const scored = results.filter(r => r.selfScore !== undefined);
+    const avgSelfScore = scored.reduce((sum, r) => sum + (r.selfScore ?? 0), 0) / Math.max(1, scored.length);
+    const highConfWrong = results.filter(r => (r.confidence === 'confident' || r.confidence === 'certain') && r.correct === false).length;
+    return `Day ${t.day ?? t.dayNumber}: ${correct}/${total} correct, avg self-score ${avgSelfScore.toFixed(1)}/5${highConfWrong > 0 ? `, ${highConfWrong} misconception(s) detected` : ''}`;
+  }).join('\n');
+}
+
 // ─── Pipeline Checkpoint CRUD (5.2) ──────────────────────────────────────────
 
 const PIPELINE_CHECKPOINT_KEY = 'coheren_pipeline_checkpoint';

@@ -64,20 +64,24 @@
     --c-text-secondary: #444444;
     --c-text-tertiary:  #888888;
     --c-text-quaternary: #bbbbbb;
-    --c-text-accent:    #7c3aed;
+    --c-text-accent:    #C4552D;
 
     /* Accent palette */
-    --c-accent-purple:      #7c3aed;
-    --c-accent-purple-soft: rgba(124, 58, 237, 0.10);
-    --c-accent-purple-border: rgba(124, 58, 237, 0.25);
+    --c-accent-purple:      #C4552D;
+    --c-accent-purple-soft: rgba(196, 85, 45, 0.10);
+    --c-accent-purple-border: rgba(196, 85, 45, 0.25);
     --c-accent-blue:   #4a90e2;
     --c-accent-green:  #22c55e;
     --c-accent-amber:  #f59e0b;
     --c-accent-red:    #ef4444;
 
+    /* Streak (warm, distinct from the accent) */
+    --c-streak:        #E8553A;
+    --c-streak-soft:   rgba(232, 85, 58, 0.08);
+
     /* Gradients */
-    --c-gradient-purple: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
-    --c-gradient-blue:   linear-gradient(135deg, #4a90e2 0%, #7c3aed 100%);
+    --c-gradient-purple: linear-gradient(135deg, #C4552D 0%, #A8451F 100%);
+    --c-gradient-blue:   linear-gradient(135deg, #4a90e2 0%, #C4552D 100%);
     --c-gradient-green:  linear-gradient(135deg, #22c55e 0%, #4a90e2 100%);
     --c-gradient-soft:   linear-gradient(180deg, rgba(102, 126, 234, 0.02) 0%, rgba(255, 255, 255, 0) 100%);
 
@@ -135,6 +139,18 @@
   --color-card-foreground: hsl(var(--card-foreground));
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  /* Clay — the owned terracotta brand scale (replaces stock violet). */
+  --color-clay-50:  #FBF3EE;
+  --color-clay-100: #F5E4DA;
+  --color-clay-200: #EBC9B6;
+  --color-clay-300: #E3B9A5;
+  --color-clay-400: #DDA189;
+  --color-clay-500: #CE6B45;
+  --color-clay-600: #C4552D;
+  --color-clay-700: #A8451F;
+  --color-clay-800: #8A3A1F;
+  --color-clay-900: #7A2E14;
 
   --animate-appear: appear 0.5s ease-out forwards;
   --animate-appear-zoom: appear-zoom 0.5s ease-out forwards;

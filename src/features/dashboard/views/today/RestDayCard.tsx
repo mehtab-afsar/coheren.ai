@@ -10,7 +10,7 @@ export default function RestDayCard({ onNavigateJourney }: RestDayCardProps) {
   return (
     <div style={{
       background: 'linear-gradient(135deg, rgba(30,14,60,0.8) 0%, rgba(17,8,40,0.9) 100%)',
-      border: '1px solid rgba(124,58,237,0.15)',
+      border: '1px solid rgba(196, 85, 45,0.15)',
       borderRadius: 24,
       padding: isMobile ? '24px 20px' : '36px 28px',
       textAlign: 'center',
@@ -25,7 +25,7 @@ export default function RestDayCard({ onNavigateJourney }: RestDayCardProps) {
         transform: 'translate(-50%, -50%)',
         width: '200px',
         height: '200px',
-        background: 'radial-gradient(circle, rgba(124,58,237,0.1) 0%, transparent 70%)',
+        background: 'radial-gradient(circle, rgba(196, 85, 45,0.1) 0%, transparent 70%)',
         pointerEvents: 'none',
       }} />
 
@@ -37,12 +37,12 @@ export default function RestDayCard({ onNavigateJourney }: RestDayCardProps) {
         width: 56,
         height: 56,
         borderRadius: '50%',
-        background: 'rgba(124,58,237,0.15)',
-        border: '1px solid rgba(124,58,237,0.3)',
+        background: 'rgba(196, 85, 45,0.15)',
+        border: '1px solid rgba(196, 85, 45,0.3)',
         marginBottom: 20,
         position: 'relative',
       }}>
-        <Coffee size={24} color="#a78bfa" strokeWidth={1.5} />
+        <Coffee size={24} color="#DDA189" strokeWidth={1.5} />
       </div>
 
       <h3 style={{
@@ -76,13 +76,13 @@ export default function RestDayCard({ onNavigateJourney }: RestDayCardProps) {
           border: 'none',
           cursor: 'pointer',
           fontSize: 13,
-          color: '#a78bfa',
+          color: '#DDA189',
           padding: 0,
           position: 'relative',
           transition: 'color 0.15s',
         }}
-        onMouseEnter={e => { e.currentTarget.style.color = '#c4b5fd'; }}
-        onMouseLeave={e => { e.currentTarget.style.color = '#a78bfa'; }}
+        onMouseEnter={e => { e.currentTarget.style.color = '#E3B9A5'; }}
+        onMouseLeave={e => { e.currentTarget.style.color = '#DDA189'; }}
       >
         See tomorrow's task →
       </button>

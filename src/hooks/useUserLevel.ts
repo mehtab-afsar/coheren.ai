@@ -22,7 +22,7 @@ const TIERS: Array<{
 }> = [
   { tier: 'novice',       label: 'Novice',       min: 0,   max: 20,  color: '#94a3b8', tagline: 'You\'re just getting started' },
   { tier: 'builder',      label: 'Builder',      min: 20,  max: 50,  color: '#0ea5e9', tagline: 'You\'re building real habits' },
-  { tier: 'practitioner', label: 'Practitioner', min: 50,  max: 100, color: '#7c3aed', tagline: 'You\'ve moved past the beginner phase' },
+  { tier: 'practitioner', label: 'Practitioner', min: 50,  max: 100, color: '#C4552D', tagline: 'You\'ve moved past the beginner phase' },
   { tier: 'expert',       label: 'Expert',       min: 100, max: 200, color: '#f97316', tagline: 'You\'re operating at a high level' },
   { tier: 'master',       label: 'Master',       min: 200, max: 999, color: '#f59e0b', tagline: 'You\'ve hardcoded the transition' },
 ];

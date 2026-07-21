@@ -73,7 +73,7 @@ async function injectPageState(
 ) {
   const storeState = buildDayState(user, day);
   const SUPABASE_AUTH_KEY = 'sb-127-auth-token';
-  const now = Math.floor(Date.now() / 1000);
+  const _now = Math.floor(Date.now() / 1000);
 
   await page.addInitScript(({ jwt, userId, email, authKey, store }: {
     jwt: string; userId: string; email: string; authKey: string; store: object;
@@ -239,7 +239,7 @@ test.describe.serial('10-Day Habit Simulation', () => {
   });
 
   // ── Day 10: Final state assertions ──────────────────────────────────────
-  test('Day 10: no orphaned rows, tasks exist for all seeded days', async ({ page }) => {
+  test('Day 10: no orphaned rows, tasks exist for all seeded days', async () => {
     const { assertNoOrphanedFeedback, getDailyTasksForDay } = await import('../helpers/db');
 
     // Verify no orphaned feedback
@@ -290,7 +290,7 @@ test.describe('Habit Simulation — Mocked (no DB required)', () => {
   ) {
     return page.addInitScript(({ day: d, userId, email }: { day: number; userId: string; email: string }) => {
       localStorage.clear();
-      const now = Math.floor(Date.now() / 1000);
+      const _now = Math.floor(Date.now() / 1000);
       localStorage.setItem('sb-127-auth-token', JSON.stringify({
         access_token: 'mock-token',
         token_type: 'bearer',

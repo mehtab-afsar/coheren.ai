@@ -5,6 +5,7 @@
  */
 
 import { supabase } from './supabase';
+import { computeStreak, earnedFreezes } from './streak';
 import type { Agent1Output, Agent2ProfileOutput, Agent3Output, StoneAnswer } from '@types-app/agents';
 import type { ThresholdAdjustments } from '@core/agents/recalibrator';
 
@@ -456,22 +457,10 @@ export async function calculateStreak(roadmapId: string): Promise<number> {
 
   if (completedDays.size === 0) return 0;
 
-  // Find the most recent completed day
-  const mostRecent = Math.max(...completedDays);
-  const mostRecentDaysAgo = Math.floor((today.getTime() - mostRecent) / 86400000);
-
-  // If the most recent completion is older than yesterday, streak is broken
-  if (mostRecentDaysAgo > 1) return 0;
-
-  // Count consecutive days backwards from most recent
-  let streak = 0;
-  let checkDay = mostRecent;
-  while (completedDays.has(checkDay)) {
-    streak++;
-    checkDay -= 86400000; // go back one day
-  }
-
-  return streak;
+  // Streak with an earned freeze tolerance so one missed day doesn't zero a
+  // hard-won streak (churn fix). Freezes are earned from completion history.
+  const allowance = earnedFreezes(completedDays.size);
+  return computeStreak(completedDays, today.getTime(), allowance).streak;
 }
 
 // ============================================
@@ -490,14 +479,11 @@ export async function saveTaskFeedback(
     completionStatus?: 'completed' | 'skipped' | 'modified';
   }
 ) {
-  // Check if feedback already exists for this task (upsert logic)
-  const { data: existing } = await supabase
-    .from('task_feedback')
-    .select('id')
-    .eq('task_id', taskId)
-    .eq('user_id', userId)
-    .single();
-
+  // Feedback is append-only: every submission (including a user editing their
+  // answer on the same task) inserts a new row rather than mutating a prior
+  // one, so the recalibrator's training history can't be silently rewritten.
+  // getRecentFeedback() dedupes to the latest row per task_id for callers
+  // that want current-state semantics.
   const feedbackData = {
     user_id: userId,
     task_id: taskId,
@@ -509,28 +495,11 @@ export async function saveTaskFeedback(
     completion_status: feedback.completionStatus || 'completed'
   };
 
-  let data, error;
-
-  if (existing) {
-    // Update existing feedback
-    const result = await supabase
-      .from('task_feedback')
-      .update(feedbackData)
-      .eq('id', existing.id)
-      .select()
-      .single();
-    data = result.data;
-    error = result.error;
-  } else {
-    // Insert new feedback
-    const result = await supabase
-      .from('task_feedback')
-      .insert(feedbackData)
-      .select()
-      .single();
-    data = result.data;
-    error = result.error;
-  }
+  const { data, error } = await supabase
+    .from('task_feedback')
+    .insert(feedbackData)
+    .select()
+    .single();
 
   if (error) {
     console.error('Error saving task feedback:', error);
@@ -559,7 +528,14 @@ export async function getRecentFeedback(
     return [];
   }
 
-  return data || [];
+  // Feedback is append-only (see saveTaskFeedback) — a task can have multiple
+  // rows if the user edited their answer. Keep only the latest per task_id.
+  const latestByTask = new Map<string, NonNullable<typeof data>[number]>();
+  for (const row of data || []) {
+    latestByTask.set(row.task_id, row);
+  }
+
+  return Array.from(latestByTask.values());
 }
 
 // ============================================
@@ -758,7 +734,9 @@ export async function syncCompleteRoadmap(
  * task_feedback has no cascade so it is deleted explicitly first.
  */
 export async function deleteUserData(userId: string): Promise<void> {
-  // task_feedback has no FK cascade — delete it first
+  // task_feedback has no FK cascade — delete it first. This is user-initiated
+  // erasure of their own data (goal reset), not routine mutation, so it's
+  // intentionally exempt from the append-only policy on this table.
   await supabase
     .from('task_feedback')
     .delete()

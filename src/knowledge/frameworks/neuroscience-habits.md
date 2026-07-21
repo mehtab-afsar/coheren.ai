@@ -145,7 +145,7 @@ The brain's ability to reorganize and form new neural connections throughout lif
 - Context stability (same cue, same environment)
 - Emotional association (reward/celebration)
 
-## Application in CONSIST
+## Application in Coheren
 
 ### Task Timing
 - Match challenging tasks to user's energy peak

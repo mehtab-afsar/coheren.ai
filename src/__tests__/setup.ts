@@ -31,8 +31,3 @@ vi.mock('@lib/analytics', () => ({
   track:    vi.fn(),
   identify: vi.fn(),
 }));
-
-// ── Mock resource matcher ────────────────────────────────────────────────────
-vi.mock('@lib/resourceMatcher', () => ({
-  matchTaskToResources: vi.fn().mockResolvedValue({ primary: null, supplementary: [] }),
-}));

@@ -10,6 +10,9 @@
  * Mixing task types measurably degrades recall.
  */
 
+import { env } from '@config/env';
+import { proxyFetch } from './ai-proxy-fetch';
+
 type JinaTask = 'retrieval.query' | 'retrieval.passage';
 
 interface JinaEmbeddingResponse {
@@ -17,20 +20,20 @@ interface JinaEmbeddingResponse {
   usage: { prompt_tokens: number; total_tokens: number };
 }
 
-const JINA_API_URL  = 'https://api.jina.ai/v1/embeddings';
+// Routes through the ai-proxy edge function (which injects the real Jina key).
+const JINA_API_URL  = `${env.AI_PROXY_URL}/jina/v1/embeddings`;
 const JINA_MODEL    = 'jina-embeddings-v3';
 const JINA_DIMS     = 1024;
 
 async function callJina(
   texts:  string[],
   task:   JinaTask,
-  apiKey: string
+  _apiKey: string, // ignored — the edge function holds the real key
 ): Promise<number[][]> {
-  const response = await fetch(JINA_API_URL, {
+  const response = await proxyFetch(JINA_API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
       model:      JINA_MODEL,
@@ -74,7 +77,7 @@ export async function embedDocuments(
 
 // ─── Reranker ────────────────────────────────────────────────────────────────
 
-const JINA_RERANK_URL   = 'https://api.jina.ai/v1/rerank';
+const JINA_RERANK_URL   = `${env.AI_PROXY_URL}/jina/v1/rerank`;
 const JINA_RERANK_MODEL = 'jina-reranker-v2-base-multilingual';
 
 export interface JinaRerankResult {
@@ -96,13 +99,12 @@ export async function rerankDocuments(
   query:     string,
   documents: string[],
   topN:      number,
-  apiKey:    string,
+  _apiKey:   string, // ignored — the edge function holds the real key
 ): Promise<JinaRerankResult[]> {
-  const response = await fetch(JINA_RERANK_URL, {
+  const response = await proxyFetch(JINA_RERANK_URL, {
     method:  'POST',
     headers: {
       'Content-Type':  'application/json',
-      'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
       model:     JINA_RERANK_MODEL,

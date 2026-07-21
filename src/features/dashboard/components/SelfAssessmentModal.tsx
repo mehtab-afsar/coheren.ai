@@ -101,10 +101,10 @@ export default function SelfAssessmentModal({
             {/* Video prompt */}
             <div style={{
               display: 'flex', alignItems: 'center', gap: 10,
-              background: '#f5f3ff', borderRadius: 12, padding: '12px 14px',
+              background: '#FBF3EE', borderRadius: 12, padding: '12px 14px',
               marginBottom: 20,
             }}>
-              <Video size={18} color="#7c3aed" />
+              <Video size={18} color="#C4552D" />
               <p style={{ fontSize: 13, color: '#374151', margin: 0, lineHeight: 1.4 }}>
                 Record yourself performing the skill, then watch back before rating.
               </p>
@@ -122,7 +122,7 @@ export default function SelfAssessmentModal({
                 return (
                   <div key={criterion.id} style={{
                     background: '#fafafa', borderRadius: 14, padding: '14px 16px',
-                    border: currentScore !== undefined ? '1px solid #ede9fe' : '1px solid #f3f4f6',
+                    border: currentScore !== undefined ? '1px solid #F9EDE6' : '1px solid #f3f4f6',
                   }}>
                     <p style={{ fontSize: 14, fontWeight: 500, color: '#1a1a2e', margin: '0 0 4px' }}>
                       {criterion.label}
@@ -147,8 +147,8 @@ export default function SelfAssessmentModal({
                           >
                             <Star
                               size={22}
-                              fill={isFilled ? '#7c3aed' : 'none'}
-                              color={isFilled ? '#7c3aed' : '#d1d5db'}
+                              fill={isFilled ? '#C4552D' : 'none'}
+                              color={isFilled ? '#C4552D' : '#d1d5db'}
                               strokeWidth={1.5}
                             />
                           </button>
@@ -167,11 +167,11 @@ export default function SelfAssessmentModal({
                 animate={{ opacity: 1, y: 0 }}
                 style={{
                   textAlign: 'center', marginBottom: 16,
-                  background: 'linear-gradient(135deg, #f5f3ff, #ede9fe)',
+                  background: 'linear-gradient(135deg, #FBF3EE, #F9EDE6)',
                   borderRadius: 14, padding: '16px 12px',
                 }}
               >
-                <p style={{ fontSize: 28, fontWeight: 700, color: '#7c3aed', margin: '0 0 4px' }}>
+                <p style={{ fontSize: 28, fontWeight: 700, color: '#C4552D', margin: '0 0 4px' }}>
                   {avgScore}/5
                 </p>
                 <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
@@ -199,7 +199,7 @@ export default function SelfAssessmentModal({
                     { value: 'guessing' as ConfidenceLevel, label: 'Guessing', color: '#ef4444' },
                     { value: 'unsure' as ConfidenceLevel, label: 'Unsure', color: '#f97316' },
                     { value: 'confident' as ConfidenceLevel, label: 'Confident', color: '#22c55e' },
-                    { value: 'certain' as ConfidenceLevel, label: 'Certain', color: '#7c3aed' },
+                    { value: 'certain' as ConfidenceLevel, label: 'Certain', color: '#C4552D' },
                   ]).map(opt => {
                     const isSelected = confidence === opt.value;
                     return (
@@ -243,11 +243,11 @@ export default function SelfAssessmentModal({
                   flex: 1, padding: '14px 16px', borderRadius: 14,
                   border: 'none',
                   background: allScored && confidence
-                    ? 'linear-gradient(135deg, #7c3aed, #a78bfa)'
+                    ? 'linear-gradient(135deg, #C4552D, #DDA189)'
                     : '#e5e7eb',
                   color: '#fff', fontSize: 14, fontWeight: 600,
                   cursor: allScored && confidence ? 'pointer' : 'default',
-                  boxShadow: allScored && confidence ? '0 4px 14px rgba(124,58,237,0.3)' : 'none',
+                  boxShadow: allScored && confidence ? '0 4px 14px rgba(196, 85, 45,0.3)' : 'none',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                   outline: 'none', transition: 'all 0.2s ease',
                 }}

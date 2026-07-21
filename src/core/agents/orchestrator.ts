@@ -14,6 +14,7 @@ import {
   saveAgentCheckpoint,
   loadAgentCheckpoint,
   clearPipelineCheckpoints,
+  buildAssessmentSummary,
 } from '@lib/checkpointHelpers';
 import { retrieveKnowledgeWithFallback } from '@core/rag';
 import { flags } from '@config/feature-flags';
@@ -204,6 +205,8 @@ export async function generateCompleteRoadmap(
   /** Optional: sprint memory chunks for returning users (Change 5). */
   sprintMemoryContext?: string,
   practiceEnvironment?: string,
+  /** Reuse Agent 1's output from runOnboardingAgents so it isn't re-run per signup. */
+  preComputedGoalAnalysis?: Agent1Output,
 ): Promise<{
   goalAnalysis: Agent1Output;
   roadmap: AgentRoadmapV2;
@@ -233,7 +236,9 @@ export async function generateCompleteRoadmap(
     goalAnalysis = cachedGoalAnalysis;
     stoneProfile = cachedStoneProfile;
   } else {
-    goalAnalysis = await analyzeGoal(context);
+    // Reuse Agent 1's output from the onboarding phase when available (avoids a
+    // second 70B goal-analysis call + latency on every signup).
+    goalAnalysis = preComputedGoalAnalysis ?? await analyzeGoal(context);
     saveAgentCheckpoint(pid, 'goal_analysis', goalAnalysis);
 
     stoneProfile = preComputedStoneProfile ?? await extractStones(context, goalAnalysis, stoneAnswers);
@@ -251,19 +256,19 @@ export async function generateCompleteRoadmap(
 
   if (cachedCurriculum) {
     roadmapV2 = cachedCurriculum;
-  } else if (flags.PARALLEL_AGENT_EXECUTION) {
-    // Wave 2: RAG pre-fetch runs in parallel with Agent 3 (prefetchedRag already in-flight above)
-    const priorLearningBlock = flags.USE_SPRINT_MEMORY_IN_ALL_AGENTS && sprintMemoryContext
-      ? `## Prior Learning History\n${sprintMemoryContext}\n\n`
-      : '';
-    roadmapV2 = await buildCurriculum(context, goalAnalysis, stoneProfile, priorLearningBlock || undefined);
-    saveAgentCheckpoint(pid, 'curriculum', roadmapV2);
   } else {
-    // Inject sprint memory as ragContext prefix when returning user has history
+    // Sprint memory (prior learning) for returning users, plus — when
+    // PARALLEL_AGENT_EXECUTION is on — the RAG prefetch that was kicked off
+    // above (line ~248) running in parallel. Both are combined into the single
+    // ragContext arg buildCurriculum accepts. (Previously the prefetch result
+    // was discarded and RAG never reached Agent 3.)
     const priorLearningBlock = flags.USE_SPRINT_MEMORY_IN_ALL_AGENTS && sprintMemoryContext
       ? `## Prior Learning History\n${sprintMemoryContext}\n\n`
       : '';
-    roadmapV2 = await buildCurriculum(context, goalAnalysis, stoneProfile, priorLearningBlock || undefined);
+    const ragString = await prefetchedRag;
+    const ragBlock = ragString ? `## Domain Knowledge (RAG)\n${ragString}\n\n` : '';
+    const combinedContext = `${priorLearningBlock}${ragBlock}` || undefined;
+    roadmapV2 = await buildCurriculum(context, goalAnalysis, stoneProfile, combinedContext);
     saveAgentCheckpoint(pid, 'curriculum', roadmapV2);
   }
 
@@ -368,22 +373,8 @@ export async function runCheckpointRecalibration(
   // Convert store tasks to feedback format
   const taskFeedback = convertToFeedback(completedTasks);
 
-  // Summarize assessment results for recalibration context
-  const assessmentTasks = completedTasks.filter(t =>
-    t.assessmentResults && t.assessmentResults.length > 0
-  );
-  if (assessmentTasks.length > 0) {
-    assessmentTasks.map(t => {
-      const results = t.assessmentResults!;
-      const correct = results.filter(r => r.correct === true).length;
-      const total = results.length;
-      const avgSelfScore = results
-        .filter(r => r.selfScore !== undefined)
-        .reduce((sum, r) => sum + (r.selfScore ?? 0), 0) / Math.max(1, results.filter(r => r.selfScore !== undefined).length);
-      const highConfWrong = results.filter(r => (r.confidence === 'confident' || r.confidence === 'certain') && r.correct === false).length;
-      return `Day ${t.day ?? t.dayNumber}: ${correct}/${total} correct, avg self-score ${avgSelfScore.toFixed(1)}/5${highConfWrong > 0 ? `, ${highConfWrong} misconception(s) detected` : ''}`;
-    }).join('\n');
-  }
+  // Summarize assessment results for recalibration context (shared helper).
+  const assessmentSummary = buildAssessmentSummary(completedTasks);
 
   const recalibration = await withAgentLogging(
     { agentName: 'agent5_recalibrator', runType: 'checkpoint', input: { currentDay, taskCount: taskFeedback.length } },
@@ -392,7 +383,8 @@ export async function runCheckpointRecalibration(
       roadmap,
       stoneProfile,
       completedTasks: taskFeedback,
-      currentDay
+      currentDay,
+      assessmentSummary
     })
   );
 

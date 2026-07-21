@@ -30,6 +30,7 @@ import {
   type ClaudeToolCallParams,
   callClaudeWithTools as _callClaudeWithTools,
 } from './claude-client';
+import { env } from '@config/env';
 
 // ── Shared types (agents depend on these) ─────────────────────────────────────
 
@@ -66,7 +67,7 @@ interface ProviderAdapter {
 
 const groqFast: ProviderAdapter = {
   name: 'groq', model: 'llama-3.1-8b-instant',
-  isAvailable: () => Boolean(import.meta.env.VITE_GROQ_API_KEY),
+  isAvailable: () => env.GROQ_ENABLED,
   async call(params) {
     const completion = await callGroqEconomy({
       messages: params.messages,
@@ -81,7 +82,7 @@ const groqFast: ProviderAdapter = {
 
 const groqStandard: ProviderAdapter = {
   name: 'groq', model: 'llama-3.3-70b-versatile',
-  isAvailable: () => Boolean(import.meta.env.VITE_GROQ_API_KEY),
+  isAvailable: () => env.GROQ_ENABLED,
   async call(params) {
     const completion = await callGroqWithFallback({
       messages: params.messages,
@@ -112,7 +113,7 @@ async function routeCall(
   if (available.length === 0) {
     throw new Error(
       `[AI Router] No providers available for ${tierLabel} tier. ` +
-      'Set VITE_GROQ_API_KEY in .env.',
+      'Set VITE_GROQ_ENABLED=true and ensure the ai-proxy edge function is deployed.',
     );
   }
 
@@ -228,7 +229,7 @@ export async function* callEconomyStream(
 /**
  * Strategic — Claude claude-sonnet-4-6.
  * Agent 3 (Curriculum Builder) and Agent 5 (Recalibrator) when USE_CLAUDE_FOR_* flags are on.
- * Falls back to callPremium() (Groq 70b) when VITE_ANTHROPIC_API_KEY is not set.
+ * Falls back to callPremium() (Groq 70b) when Claude is disabled (VITE_CLAUDE_ENABLED).
  */
 export async function callStrategic(params: RouterCallParams): Promise<RouterCompletion> {
   if (!isClaudeAvailable()) return callPremium(params);
@@ -247,7 +248,7 @@ export async function callStrategic(params: RouterCallParams): Promise<RouterCom
 /**
  * Strategic with extended thinking — Claude claude-sonnet-4-6 + thinking block.
  * Returns `{ content, thinking }` embedded in content as `[THINKING]…[/THINKING]\n{output}`.
- * Falls back to callStrategic() when VITE_ANTHROPIC_API_KEY is not set.
+ * Falls back to callStrategic() when Claude is disabled (VITE_CLAUDE_ENABLED).
  */
 export async function callStrategicWithThinking(
   params: RouterCallParams & { budgetTokens?: number },
@@ -275,13 +276,13 @@ export async function callStrategicWithThinking(
 
 /**
  * Re-export callClaudeWithTools so agents can do tool-use loops through the router.
- * Only available when VITE_ANTHROPIC_API_KEY is set; throws otherwise.
+ * Only available when Claude is enabled (VITE_CLAUDE_ENABLED); throws otherwise.
  */
 export async function callStrategicWithTools(
   params: ClaudeToolCallParams,
 ) {
   if (!isClaudeAvailable()) {
-    throw new Error('[AI Router] callStrategicWithTools requires VITE_ANTHROPIC_API_KEY');
+    throw new Error('[AI Router] callStrategicWithTools requires Claude enabled (VITE_CLAUDE_ENABLED=true)');
   }
   return _callClaudeWithTools(params);
 }

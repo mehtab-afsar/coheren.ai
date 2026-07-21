@@ -28,7 +28,7 @@ test.setTimeout(600_000); // 10 minutes — real AI onboarding + 10 day-reloads
 const TEST_NAME = 'Habit Tester';
 const TEST_EMAIL = `habit-${Date.now()}@coheren.dev`;
 const TEST_PASSWORD = 'HabitTest123!';
-const TEST_GOAL = 'I want to build a daily 20-minute morning walk habit';
+const _TEST_GOAL = 'I want to build a daily 20-minute morning walk habit';
 
 // Deterministic base date for the calendar (local midnight, a few days in the past
 // so the goal's real created_at is never in the future relative to the clock).

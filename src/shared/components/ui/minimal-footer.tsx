@@ -45,7 +45,7 @@ export function MinimalFooter() {
         style={{
           width: '800px',
           height: '260px',
-          background: 'radial-gradient(ellipse 65% 55% at 50% 100%, rgba(139,92,246,0.45) 0%, rgba(109,40,217,0.2) 45%, transparent 72%)',
+          background: 'radial-gradient(ellipse 65% 55% at 50% 100%, rgba(206, 107, 69,0.45) 0%, rgba(168, 69, 31,0.2) 45%, transparent 72%)',
           filter: 'blur(1px)',
         }}
       />
@@ -61,13 +61,13 @@ export function MinimalFooter() {
           {/* Left — brand content */}
           <div className="shrink-0 w-full sm:w-72 flex flex-col gap-5">
             <div className="flex items-center gap-2">
-              <Icons.logo className="h-6 w-6 text-violet-600" />
+              <Icons.logo className="h-6 w-6 text-clay-600" />
               <span className="text-base font-semibold text-white tracking-tight">coheren.ai</span>
             </div>
             <div>
               <p className="text-3xl font-light text-white leading-snug" style={{ letterSpacing: '-0.02em' }}>
                 Backed by science.<br />
-                <span className="text-violet-600">Built for you.</span>
+                <span className="text-clay-600">Built for you.</span>
               </p>
               <p className="mt-3 text-slate-400 text-sm leading-relaxed">
                 AI that turns your goals into one simple task per day.
@@ -76,7 +76,7 @@ export function MinimalFooter() {
             <div className="flex gap-2">
               {socialLinks.map(({ label, icon, href }) => (
                 <a key={label} href={href} target="_blank" rel="noreferrer" aria-label={label}
-                  className="flex items-center justify-center h-7 w-7 rounded-lg border border-slate-200 text-slate-400 hover:border-violet-300 hover:text-violet-600 hover:bg-violet-50 transition-colors">
+                  className="flex items-center justify-center h-7 w-7 rounded-lg border border-slate-200 text-slate-400 hover:border-clay-300 hover:text-clay-600 hover:bg-clay-50 transition-colors">
                   {icon}
                 </a>
               ))}
@@ -93,7 +93,7 @@ export function MinimalFooter() {
                 {product.map(({ href, title }) => (
                   <li key={title}>
                     <a href={href} onClick={e => { e.preventDefault(); scrollTo(href); }}
-                      className="text-sm text-slate-600 hover:text-violet-600 transition-colors">
+                      className="text-sm text-slate-600 hover:text-clay-600 transition-colors">
                       {title}
                     </a>
                   </li>
@@ -107,7 +107,7 @@ export function MinimalFooter() {
               <ul className="space-y-2.5">
                 {support.map(({ href, title }) => (
                   <li key={title}>
-                    <a href={href} className="text-sm text-slate-600 hover:text-violet-600 transition-colors">
+                    <a href={href} className="text-sm text-slate-600 hover:text-clay-600 transition-colors">
                       {title}
                     </a>
                   </li>
@@ -121,7 +121,7 @@ export function MinimalFooter() {
               <ul className="space-y-2.5">
                 {legal.map(({ href, title }) => (
                   <li key={title}>
-                    <a href={href} className="text-sm text-slate-600 hover:text-violet-600 transition-colors">
+                    <a href={href} className="text-sm text-slate-600 hover:text-clay-600 transition-colors">
                       {title}
                     </a>
                   </li>

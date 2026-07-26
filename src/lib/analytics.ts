@@ -24,6 +24,10 @@ export function initAnalytics() {
 
 // ── Event catalogue ───────────────────────────────────────────────────────────
 export type AnalyticsEvent =
+  // Activation funnel (top of funnel → signup) — the retention test's plumbing
+  | { event: 'landing_view'; properties?: Record<string, never> }
+  | { event: 'onboarding_started'; properties?: { has_initial_goal?: boolean } }
+  | { event: 'signup'; properties: { method: string } }
   // Core task events
   | { event: 'onboarding_completed'; properties?: { goal_category?: string } }
   | { event: 'task_completed'; properties: { task_id: string; task_type?: string; day: number } }

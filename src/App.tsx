@@ -9,7 +9,7 @@ import AuthPage from '@features/auth/AuthPage';
 import ErrorBoundary from '@shared/components/ErrorBoundary';
 import { onAuthStateChange, supabase } from '@lib/supabase';
 import { getTasksByRoadmapId, calculateStreak } from '@lib/database';
-import { identifyUser, resetAnalyticsUser } from '@lib/analytics';
+import { identifyUser, resetAnalyticsUser, track } from '@lib/analytics';
 import { expireStaleCheckpoints } from '@lib/checkpointHelpers';
 
 function App() {
@@ -55,6 +55,16 @@ function App() {
       if (session?.user) {
         setUser(session.user);
         identifyUser(session.user.id, { email: session.user.email });
+
+        // Activation funnel: fire `signup` only for a genuinely NEW account, not a
+        // returning login. `SIGNED_IN` fires on both, so gate on account age — a
+        // just-created account is <5 min old. This is the real signup conversion step.
+        if (event === 'SIGNED_IN' && session.user.created_at) {
+          const accountAgeMs = Date.now() - new Date(session.user.created_at).getTime();
+          if (accountAgeMs >= 0 && accountAgeMs < 5 * 60_000) {
+            track({ event: 'signup', properties: { method: session.user.app_metadata?.provider ?? 'email' } });
+          }
+        }
 
         // Always read live step (not stale closure) to avoid token-refresh reset
         const liveStep = useStore.getState().step;
@@ -246,6 +256,12 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Activation funnel: top of funnel. Fires when the landing page is shown
+  // (on first load and any return to step 0).
+  useEffect(() => {
+    if (step === 0) track({ event: 'landing_view', properties: {} });
+  }, [step]);
 
   // Show loading while checking auth
   if (!authInitialized) {

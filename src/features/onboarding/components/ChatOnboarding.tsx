@@ -252,6 +252,13 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
     'Almost there',
   ];
   const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
+  // Activation funnel: onboarding began (step 1 reached). Fire once on mount —
+  // pairs with the existing `onboarding_completed` to bracket the funnel.
+  useEffect(() => {
+    track({ event: 'onboarding_started', properties: { has_initial_goal: Boolean(initialGoal) } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (!isGeneratingPlan) { setLoadingMsgIndex(0); return; }
     const maxIndex = LOADING_MESSAGES.length - 1;

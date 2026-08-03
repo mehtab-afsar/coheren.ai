@@ -67,18 +67,32 @@ export function useAuthGate({
       // Clear initialGoal from store
       setInitialGoal(null);
 
-      // Sync roadmap to Supabase
+      // Sync roadmap to Supabase, then reconcile the real DB ids (goal/roadmap/task
+      // UUIDs) back into the store BEFORE showing the dashboard. Without this, the
+      // in-memory tasks keep their local `task-<day>-<i>` ids, completeTask skips the
+      // DB write (isUUID guard), and the day-1 streak can never compute. We await so
+      // the user can't complete a task before ids are reconciled. Sync has its own
+      // 8s timeout + graceful fallback, so this can't hang the flow.
       if (pendingSyncData) {
-        syncCompleteRoadmap(
-          userId,
-          collectedData.goal,
-          `Generated via AI multi-agent system for ${collectedData.category}`,
-          pendingSyncData.goalAnalysisData,
-          pendingSyncData.answers,
-          pendingSyncData.agentRoadmap,
-          pendingSyncData.initialTasksData as Parameters<typeof syncCompleteRoadmap>[6],
-          pendingSyncData.stoneProfile
-        ).catch(err => console.warn('⚠️ Sync after signup failed:', err));
+        try {
+          const result = await syncCompleteRoadmap(
+            userId,
+            collectedData.goal,
+            `Generated via AI multi-agent system for ${collectedData.category}`,
+            pendingSyncData.goalAnalysisData,
+            pendingSyncData.answers,
+            pendingSyncData.agentRoadmap,
+            pendingSyncData.initialTasksData as Parameters<typeof syncCompleteRoadmap>[6],
+            pendingSyncData.stoneProfile
+          );
+          const goalId = (result as { goal?: { id?: string } }).goal?.id;
+          const roadmapId = (result as { roadmap?: { id?: string } }).roadmap?.id;
+          if (goalId && roadmapId) {
+            await useStore.getState().reconcileSyncedRoadmap(goalId, roadmapId);
+          }
+        } catch (err) {
+          console.warn('⚠️ Sync after signup failed:', err);
+        }
       }
 
       // Go to dashboard

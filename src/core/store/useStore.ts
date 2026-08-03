@@ -4,7 +4,7 @@ import type { OnboardingState, GoalCategory } from '@types-app/index.js';
 import { generateTasksForDay, generateTasksFromAIPlan } from '@shared/utils/taskGenerator.js';
 import type { User } from '@supabase/supabase-js';
 import { getCurrentUser } from '@lib/supabase';
-import { updateTaskCompletion, updateTaskSkip, updateProfile, saveTaskFeedback, syncDailyTasksToDB, deleteUserData, calculateStreak } from '@lib/database';
+import { updateTaskCompletion, updateTaskSkip, updateProfile, saveTaskFeedback, syncDailyTasksToDB, deleteUserData, calculateStreak, getTasksByRoadmapId } from '@lib/database';
 import type { Agent3Output, Agent2ProfileOutput, DailyTask, TaskStep, AssessmentQuestion, AssessmentResult } from '@types-app/agents.js';
 import { runTaskGenerator } from '@core/agents';
 import { callEconomyStream } from '@lib/ai-router';
@@ -153,6 +153,39 @@ export interface Task {
   variant?: 'light' | 'standard' | 'deep';
 }
 
+/**
+ * Map a `daily_tasks` DB row to the in-memory store `Task`. Single source of truth
+ * for DB→store task hydration — used by both the reload path (App.tsx) and the
+ * post-signup reconciliation (`reconcileSyncedRoadmap`). The DB id is a real UUID,
+ * which is what makes completion persistence + calendar streak work.
+ */
+export function mapDbTaskToStoreTask(t: Record<string, unknown>): Task {
+  const content = (t.content as Record<string, unknown>) ?? {};
+  return {
+    id: t.id as string,
+    title: t.title as string,
+    description: (content.description as string) ?? '',
+    type: ((content.type as string) ?? 'practice') as Task['type'],
+    duration: (content.duration as number) ?? 45,
+    completed: Boolean(t.is_completed),
+    completedAt: t.completed_at as string | undefined,
+    skipped: Boolean(t.skipped),
+    scheduledFor: (content.scheduledFor as string) ?? '08:00',
+    day: t.day_number as number,
+    dayNumber: t.day_number as number,
+    segments: (content.segments as Task['segments']) ?? [],
+    steps: (content.steps as string[]) ?? [],
+    tips: (content.tips as string[]) ?? [],
+    successCriteria: (content.successCriteria as string) ?? '',
+    coachTips: (content.coachTips as string[]) ?? [],
+    reflection: (content.reflection as string) ?? undefined,
+    requiresPrep: (content.requiresPrep as { items: string[]; note: string }) ?? undefined,
+    resources: (content.resources as Task['resources']) ?? undefined,
+    difficultyRating: t.difficulty_rating as number | undefined,
+    actualDuration: t.actual_duration as number | undefined,
+  };
+}
+
 interface WeekPerformance {
   weekNumber: number;
   completionRate: number;
@@ -234,6 +267,7 @@ interface AppStore extends OnboardingState {
   addWeeklyCheckIn: (checkIn: WeeklyCheckIn) => void;
   setPendingWeeklyCheckIn: (weekNumber: number | null) => void;
   setTasks: (tasks: Task[]) => void;
+  reconcileSyncedRoadmap: (goalId: string, roadmapId: string) => Promise<void>;
   completeTask: (taskId: string) => Promise<void>;
   setTaskFeedback: (taskId: string, difficultyRating: number, feedbackTags?: string[], userComment?: string, actualDuration?: number) => Promise<void>;
   skipTask: (taskId: string, reason?: 'time' | 'health' | 'difficulty' | 'external') => Promise<void>;
@@ -355,6 +389,29 @@ export const useStore = create<AppStore>()(
         set({ pendingWeeklyCheckIn: weekNumber }),
 
       setTasks: (tasks) => set({ tasks }),
+
+      // After a value-first signup, syncCompleteRoadmap writes goal/roadmap/tasks to
+      // the DB with real UUIDs, but the in-memory store still holds the local
+      // pre-sync ids (roadmap has no id; tasks are `task-<day>-<i>`). Without this,
+      // completeTask's isUUID guard skips the DB write and the calendar streak (which
+      // reads the DB by roadmap id) can never see day-1 as done — so the streak shows
+      // 0 and streak_milestone can't fire until an app reload. This reconciles the
+      // real DB ids into the store immediately, mirroring the reload hydration path.
+      reconcileSyncedRoadmap: async (goalId, roadmapId) => {
+        try {
+          const dbTasks = await getTasksByRoadmapId(roadmapId);
+          const tasksForStore = (dbTasks ?? []).map(t => mapDbTaskToStoreTask(t as Record<string, unknown>));
+          const streak = await calculateStreak(roadmapId).catch(() => 0);
+          set((state) => ({
+            roadmap: state.roadmap ? { ...state.roadmap, id: roadmapId } : state.roadmap,
+            currentGoal: { ...state.currentGoal, id: goalId },
+            ...(tasksForStore.length > 0 ? { tasks: tasksForStore } : {}),
+            streak,
+          }));
+        } catch (err) {
+          console.error('reconcileSyncedRoadmap failed:', err);
+        }
+      },
 
       completeTask: async (taskId) => {
         const state = get();

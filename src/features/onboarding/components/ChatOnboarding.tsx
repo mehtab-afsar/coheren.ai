@@ -983,6 +983,16 @@ The system will automatically detect when the data is complete and transition to
         const u = useStore.getState().user;
         if (u) {
           syncCompleteRoadmap(u.id, collectedData.goal, `Generated via AI for ${collectedData.category}`, goalAnalysis!, pending.answers, legacyRoadmap, allTasks, sp)
+            .then(result => {
+              // Reconcile real DB ids (roadmap + task UUIDs) into the store so the
+              // day-1 streak persists — see reconcileSyncedRoadmap. Authed path is
+              // already on the dashboard, so this lands async a beat later.
+              const goalId = (result as { goal?: { id?: string } }).goal?.id;
+              const roadmapId = (result as { roadmap?: { id?: string } }).roadmap?.id;
+              if (goalId && roadmapId) {
+                return useStore.getState().reconcileSyncedRoadmap(goalId, roadmapId);
+              }
+            })
             .catch(() => { /* non-critical */ });
         } else {
           // Value-first funnel: user hasn't signed up yet — update pending sync with full task list

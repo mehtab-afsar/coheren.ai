@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useStore } from '@core/store/useStore';
+import { useStore, mapDbTaskToStoreTask } from '@core/store/useStore';
 import LandingPage from '@features/onboarding/components/LandingPage';
 import TodayHero from '@features/dashboard/views/today/TodayHero';
 import ChatOnboarding from '@features/onboarding/components/ChatOnboarding';
@@ -151,34 +151,10 @@ function App() {
               endDate,
             };
 
-            // Load tasks from DB
+            // Load tasks from DB (shared mapper — single source of truth with the
+            // post-signup reconciliation in the store)
             const dbTasks = await getTasksByRoadmapId(roadmapRow.id);
-            const tasksForStore = (dbTasks ?? []).map((t) => {
-              const content = t.content as Record<string, unknown> ?? {};
-              return {
-                id: t.id as string,
-                title: t.title as string,
-                description: (content.description as string) ?? '',
-                type: ((content.type as string) ?? 'practice') as 'practice' | 'learning' | 'reflection',
-                duration: (content.duration as number) ?? 45,
-                completed: Boolean(t.is_completed),
-                completedAt: t.completed_at as string | undefined,
-                skipped: Boolean(t.skipped),
-                scheduledFor: (content.scheduledFor as string) ?? '08:00',
-                day: t.day_number as number,
-                dayNumber: t.day_number as number,
-                segments: (content.segments as Array<{ label: string; duration: number; description: string; tip?: string }>) ?? [],
-                steps: (content.steps as string[]) ?? [],
-                tips: (content.tips as string[]) ?? [],
-                successCriteria: (content.successCriteria as string) ?? '',
-                coachTips: (content.coachTips as string[]) ?? [],
-                reflection: (content.reflection as string) ?? undefined,
-                requiresPrep: (content.requiresPrep as { items: string[]; note: string }) ?? undefined,
-                resources: (content.resources as import('@core/store/useStore').Task['resources']) ?? undefined,
-                difficultyRating: t.difficulty_rating as number | undefined,
-                actualDuration: t.actual_duration as number | undefined,
-              };
-            });
+            const tasksForStore = (dbTasks ?? []).map((t) => mapDbTaskToStoreTask(t as Record<string, unknown>));
 
             // Calculate current day (days since start + 1, capped at duration)
             const daysSinceStart = Math.floor((Date.now() - new Date(startDate).getTime()) / 86400000);

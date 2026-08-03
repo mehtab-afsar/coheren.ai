@@ -25,7 +25,6 @@ import { tokens } from '@core/design-system';
 import { HeroSection } from './HeroSection';
 import { FloatingNav } from '@shared/components/ui/floating-navbar';
 import { StickyScroll } from '@shared/components/ui/sticky-scroll-reveal';
-import { Testimonials } from '@shared/components/ui/unique-testimonial';
 import { MinimalFooter } from '@shared/components/ui/minimal-footer';
 import { PricingSection } from '@shared/components/ui/pricing-section';
 
@@ -1480,14 +1479,9 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
       </section>
 
 
-      {/* 600vh wrapper: science is sticky 0→600vh; testimonials slide in from 500vh, covering science */}
+      {/* Science section, sticky 0→600vh. (Testimonials removed — no fabricated users pre-launch.) */}
       <div ref={scienceWrapperRef} style={{ height: '600vh', position: 'relative', backgroundColor: '#000000' }}>
         <ScienceSection wrapperRef={scienceWrapperRef} />
-        {/* Testimonials start at 500vh inside the wrapper — they scroll into view from below
-            while science is still pinned, producing the curtain effect */}
-        <div style={{ position: 'absolute', top: '500vh', left: 0, right: 0, zIndex: 20 }}>
-          <Testimonials />
-        </div>
       </div>
 
       {/* Pricing curtain slides in from right over testimonials — 300vh scroll window */}

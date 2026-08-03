@@ -54,7 +54,9 @@ function App() {
       }
       if (session?.user) {
         setUser(session.user);
-        identifyUser(session.user.id, { email: session.user.email });
+        // Identify by stable id only — do NOT send email (PII) to PostHog. The
+        // id maps back to the user in Supabase if you ever need to join server-side.
+        identifyUser(session.user.id);
 
         // Activation funnel: fire `signup` only for a genuinely NEW account, not a
         // returning login. `SIGNED_IN` fires on both, so gate on account age — a

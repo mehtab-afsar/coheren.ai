@@ -520,7 +520,7 @@ export const useStore = create<AppStore>()(
           // Write to task_feedback table (used by checkpoint recalibration)
           const goalId = (state.currentGoal as { id?: string }).id;
           if (goalId) {
-            await saveTaskFeedback(taskId, state.user.id, goalId, {
+            await saveTaskFeedback(state.user.id, taskId, goalId, {
               difficultyScore: difficultyRating,
               actualDurationMins: actualDuration,
               feedbackTags,

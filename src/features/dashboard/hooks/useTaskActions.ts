@@ -18,6 +18,13 @@ export function useTaskActions(
   const [pendingFeedbackTaskId, setPendingFeedbackTaskId] = useState<string | null>(null);
 
   const handleCompleteTask = (taskId: string, sourceX?: number, sourceY?: number) => {
+    // Guard against double-submit: a fast double-tap fires this twice before the
+    // task's `completed` flag flips (the async DB write hasn't resolved), causing
+    // duplicate completion + streak writes. Bail if this task is already completing
+    // or already done.
+    const target = tasks.find((t) => t.id === taskId);
+    if (!target || target.completed || completingTaskId === taskId) return;
+
     const x = sourceX ?? window.innerWidth / 2;
     const y = sourceY ?? window.innerHeight / 2;
 

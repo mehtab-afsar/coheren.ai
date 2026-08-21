@@ -41,6 +41,25 @@ export async function getSessionSafe() {
   ]);
 }
 
+// getSession() is safe to call once at startup (see getSessionSafe above), but
+// calling it per-request (e.g. once per LLM call in an agent pipeline) means
+// every request independently risks the same lock stall — observed in practice
+// as several requests in one pipeline run each eating the full timeout back to
+// back, enough to blow through the pipeline's own higher-level timeout. Instead,
+// track the current token in memory from the auth-state listener (already
+// running for the app's own auth init) and read it synchronously — no per-call
+// lock contention, no per-call latency. autoRefreshToken keeps this current via
+// TOKEN_REFRESHED events in the background.
+let cachedAccessToken: string | undefined;
+
+supabase.auth.onAuthStateChange((_event, session) => {
+  cachedAccessToken = session?.access_token;
+});
+
+export function getCachedAccessToken(): string | undefined {
+  return cachedAccessToken;
+}
+
 // Types for database tables
 export interface Profile {
   id: string;

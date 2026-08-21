@@ -3,7 +3,11 @@
  *
  * Provider SDKs (@anthropic-ai/sdk) are pointed at the ai-proxy edge
  * function via `baseURL`, and given this fetch implementation. Per request it:
- *   1. reads a FRESH Supabase access token (handles token refresh),
+ *   1. reads the current Supabase access token from an in-memory cache kept
+ *      fresh by the auth-state listener (NOT a live getSession() call — that
+ *      call is lock-serialized across tabs/requests and was observed hanging
+ *      repeatedly under real use, e.g. several agent-pipeline calls each
+ *      eating a multi-second stall back to back; see supabase.ts),
  *   2. overwrites whatever auth header the SDK set (the SDK's `apiKey` is a
  *      dummy) with `Authorization: Bearer <jwt>`,
  *   3. strips `x-api-key` (the Anthropic SDK sets this; the gateway injects the
@@ -13,16 +17,13 @@
  * real provider key, and forwards — so the real keys never reach the browser.
  */
 
-import { getSessionSafe } from './supabase';
+import { getCachedAccessToken } from './supabase';
 
 export async function proxyFetch(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
-  // getSessionSafe() bounds the otherwise-unbounded getSession() call — see its
-  // definition in supabase.ts for why that call can hang indefinitely.
-  const result = await getSessionSafe();
-  const token = result?.data.session?.access_token;
+  const token = getCachedAccessToken();
 
   const headers = new Headers(init?.headers);
   // The SDK put a dummy key here; replace with the caller's Supabase JWT.

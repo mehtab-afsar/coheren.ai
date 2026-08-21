@@ -609,7 +609,7 @@ export async function extractStones(
     const { content } = await callReasoning({
       messages: callMessages,
       temperature: 0.2,
-      max_tokens: 1200,
+      max_tokens: 2000,
       response_format: { type: 'json_object' },
     });
     if (!content) throw new Error('Agent 2 Mode 2: No response received');

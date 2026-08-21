@@ -309,7 +309,13 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
               { role: 'user', content: initialGoal }
             ],
             temperature: 0.7,
-            max_tokens: 150,
+            // Sonnet 5 applies implicit adaptive thinking even on plain calls
+            // with no explicit thinking param — observed consuming an entire
+            // 150-token budget on a thinking block with zero tokens left for
+            // the actual reply (stop_reason: max_tokens, block_types: only
+            // 'thinking'). This doesn't make the reply longer, just gives the
+            // model room to think first without truncating the visible output.
+            max_tokens: 500,
           });
           setMessages(prev => [...prev, {
             id: (Date.now() + 1).toString(),
@@ -496,7 +502,10 @@ Current Data Already Collected: ${JSON.stringify(collectedData)}`
             { role: 'user', content: currentInput },
           ],
           temperature: 0.7,
-          max_tokens: 80,
+          // See the trigger-response call above — Sonnet 5's implicit adaptive
+          // thinking can consume a small budget entirely before any visible
+          // text is emitted.
+          max_tokens: 400,
         });
         setMessages(prev => [...prev, {
           id: (Date.now() + 1).toString(),
@@ -580,14 +589,20 @@ The system will automatically detect when the data is complete and transition to
       // Use mergedData (not stale collectedData) so whisper reflects what was just extracted.
       // Single declarative list of "must actively ask about" fields, checked in
       // priority order — add an entry here instead of hand-editing a growing
-      // if/else chain. (energyPattern used to be extracted but never included in
-      // this check, so it silently stayed unasked forever — see REQUIRED_FIELDS.)
+      // if/else chain. Hard-required only: must exactly match the fields the
+      // isReady trigger below actually gates on (goal/timeline/dailyTime/
+      // skillLevel). energyPattern is intentionally NOT here — it's a soft
+      // field the pipeline already treats as optional (passed as `|| undefined`
+      // to chatContext), so it must never block wrap-up: if extraction keeps
+      // missing it (unparseable phrasing, user never answers it directly), the
+      // whisper would otherwise loop forever telling the model "don't wrap up"
+      // for a field the backend was never waiting on. It's still captured
+      // opportunistically by the Shadow Extractor if the user mentions it.
       const REQUIRED_FIELDS: Array<{ isMissing: (d: typeof mergedData) => boolean; prompt: string }> = [
         { isMissing: d => !d.goal, prompt: 'what they actually want to achieve — you don\'t know their goal yet, so ask that before anything else' },
         { isMissing: d => !d.timeline, prompt: 'their target timeline or deadline (e.g. "3 months", "6 weeks", "by December")' },
         { isMissing: d => !d.dailyTime, prompt: 'how much time per day they can commit (e.g. "30 minutes", "1 hour")' },
         { isMissing: d => !d.skillLevel, prompt: 'their current experience level (beginner / intermediate / advanced)' },
-        { isMissing: d => !d.energyPattern, prompt: 'when they tend to have the most energy or focus (morning / afternoon / evening / night)' },
       ];
       const nextQuestion = REQUIRED_FIELDS.find(f => f.isMissing(mergedData))?.prompt ?? null;
 
@@ -622,7 +637,11 @@ The system will automatically detect when the data is complete and transition to
           { role: 'user', content: currentInput }
         ],
         temperature: 0.7,
-        max_tokens: 150,
+        // This is the main per-turn reply — same implicit-thinking risk as the
+        // trigger-response call above, but on the highest-traffic call in the
+        // whole chat. A silent empty response here degrades to the generic
+        // "Tell me more!" fallback every single turn it happens.
+        max_tokens: 500,
       });
 
       const aiMessage: Message = {
@@ -702,7 +721,13 @@ The system will automatically detect when the data is complete and transition to
               { role: 'user', content: `Goal: "${collectedData.goal}"` },
             ],
             temperature: 0.7,
-            max_tokens: 120,
+            // Same implicit-thinking risk as the plain calls above — a stream
+            // only yields text_delta events, so a thinking block eating the
+            // whole budget here means zero tokens ever stream out (the
+            // existing "remove if nothing was produced" cleanup below already
+            // keeps this from showing an empty bubble, but this silently drops
+            // the coach-voice acknowledgement more often than it should).
+            max_tokens: 400,
           })) {
             setMessages(prev => prev.map(m =>
               m.id === streamMsgId ? { ...m, content: m.content + token } : m
@@ -726,7 +751,14 @@ The system will automatically detect when the data is complete and transition to
               practiceEnvironment: collectedData.practiceEnvironment || undefined,
             }
           ),
-          30_000,
+          // Agent 1 then Agent 2 run sequentially (Agent 2 needs Agent 1's output),
+          // each with up to one same-tier retry on a content-shape failure — worst
+          // case is 4 sequential reasoning-tier calls. Agent 2's question-generator
+          // was bumped to max_tokens: 10000 (was truncating mid-array at 6000) —
+          // a larger ceiling means a genuinely long generation takes longer in
+          // wall-clock time too, not just more headroom, so this needs to grow
+          // alongside it. The SDK's own per-call timeout is 120s.
+          90_000,
           'Goal analysis'
         ),
         streamCoachVoice(),
@@ -863,6 +895,13 @@ The system will automatically detect when the data is complete and transition to
       return;
     }
 
+    // StoneQuestions has already unmounted its own UI by the time onComplete
+    // fires, but onboardingPhase stays 'stones' (stones.length > 0, so the
+    // 'analyzing' loader's condition doesn't match either) until extractStones
+    // resolves — leaving a frozen screen with nothing rendering for the
+    // duration of that unbounded call. Show the existing loader instead.
+    setOnboardingPhase('analyzing');
+
     try {
       const dailyMinutes = parseDailyTimeToMinutes(collectedData.dailyTime);
       const timelineDays = (collectedData.timeline ? calculateDurationInMonths(collectedData.timeline) : 3) * 30;
@@ -893,6 +932,15 @@ The system will automatically detect when the data is complete and transition to
       generateStrategicPlanWithAgents(answers);
       return;
     }
+
+    // AdaptiveInterview unmounts its own content the instant it finishes (its
+    // internal phase hits 'done' and it returns null), but onboardingPhase is
+    // still 'stones' here until extractStones resolves — with stones.length > 0
+    // that doesn't match the 'analyzing' loader's condition either, so without
+    // this the header is left frozen with nothing rendering underneath it for
+    // the entire (unbounded, no-timeout) call below. Show the existing loader
+    // instead of a screen that silently does nothing.
+    setOnboardingPhase('analyzing');
 
     try {
       const dailyMinutes = parseDailyTimeToMinutes(collectedData.dailyTime);
@@ -1135,7 +1183,13 @@ The system will automatically detect when the data is complete and transition to
           collectedData.practiceEnvironment || undefined,
           goalAnalysis || undefined, // reuse Agent 1 output — don't re-run it
         ),
-        30_000,
+        // Agent 3 now streams (see callPremiumStream in curriculum-builder.ts —
+        // a blocking call was hitting the ai-proxy edge function's own ~150s
+        // execution ceiling). Measured directly: one full streamed run took
+        // 196s (Opus 5 applies implicit thinking even without a `thinking`
+        // param). Plus Agent 4 (first task) runs after it, plus either can
+        // retry once — give real margin over the measured single-run time.
+        360_000,
         'Curriculum generation'
       );
 

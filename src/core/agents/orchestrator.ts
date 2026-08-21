@@ -293,8 +293,16 @@ export async function generateCompleteRoadmap(
     const ragString = await prefetchedRag;
     const ragBlock = ragString ? `## Domain Knowledge (RAG)\n${ragString}\n\n` : '';
     const combinedContext = `${priorLearningBlock}${ragBlock}` || undefined;
-    roadmapV2 = await withContentRetry('agent3-curriculum-builder',
-      () => buildCurriculum(context, goalAnalysis, stoneProfile, combinedContext));
+    // No withContentRetry here, deliberately — a single curriculum generation
+    // was measured taking ~200s (Opus 5, large structured output); the generic
+    // retry-once policy that's fine for every other (fast) agent would silently
+    // commit the user to double that on a content-shape failure, likely
+    // exceeding the caller's own timeout before the retry even finishes. Fail
+    // fast instead and let the caller's existing manual-retry UI (agentError /
+    // retryFn in ChatOnboarding.tsx) handle it — a user choosing to wait
+    // through a second ~200s attempt is a very different UX than being forced
+    // into it silently.
+    roadmapV2 = await buildCurriculum(context, goalAnalysis, stoneProfile, combinedContext);
     saveAgentCheckpoint(pid, 'curriculum', roadmapV2);
   }
 

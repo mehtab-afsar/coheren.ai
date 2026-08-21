@@ -231,6 +231,30 @@ export async function* callEconomyStream(
   });
 }
 
+/**
+ * Stream tokens from Claude on the premium tier (Opus 5). Unlike a blocking
+ * call, streaming doesn't require the edge function to buffer the entire
+ * response before returning anything — a large-output premium-tier call
+ * (e.g. Agent 3's curriculum JSON) can otherwise outrun the edge function's
+ * own execution window even when the model itself would have finished given
+ * more wall-clock time. Anthropic's own guidance is to stream any request
+ * likely to produce a large completion for exactly this reason.
+ */
+export async function* callPremiumStream(
+  params: Omit<RouterCallParams, 'response_format'>
+): AsyncGenerator<string> {
+  yield* streamClaude({
+    model: TIER_MODELS.premium,
+    messages: params.messages.filter(m => m.role !== 'system').map(m => ({
+      role:    m.role as 'user' | 'assistant',
+      content: m.content,
+    })) as ClaudeMessage[],
+    systemPrompt: params.messages.find(m => m.role === 'system')?.content,
+    temperature:  params.temperature,
+    max_tokens:   params.max_tokens,
+  });
+}
+
 // ── Claude strategic tier ─────────────────────────────────────────────────────
 
 /**

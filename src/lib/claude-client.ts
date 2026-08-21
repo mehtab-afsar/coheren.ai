@@ -53,9 +53,11 @@ export function isClaudeAvailable(): boolean {
 }
 
 // Conservative ceiling against a genuinely hung request — not tuned for snappy
-// UX (extended-thinking calls with a large budget_tokens can legitimately take
-// well over a minute), just to guarantee no call hangs indefinitely.
-const CALL_TIMEOUT_MS = 120_000;
+// UX. Measured directly: a large Opus-5 structured-output call (Agent 3's
+// curriculum, streamed) took 196s end to end, including implicit thinking
+// tokens the model applies even without an explicit `thinking` param. 120s
+// would abort that from the client side before it finishes.
+const CALL_TIMEOUT_MS = 300_000;
 
 function makeClient(): Anthropic {
   // Routes through ai-proxy (which injects the real x-api-key). `apiKey` is a
@@ -130,10 +132,25 @@ export async function callClaude(params: ClaudeCallParams): Promise<string> {
     system:      params.systemPrompt,
     messages:    params.messages,
   });
-  return response.content
+  const text = response.content
     .filter(b => b.type === 'text')
     .map(b => (b as { type: 'text'; text: string }).text)
     .join('');
+  // Several agents throw a bare "no response received" when this comes back
+  // empty, with nothing to diagnose why. Log what the API actually returned —
+  // stop_reason (e.g. 'max_tokens' cutting off before any text block) and the
+  // block types present — so the next occurrence is diagnosable instead of a
+  // dead end.
+  if (!text) {
+    console.warn(
+      '[callClaude] empty text content —',
+      'model:', model,
+      'stop_reason:', response.stop_reason,
+      'block_types:', response.content.map(b => b.type),
+      'usage:', response.usage,
+    );
+  }
+  return text;
 }
 
 // ── Forced single tool call (structured-output trick) ─────────────────────────

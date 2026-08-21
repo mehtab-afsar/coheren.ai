@@ -36,7 +36,7 @@ import type {
   PaceChoice,
 } from '@types-app/agents';
 import type { AgentRoadmapV2, WeekPlan, WeekDay, MonthPlan } from '@core/store/useStore';
-import { callPremium as callReasoning, callStrategicWithThinking, callStrategicWithTools } from '@lib/ai-router';
+import { callPremiumStream, callStrategicWithThinking, callStrategicWithTools } from '@lib/ai-router';
 import { retrieveKnowledgeSemantic } from '@core/rag/semantic-retriever';
 import { flags } from '@config/feature-flags';
 import { parseAgentJSON } from './llm-output';
@@ -845,13 +845,24 @@ TOOL USE INSTRUCTIONS:
     });
     content = result.content;
   } else {
-    const result = await callReasoning({
+    // A blocking call here was observed hitting the ai-proxy edge function's
+    // own execution ceiling (~150s) even with a correctly-scoped prompt (only
+    // Week 1 gets full day-by-day detail) — Opus 5 generating even a moderate
+    // structured-JSON completion can genuinely take longer than that window,
+    // and a non-streaming call can't return anything until the whole response
+    // is done. Streaming avoids the buffering that trips that ceiling — the
+    // edge function forwards chunks as they arrive instead of waiting for the
+    // full completion — and is Anthropic's own recommended pattern for any
+    // call likely to produce a large response.
+    let accumulated = '';
+    for await (const chunk of callPremiumStream({
       messages:        callMessages,
       temperature:     0.3,
-      max_tokens:      6000,
-      response_format: { type: 'json_object' },
-    });
-    content = result.content;
+      max_tokens:      16000,
+    })) {
+      accumulated += chunk;
+    }
+    content = accumulated;
   }
   if (!content) throw new Error('Agent 3: No response received from model');
 

@@ -284,7 +284,12 @@ export async function generateQuestions(
       { role: 'user', content: buildUserPrompt(context, goalAnalysis) },
     ],
     temperature: 0.3,
-    max_tokens: 6000,
+    // 5 questions x up to 4 options x verbose per-option impact.curriculum/
+    // modifications text (see prompt section 7) is a dense, punctuation-heavy
+    // JSON payload — observed truncating mid-array well under what 6000
+    // tokens would suggest, since structured JSON is token-inefficient per
+    // character (lots of short key/punctuation tokens) versus prose.
+    max_tokens: 10000,
     response_format: { type: 'json_object' },
   });
   if (!content) {

@@ -15,10 +15,21 @@
  */
 
 import type { ClaudeToolSchema } from './claude-client';
-import type { GroqTool } from './groq-client';
-import type { CompletedTaskFeedback } from '@types-app/agents';
+import type { CompletedTaskFeedback, StoneType } from '@types-app/agents';
 import { computeSignals, DEFAULT_THRESHOLDS } from '@core/agents/recalibrator';
 import { retrieveBehavioralPatterns } from '@core/rag/behavioral-retriever';
+import {
+  ALL_STONE_TYPES,
+  STONE_MODIFICATIONS,
+  STONE_RECALIBRATION_MATRIX,
+  type RecalibrationStatus,
+} from '@core/agents/stone-identifier/stone-taxonomy';
+
+// Single source of truth for the stone-type list shown to the LLM in tool
+// descriptions below — built from the canonical taxonomy so it can't drift out
+// of sync with STONE_MODIFICATIONS/STONE_RECALIBRATION_MATRIX the way the old
+// hardcoded 8-stone description did (it still listed the removed 'ExternalObstacles').
+const STONE_TYPE_LIST = ALL_STONE_TYPES.join(', ');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // AGENT 3 — Curriculum Builder tools
@@ -64,52 +75,8 @@ Phase structure: Foundation phase for both tracks simultaneously (reduced volume
 Rule: never let time split drop below 25% for either track.`,
 };
 
-const STONE_INTERVENTIONS: Record<string, string> = {
-  TimeConstraint: `Add: micro-session format (10-min fallback version per task); time-blocking instructions ("open at 7am, close at 7:25am"). Remove: all supplementary activities; nice-to-know content. Compress: Phase 1 by 20% (basics only). Priority: depth over breadth.`,
-  ResourceGap: `Add: free/low-cost alternatives for all required resources; "budget path" note in Phase 1; flag resource-dependent milestones as conditional. Replace: equipment-dependent tasks with bodyweight/free alternatives.`,
-  FearOfFailure: `Add: "Experiment:" framing on all tasks; observation-based success criteria ("What did you notice?"); one Safe Attempt per week labelled explicitly. Remove: performance-based success metrics. Phase names should feel exploratory, not evaluative.`,
-  Perfectionism: `Add: hard time-boxes per task; STOP HERE marker at 80% time; "Done > Perfect" reminder. Label all tasks "ROUGH DRAFT". Success criteria: started AND stopped on time. Include a weekly polish day as the sanctioned outlet.`,
-  Inconsistency: `Add: Never Miss Twice rule as reminder; minimum viable session fallback on every task (e.g. "just do Step 1 — 3 min counts"); streak milestone celebrations. Include explicit rest day framing. Repeat similar task structures to build automatic habit.`,
-  ProcrastinationPattern: `Add: Starter Step on every task (≤90 seconds, physical action); When–Then prompt before main steps. Limit: ≤3 steps per task. Remove: multi-step sequences until initiation is established.`,
-  Overcommitment: `Add: explicit daily commitment cap (≤${3} tasks); mandatory "cut list" review at end of each day; protect sleep/recovery as non-negotiable. Remove: optional stretch tasks. Frame planning as subtraction, not addition.`,
-  ExternalObstacles: `Add: contingency micro-plan for each task ("If X happens, I will do Y instead"); portable/offline alternatives for resource-dependent tasks. Flag phases with external dependencies and build buffer weeks.`,
-};
-
-const STONE_RECALIBRATION_DIRECTIVES: Record<string, Record<string, string>> = {
-  TimeConstraint: {
-    ACCELERATE: 'User thriving within time limits. Keep micro-block structure but allow slightly longer sessions (up to 10% over budget). Add one optional BONUS extension step per task.',
-    MAINTAIN:   'Keep strict time-boxing. Reconfirm every task fits daily budget. Add one "parking lot" tip so they can stop guilt-free.',
-    SIMPLIFY:   'Reduce every task by 20% in scope. Split any 2-step tasks into 2 separate day entries. Never exceed budget. Add micro-win Starter Step (<3 min) at start of each task.',
-    RECOVER:    'Sprint must be completable in 50% of declared daily time. All tasks start with a 2-minute Starter Step. Include "15-minute win" fallback inside every task description.',
-  },
-  ProcrastinationPattern: {
-    ACCELERATE: 'User initiating consistently. Introduce slightly more open-ended tasks — reduce scripted micro-steps. Add one reflective question at task end.',
-    MAINTAIN:   'Keep Starter Step on every task. Vary the Starter Step (physical set-up, verbal declaration, time-lapse write). Implementation intention tip weekly.',
-    SIMPLIFY:   'Starter Step must be ≤90 seconds and physical (open the app, put on gloves, uncap the pen). Add When–Then prompt before main task steps. Reduce steps to ≤3.',
-    RECOVER:    'Every task is a Starter Step only — nothing beyond a 3-minute entry point. Label them "Ignition Day". No multi-step sequences. Goal: re-establish the initiation habit.',
-  },
-  Inconsistency: {
-    ACCELERATE: 'Streak is healthy. Add a weekly "make-up" option so missing once feels safe. Add one creative exploration day mid-sprint.',
-    MAINTAIN:   'Keep Never Miss Twice rule prominent. Add "minimum viable session" footnote to each task. Celebrate streaks verbally in tips.',
-    SIMPLIFY:   'Reduce task variety — repeat similar structures so habit feels automatic. Each task ends with "minimum viable tomorrow" preview. Add explicit rest day framing.',
-    RECOVER:    'Sprint goal: show up 8 out of 14 days — not 14 out of 14. Each task labelled "Consistency Day". Micro-win first, rest is bonus.',
-  },
-  FearOfFailure: {
-    ACCELERATE: 'User building confidence. Add one "challenge rep" per task — optional, higher difficulty, framed as an experiment.',
-    MAINTAIN:   'Keep "Experiment:" framing and observation-based criteria. One task per week labelled "Safe Attempt" — outcome irrelevant.',
-    SIMPLIFY:   'All tasks reframe failure as data. Replace success criteria with "What did you notice?" prompts. Add "This is allowed to be messy" in every tip.',
-    RECOVER:    'Sprint is a "Curiosity Sprint" — no performance goals, only observations. Success = showing up, not results.',
-  },
-  Perfectionism: {
-    ACCELERATE: 'User releasing good work. Add one "polish day" per week as sanctioned outlet. Rest is rough-draft mode.',
-    MAINTAIN:   'Keep ROUGH DRAFT framing. Each task has explicit time-box. Add "Done > Perfect" reminder. One task: practise letting something be "good enough".',
-    SIMPLIFY:   'Every task labelled "ROUGH DRAFT". Hard time-box on every step. Add STOP HERE marker after 80% of budget. Success: started AND stopped on time.',
-    RECOVER:    'Sprint goal: finish on time, not perfectly. Each task ends with mandatory "Exit at time" step.',
-  },
-};
-
 // ═══════════════════════════════════════════════════════════════════════════════
-// TOOL SCHEMA DEFINITIONS (Groq-compatible + Claude-compatible)
+// TOOL SCHEMA DEFINITIONS (Claude format)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // Agent 3 tools
@@ -132,7 +99,7 @@ export const CURRICULUM_TOOL_SCHEMAS: ClaudeToolSchema[] = [
     input_schema: {
       type:       'object',
       properties: {
-        stoneType: { type: 'string', description: 'Stone type: TimeConstraint, ResourceGap, FearOfFailure, Perfectionism, Inconsistency, ProcrastinationPattern, Overcommitment, ExternalObstacles' },
+        stoneType: { type: 'string', description: `Stone type: ${STONE_TYPE_LIST}` },
         severity:  { type: 'string', description: 'Stone severity: low, medium, high' },
         domain:    { type: 'string', description: 'Learning domain for context' },
       },
@@ -194,18 +161,6 @@ export const RECALIBRATOR_TOOL_SCHEMAS: ClaudeToolSchema[] = [
   },
 ];
 
-// Convert ClaudeToolSchema to GroqTool format (for Groq tool-calling path)
-export function toGroqTools(schemas: ClaudeToolSchema[]): GroqTool[] {
-  return schemas.map(s => ({
-    type:     'function' as const,
-    function: {
-      name:        s.name,
-      description: s.description,
-      parameters:  s.input_schema,
-    },
-  }));
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // TOOL HANDLERS
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -232,7 +187,7 @@ export function makeCurriculumToolHandler(
         const stoneType = String(input.stoneType ?? '');
         const severity  = String(input.severity  ?? 'medium');
         const domain    = String(input.domain    ?? '');
-        const base = STONE_INTERVENTIONS[stoneType]
+        const base = STONE_MODIFICATIONS[stoneType]
           ?? `Apply standard ${stoneType} interventions: reduce friction, increase support scaffolding.`;
         const severityNote = severity === 'high'
           ? '\nSeverity HIGH: apply all modifications aggressively. Prioritise stone management over content progression.'
@@ -287,9 +242,9 @@ export function makeRecalibratorToolHandler(
       }
 
       case 'get_stone_recalibration_directives': {
-        const stoneType = String(input.stoneType ?? '');
-        const status    = String(input.status    ?? 'MAINTAIN') as keyof typeof STONE_RECALIBRATION_DIRECTIVES[string];
-        const stoneMap  = STONE_RECALIBRATION_DIRECTIVES[stoneType];
+        const stoneType = String(input.stoneType ?? '') as StoneType;
+        const status    = String(input.status    ?? 'MAINTAIN') as RecalibrationStatus;
+        const stoneMap  = STONE_RECALIBRATION_MATRIX[stoneType];
         if (!stoneMap) return `No specific directives for ${stoneType}. Apply ${status} recalibration strategy — reduce scope on SIMPLIFY/RECOVER, increase challenge on ACCELERATE.`;
         return stoneMap[status] ?? `Apply ${status} strategy for ${stoneType}: focus on the behavioral pattern and adapt pace accordingly.`;
       }

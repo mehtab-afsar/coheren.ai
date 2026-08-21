@@ -7,7 +7,8 @@
  * Requires:
  *   - Local Supabase running (`npx supabase start`)
  *   - Dev server running (launched by playwright webServer config)
- *   - VITE_GROQ_API_KEY set in .env.local
+ *   - VITE_CLAUDE_ENABLED=true in .env.local and a real ANTHROPIC_API_KEY in
+ *     supabase/functions/.env (the ai-proxy edge function's server-side secret)
  *
  * The test cleans up the created account in afterAll.
  */

@@ -4,6 +4,9 @@
  * "video shows" guarantee can't drift between producer and renderer.
  */
 
+import { env } from '@config/env';
+import { proxyFetch } from './ai-proxy-fetch';
+
 /** Extract an 11-char YouTube video ID, or null if the URL isn't a watchable video. */
 export function getYouTubeId(url: string | undefined | null): string | null {
   if (!url) return null;
@@ -67,4 +70,58 @@ export function timeToSeconds(t: string | undefined | null): number {
 export function minutesToTimestamp(min: number): string {
   const m = Math.max(0, Math.floor(min));
   return `${m}:00`;
+}
+
+// ─── Live existence verification ───────────────────────────────────────────────
+// isEmbeddableVideoUrl above is a URL-*shape* check only — it says nothing about
+// whether the video still exists. verifyYouTubeVideoLive does a real check via
+// YouTube's keyless oEmbed endpoint, routed through the ai-proxy edge function
+// (consistent with this app's "no raw third-party calls from the client" pattern,
+// and avoids relying on unconfirmed browser CORS behavior for oEmbed).
+
+const OEMBED_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 1 week — only for a *confirmed* result
+const OEMBED_TIMEOUT_MS = 8000;
+const oembedCache = new Map<string, { live: boolean; checkedAt: number }>();
+
+/**
+ * Verify a YouTube video is still live/public via oEmbed. Returns false for any
+ * non-video URL, a deleted/private video, or a network/proxy failure — callers
+ * should treat "unverified" the same as "don't show this as a confirmed resource."
+ *
+ * Only a *confirmed* answer gets cached for OEMBED_CACHE_TTL_MS: a 2xx (live) or
+ * a 401/403/404 (oEmbed's own "gone/private" response). A transient failure —
+ * network error, timeout, or a 429/5xx (the shared ai-proxy rate limit or an infra
+ * blip, not YouTube saying anything about the video) — is deliberately NOT cached,
+ * so a brief outage can't hide a genuinely live video from every user for a week.
+ */
+export async function verifyYouTubeVideoLive(url: string | undefined | null): Promise<boolean> {
+  const id = getYouTubeId(url);
+  if (!id) return false;
+
+  const cached = oembedCache.get(id);
+  if (cached && Date.now() - cached.checkedAt < OEMBED_CACHE_TTL_MS) {
+    return cached.live;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), OEMBED_TIMEOUT_MS);
+  try {
+    const watchUrl = `https://www.youtube.com/watch?v=${id}`;
+    const oembedUrl = `${env.AI_PROXY_URL}/youtube/oembed?url=${encodeURIComponent(watchUrl)}&format=json`;
+    const res = await proxyFetch(oembedUrl, { signal: controller.signal });
+
+    if (res.ok) {
+      oembedCache.set(id, { live: true, checkedAt: Date.now() });
+      return true;
+    }
+    if (res.status === 401 || res.status === 403 || res.status === 404) {
+      oembedCache.set(id, { live: false, checkedAt: Date.now() });
+    }
+    return false;
+  } catch {
+    // Network error, timeout, or abort — transient, deliberately not cached.
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
 }

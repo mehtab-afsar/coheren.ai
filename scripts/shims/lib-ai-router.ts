@@ -7,9 +7,11 @@
 import {
   callGroqWithFallback,
   callGroqEconomy,
+  callGroqWithTools,
   getGroqSessionStats,
   resetGroqSessionStats,
 } from '../../src/lib/groq-client.ts';
+import type { GroqTool } from '../../src/lib/groq-client.ts';
 
 export type AgentTier = 'reasoning' | 'economy' | 'premium';
 
@@ -102,6 +104,58 @@ export async function callReasoning(params: RouterCallParams): Promise<RouterCom
 
 export async function callPremium(params: RouterCallParams): Promise<RouterCompletion> {
   return routeCall(params, PREMIUM_CHAIN, 'premium');
+}
+
+// ── Tool calling ───────────────────────────────────────────────────────────────
+
+export type { GroqTool };
+
+export interface ToolCallParams extends Omit<RouterCallParams, 'response_format'> {
+  tools: GroqTool[];
+  tool_name: string;
+}
+
+/**
+ * Call any tier with native function calling. Mirrors src/lib/ai-router.ts's
+ * callWithTools — Node/test-script context has no import.meta.env, so this
+ * shim exists purely to route through process.env-based groq-client.ts.
+ */
+export async function callWithTools(
+  params: ToolCallParams,
+  tier: 'economy' | 'reasoning' | 'premium' = 'reasoning',
+): Promise<string> {
+  const groqTier = tier === 'economy' ? 'economy' : tier === 'premium' ? 'premium' : 'standard';
+  return callGroqWithTools(
+    {
+      messages:    params.messages,
+      temperature: params.temperature,
+      max_tokens:  params.max_tokens,
+      tools:       params.tools,
+      tool_name:   params.tool_name,
+    },
+    groqTier as Parameters<typeof callGroqWithTools>[1],
+  );
+}
+
+// ── Claude strategic tier ─────────────────────────────────────────────────────
+// The real router's callStrategic* falls back to callPremium() when Claude is
+// disabled (VITE_CLAUDE_ENABLED). Node/test-script context never wires up
+// Claude, so these unconditionally mirror that "disabled" fallback path.
+
+export async function callStrategic(params: RouterCallParams): Promise<RouterCompletion> {
+  return callPremium(params);
+}
+
+export async function callStrategicWithThinking(
+  params: RouterCallParams & { budgetTokens?: number },
+): Promise<RouterCompletion & { thinking?: string }> {
+  return callPremium(params);
+}
+
+export async function callStrategicWithTools(): Promise<never> {
+  throw new Error(
+    '[ai-router shim] callStrategicWithTools requires Claude (VITE_CLAUDE_ENABLED) and is not supported in the Node/test-script context.',
+  );
 }
 
 export { getGroqSessionStats as getSessionStats, resetGroqSessionStats as resetSessionStats };

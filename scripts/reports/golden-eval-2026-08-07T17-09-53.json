@@ -1,0 +1,39 @@
+{
+  "runId": "2026-08-07T17-09-53",
+  "runDate": "2026-08-07T17:09:56.479Z",
+  "dryRun": false,
+  "skipJudge": false,
+  "personas": [
+    {
+      "persona": {
+        "id": "career-fearoffailure",
+        "name": "Career × Fear of Failure",
+        "domain": "Career",
+        "category": "Career",
+        "goal": "Get promoted to senior software engineer within 6 months",
+        "timeline": 180,
+        "dailyTime": 45,
+        "targetStone": "FearOfFailure",
+        "rationale": "Regression baseline — has an explicit tiebreaker in STONE_DOMAIN_TIEBREAKERS."
+      },
+      "artifacts": [],
+      "fatalError": "Invalid URL"
+    },
+    {
+      "persona": {
+        "id": "cognitive-timeconstraint",
+        "name": "Cognitive × Time Constraint (sanity floor)",
+        "domain": "Cognitive",
+        "category": "Learning",
+        "goal": "Learn to play chess competitively and reach 1500 ELO rating",
+        "timeline": 90,
+        "dailyTime": 45,
+        "targetStone": "TimeConstraint",
+        "rationale": "Well-trodden, low-conflict combo. If this scores low, suspect the judge, not the pipeline."
+      },
+      "artifacts": [],
+      "fatalError": "Invalid URL"
+    }
+  ],
+  "durationMs": 2507
+}

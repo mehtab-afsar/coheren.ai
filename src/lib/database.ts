@@ -10,6 +10,47 @@ import type { Agent1Output, Agent2ProfileOutput, Agent3Output, StoneAnswer } fro
 import type { ThresholdAdjustments } from '@core/agents/recalibrator';
 
 // ============================================
+// QUERY HELPERS — one error-handling contract per query shape, instead of
+// each function reinventing (and sometimes forgetting) its own.
+// ============================================
+
+type QueryResult<T> = { data: T | null; error: { code?: string; message: string } | null };
+
+// Takes the query builder result directly (not a thunk) — Supabase builders are
+// lazy and don't fire until awaited, and passing the value keeps T inference
+// well-behaved (wrapping it in `() => ...` makes T contravariant via
+// PromiseLike#then, which TS infers as `never` for the union response type).
+
+/** Mutation / required lookup — logs and throws on failure. */
+async function runQuery<T>(label: string, query: PromiseLike<QueryResult<T>>): Promise<T> {
+  const { data, error } = await query;
+  if (error) {
+    console.error(`Error ${label}:`, error);
+    throw error;
+  }
+  return data as T;
+}
+
+/** Single-row lookup that may legitimately return no row (PGRST116) — logs other errors but never throws. */
+async function runOptionalQuery<T>(label: string, query: PromiseLike<QueryResult<T>>): Promise<T | null> {
+  const { data, error } = await query;
+  if (error && error.code !== 'PGRST116') {
+    console.error(`Error ${label}:`, error);
+  }
+  return data;
+}
+
+/** List query — logs and returns [] on failure so callers can render an empty state instead of crashing. */
+async function runListQuery<T>(label: string, query: PromiseLike<QueryResult<T[]>>): Promise<T[]> {
+  const { data, error } = await query;
+  if (error) {
+    console.error(`Error ${label}:`, error);
+    return [];
+  }
+  return data ?? [];
+}
+
+// ============================================
 // GOAL OPERATIONS
 // ============================================
 
@@ -73,18 +114,14 @@ export async function createGoal(
 }
 
 export async function getActiveGoal(userId: string) {
-  const { data, error } = await supabase
-    .from('user_goals')
-    .select('*, roadmaps(*)')
-    .eq('user_id', userId)
-    .eq('status', 'active')
-    .single();
-
-  if (error && error.code !== 'PGRST116') { // PGRST116 = no rows
-    console.error('Error fetching goal:', error);
-  }
-
-  return data;
+  return runOptionalQuery('fetching goal',
+    supabase
+      .from('user_goals')
+      .select('*, roadmaps(*)')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .single()
+  );
 }
 
 // ============================================
@@ -100,17 +137,12 @@ export async function saveStones(goalId: string, stoneAnswers: StoneAnswer[]) {
     priority: 'high' as const
   }));
 
-  const { data, error } = await supabase
-    .from('goal_stones')
-    .insert(stonesToInsert)
-    .select();
-
-  if (error) {
-    console.error('Error saving stones:', error);
-    throw error;
-  }
-
-  return data;
+  return runQuery('saving stones',
+    supabase
+      .from('goal_stones')
+      .insert(stonesToInsert)
+      .select()
+  );
 }
 
 // ============================================
@@ -118,44 +150,35 @@ export async function saveStones(goalId: string, stoneAnswers: StoneAnswer[]) {
 // ============================================
 
 export async function createRoadmap(goalId: string, roadmap: Agent3Output, stoneProfile?: Agent2ProfileOutput) {
-  const { data, error } = await supabase
-    .from('roadmaps')
-    .insert({
-      goal_id: goalId,
-      phases: roadmap.roadmap.phases,   // store the phases array directly
-      config: {
-        pedagogical_principles: 'scaffolding, progressive_overload, spacing_effect',
-        checkpoint_interval: 7,
-        domain_pedagogy: roadmap.domainPedagogy ?? null,
-        total_weeks: roadmap.roadmap.phases?.reduce((acc: number, p: { weeks: number[] }) => acc + (p.weeks?.length ?? 0), 0) ?? null,
-        // Full agent outputs for cross-device restore
-        agent_roadmap_json: roadmap,
-        stone_profile_json: stoneProfile ?? null,
-      }
-    })
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Error creating roadmap:', error);
-    throw error;
-  }
-
-  return data;
+  return runQuery<{ id: string; [key: string]: unknown }>('creating roadmap',
+    supabase
+      .from('roadmaps')
+      .insert({
+        goal_id: goalId,
+        phases: roadmap.roadmap.phases,   // store the phases array directly
+        config: {
+          pedagogical_principles: 'scaffolding, progressive_overload, spacing_effect',
+          checkpoint_interval: 7,
+          domain_pedagogy: roadmap.domainPedagogy ?? null,
+          total_weeks: roadmap.roadmap.phases?.reduce((acc: number, p: { weeks: number[] }) => acc + (p.weeks?.length ?? 0), 0) ?? null,
+          // Full agent outputs for cross-device restore
+          agent_roadmap_json: roadmap,
+          stone_profile_json: stoneProfile ?? null,
+        }
+      })
+      .select()
+      .single()
+  );
 }
 
 export async function getRoadmapByGoalId(goalId: string) {
-  const { data, error } = await supabase
-    .from('roadmaps')
-    .select('*')
-    .eq('goal_id', goalId)
-    .single();
-
-  if (error && error.code !== 'PGRST116') {
-    console.error('Error fetching roadmap:', error);
-  }
-
-  return data;
+  return runOptionalQuery('fetching roadmap',
+    supabase
+      .from('roadmaps')
+      .select('*')
+      .eq('goal_id', goalId)
+      .single()
+  );
 }
 
 /**
@@ -167,19 +190,15 @@ export async function updateRoadmapStoneProfile(
   stoneProfile: import('@types-app/agents').Agent2ProfileOutput
 ): Promise<void> {
   // Supabase JS doesn't support JSONB path updates directly — fetch, merge, and update.
-  const { data: current } = await supabase
-    .from('roadmaps')
-    .select('config')
-    .eq('id', roadmapId)
-    .single();
-
+  const current = await runOptionalQuery<{ config: Record<string, unknown> | null }>('fetching roadmap config',
+    supabase.from('roadmaps').select('config').eq('id', roadmapId).single()
+  );
   if (!current) return;
 
   const mergedConfig = { ...(current.config ?? {}), stone_profile_json: stoneProfile };
-  await supabase
-    .from('roadmaps')
-    .update({ config: mergedConfig })
-    .eq('id', roadmapId);
+  await runQuery('updating roadmap stone profile',
+    supabase.from('roadmaps').update({ config: mergedConfig }).eq('id', roadmapId)
+  );
 }
 
 // ============================================
@@ -199,11 +218,9 @@ const DEFAULT_THRESHOLDS: ThresholdAdjustments = {
 };
 
 export async function loadThresholdAdjustments(roadmapId: string): Promise<ThresholdAdjustments> {
-  const { data } = await supabase
-    .from('roadmaps')
-    .select('config')
-    .eq('id', roadmapId)
-    .single();
+  const data = await runOptionalQuery<{ config: Record<string, unknown> | null }>('loading threshold adjustments',
+    supabase.from('roadmaps').select('config').eq('id', roadmapId).single()
+  );
   const adj = (data?.config as Record<string, unknown> | null)?.threshold_adjustments;
   return (adj as ThresholdAdjustments) ?? DEFAULT_THRESHOLDS;
 }
@@ -216,17 +233,14 @@ export async function saveThresholdAdjustments(
   roadmapId: string,
   adj: ThresholdAdjustments,
 ): Promise<void> {
-  const { data: current } = await supabase
-    .from('roadmaps')
-    .select('config')
-    .eq('id', roadmapId)
-    .single();
+  const current = await runOptionalQuery<{ config: Record<string, unknown> | null }>('fetching roadmap config',
+    supabase.from('roadmaps').select('config').eq('id', roadmapId).single()
+  );
 
   const mergedConfig = { ...(current?.config ?? {}), threshold_adjustments: adj };
-  await supabase
-    .from('roadmaps')
-    .update({ config: mergedConfig })
-    .eq('id', roadmapId);
+  await runQuery('saving threshold adjustments',
+    supabase.from('roadmaps').update({ config: mergedConfig }).eq('id', roadmapId)
+  );
 }
 
 // ============================================
@@ -244,14 +258,16 @@ export async function saveSprintMemoryRow(
   embedding: number[],
   metadata: Record<string, unknown>,
 ): Promise<void> {
-  await supabase.from('sprint_memories').insert({
-    user_id:      userId,
-    goal_id:      goalId,
-    sprint_number: sprintNumber,
-    content,
-    embedding,
-    metadata,
-  });
+  await runQuery('saving sprint memory',
+    supabase.from('sprint_memories').insert({
+      user_id:      userId,
+      goal_id:      goalId,
+      sprint_number: sprintNumber,
+      content,
+      embedding,
+      metadata,
+    })
+  );
 }
 
 // ============================================
@@ -278,32 +294,22 @@ export async function saveTasks(roadmapId: string, tasks: Array<Record<string, u
     skipped: task.skipped || false
   }));
 
-  const { data, error } = await supabase
-    .from('daily_tasks')
-    .insert(tasksToInsert)
-    .select();
-
-  if (error) {
-    console.error('Error saving tasks:', error);
-    throw error;
-  }
-
-  return data;
+  return runQuery('saving tasks',
+    supabase
+      .from('daily_tasks')
+      .insert(tasksToInsert)
+      .select()
+  );
 }
 
 export async function getTasksByRoadmapId(roadmapId: string) {
-  const { data, error } = await supabase
-    .from('daily_tasks')
-    .select('*')
-    .eq('roadmap_id', roadmapId)
-    .order('day_number', { ascending: true });
-
-  if (error) {
-    console.error('Error fetching tasks:', error);
-    throw error;
-  }
-
-  return data;
+  return runQuery('fetching tasks',
+    supabase
+      .from('daily_tasks')
+      .select('*')
+      .eq('roadmap_id', roadmapId)
+      .order('day_number', { ascending: true })
+  );
 }
 
 export async function updateTaskCompletion(
@@ -324,41 +330,31 @@ export async function updateTaskCompletion(
   if (userComment) updates.user_comment = userComment;
   if (feedbackTags && feedbackTags.length > 0) updates.feedback_tags = feedbackTags;
 
-  const { data, error } = await supabase
-    .from('daily_tasks')
-    .update(updates)
-    .eq('id', taskId)
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Error updating task:', error);
-    throw error;
-  }
-
-  return data;
+  return runQuery('updating task',
+    supabase
+      .from('daily_tasks')
+      .update(updates)
+      .eq('id', taskId)
+      .select()
+      .single()
+  );
 }
 
 export async function updateTaskSkip(
   taskId: string,
   skipReason: 'time' | 'health' | 'difficulty' | 'external'
 ) {
-  const { data, error } = await supabase
-    .from('daily_tasks')
-    .update({
-      skipped: true,
-      skip_reason: skipReason
-    })
-    .eq('id', taskId)
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Error skipping task:', error);
-    throw error;
-  }
-
-  return data;
+  return runQuery('skipping task',
+    supabase
+      .from('daily_tasks')
+      .update({
+        skipped: true,
+        skip_reason: skipReason
+      })
+      .eq('id', taskId)
+      .select()
+      .single()
+  );
 }
 
 // ============================================
@@ -369,24 +365,19 @@ export async function createProfile(
   userId: string,
   fullName?: string
 ) {
-  const { data, error } = await supabase
-    .from('profiles')
-    .insert({
-      id: userId,
-      full_name: fullName || null,
-      location: null,
-      bio: null,
-      persona_traits: {}
-    })
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Error creating profile:', error);
-    throw error;
-  }
-
-  return data;
+  return runQuery('creating profile',
+    supabase
+      .from('profiles')
+      .insert({
+        id: userId,
+        full_name: fullName || null,
+        location: null,
+        bio: null,
+        persona_traits: {}
+      })
+      .select()
+      .single()
+  );
 }
 
 export async function updateProfile(userId: string, updates: {
@@ -395,36 +386,27 @@ export async function updateProfile(userId: string, updates: {
   bio?: string;
   persona_traits?: Record<string, unknown>;
 }) {
-  const { data, error } = await supabase
-    .from('profiles')
-    .update({
-      ...updates,
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', userId)
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Error updating profile:', error);
-    throw error;
-  }
-
-  return data;
+  return runQuery('updating profile',
+    supabase
+      .from('profiles')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId)
+      .select()
+      .single()
+  );
 }
 
 export async function getProfile(userId: string) {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .single();
-
-  if (error && error.code !== 'PGRST116') {
-    console.error('Error fetching profile:', error);
-  }
-
-  return data;
+  return runOptionalQuery('fetching profile',
+    supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single()
+  );
 }
 
 // Helper to calculate streak from tasks
@@ -495,18 +477,13 @@ export async function saveTaskFeedback(
     completion_status: feedback.completionStatus || 'completed'
   };
 
-  const { data, error } = await supabase
-    .from('task_feedback')
-    .insert(feedbackData)
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Error saving task feedback:', error);
-    throw error;
-  }
-
-  return data;
+  return runQuery('saving task feedback',
+    supabase
+      .from('task_feedback')
+      .insert(feedbackData)
+      .select()
+      .single()
+  );
 }
 
 export async function getRecentFeedback(
@@ -516,22 +493,19 @@ export async function getRecentFeedback(
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - days);
 
-  const { data, error } = await supabase
-    .from('task_feedback')
-    .select('*')
-    .eq('goal_id', goalId)
-    .gte('created_at', cutoffDate.toISOString())
-    .order('created_at', { ascending: true });
-
-  if (error) {
-    console.error('Error fetching recent feedback:', error);
-    return [];
-  }
+  const rows = await runListQuery('fetching recent feedback',
+    supabase
+      .from('task_feedback')
+      .select('*')
+      .eq('goal_id', goalId)
+      .gte('created_at', cutoffDate.toISOString())
+      .order('created_at', { ascending: true })
+  );
 
   // Feedback is append-only (see saveTaskFeedback) — a task can have multiple
   // rows if the user edited their answer. Keep only the latest per task_id.
-  const latestByTask = new Map<string, NonNullable<typeof data>[number]>();
-  for (const row of data || []) {
+  const latestByTask = new Map<string, (typeof rows)[number]>();
+  for (const row of rows) {
     latestByTask.set(row.task_id, row);
   }
 
@@ -555,43 +529,33 @@ export async function saveCheckpoint(
     personalizedMessage: string;
   }
 ) {
-  const { data, error } = await supabase
-    .from('checkpoints')
-    .insert({
-      roadmap_id: roadmapId,
-      checkpoint_day: checkpointDay,
-      overall_mastery: analysis.overallMastery,
-      struggling_areas: analysis.strugglingAreas,
-      mastering_areas: analysis.masteringAreas,
-      pace_adjustment: analysis.paceAdjustment,
-      recommendations: analysis.recommendations,
-      next_sprint_focus: analysis.nextSprintFocus,
-      personalized_message: analysis.personalizedMessage
-    })
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Error saving checkpoint:', error);
-    throw error;
-  }
-
-  return data;
+  return runQuery('saving checkpoint',
+    supabase
+      .from('checkpoints')
+      .insert({
+        roadmap_id: roadmapId,
+        checkpoint_day: checkpointDay,
+        overall_mastery: analysis.overallMastery,
+        struggling_areas: analysis.strugglingAreas,
+        mastering_areas: analysis.masteringAreas,
+        pace_adjustment: analysis.paceAdjustment,
+        recommendations: analysis.recommendations,
+        next_sprint_focus: analysis.nextSprintFocus,
+        personalized_message: analysis.personalizedMessage
+      })
+      .select()
+      .single()
+  );
 }
 
 export async function getCheckpoints(roadmapId: string) {
-  const { data, error } = await supabase
-    .from('checkpoints')
-    .select('*')
-    .eq('roadmap_id', roadmapId)
-    .order('checkpoint_day', { ascending: true });
-
-  if (error) {
-    console.error('Error fetching checkpoints:', error);
-    return [];
-  }
-
-  return data || [];
+  return runListQuery('fetching checkpoints',
+    supabase
+      .from('checkpoints')
+      .select('*')
+      .eq('roadmap_id', roadmapId)
+      .order('checkpoint_day', { ascending: true })
+  );
 }
 
 // ============================================

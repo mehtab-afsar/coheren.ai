@@ -5,6 +5,7 @@ import { useStore } from '@core/store/useStore';
 import { useBreakpoint } from '@hooks/useBreakpoint';
 import UpcomingPreview from './journey/UpcomingPreview';
 import { ap } from '@core/design-system/appleTokens';
+import { resolveDurationDays } from '@lib/roadmapDuration';
 
 export default function RoadmapView() {
   const { roadmap, currentDay, tasks } = useStore();
@@ -13,7 +14,8 @@ export default function RoadmapView() {
   const { isMobile } = useBreakpoint();
 
   const phases = agentRoadmap?.roadmap?.phases ?? [];
-  const totalWeeks = Math.ceil((agentRoadmap?.roadmap?.totalDays ?? (roadmap?.duration ?? 3) * 30) / 7);
+  const totalDays = resolveDurationDays(roadmap?.duration, agentRoadmap?.roadmap?.totalDays);
+  const totalWeeks = Math.ceil(totalDays / 7);
   const currentWeek = Math.ceil(currentDay / 7);
 
   type PhaseWithMeta = {
@@ -106,7 +108,6 @@ export default function RoadmapView() {
 
   const goalTitle = currentGoal?.specificGoal ?? roadmap?.title ?? 'Your Goal';
   const goalTimeline = (currentGoal as Record<string, unknown>)?.timeline as Record<string, unknown> | undefined;
-  const durationMonths = (goalTimeline?.estimatedDuration_months as number) ?? roadmap?.duration ?? 3;
   const dailyMinutes = (goalTimeline?.dailyTimeCommitment_minutes as number) ?? 30;
   const daysPerWeek = (goalTimeline?.daysPerWeek as number) ?? 5;
 
@@ -129,7 +130,6 @@ export default function RoadmapView() {
 
       {/* ── 1. Goal Hero card ── */}
       {(() => {
-        const totalDays = agentRoadmap?.roadmap?.totalDays ?? ((roadmap?.duration ?? 3) * 30);
         const journeyPct = Math.min(1, currentDay / totalDays);
         const weekPct = Math.min(100, Math.round((currentWeek / totalWeeks) * 100));
         const RING_SIZE = isMobile ? 62 : 72;
@@ -185,7 +185,7 @@ export default function RoadmapView() {
                 {/* Stats pills */}
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {[
-                    `${durationMonths * 4} weeks`,
+                    `${totalWeeks} weeks`,
                     `${daysPerWeek}d/wk`,
                     `${dailyMinutes}min`,
                   ].map((pill) => (

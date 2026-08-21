@@ -50,21 +50,18 @@ test.describe('ChatOnboarding', () => {
   });
 
   test('user types a goal and receives an AI response', async ({ page }) => {
-    // Mock Groq so the test doesn't make real API calls
-    await page.route('**/openai/v1/chat/completions', r => r.fulfill({
+    // Mock the ai-proxy's Claude route so the test doesn't make real API calls.
+    // Response shape matches the Anthropic Messages API (claude-client.ts's
+    // callClaude() reads response.content[].text), not the OpenAI-style
+    // choices[].message.content shape the old Groq-backed mock used.
+    await page.route('**/anthropic/v1/messages', r => r.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        choices: [{ message: { role: 'assistant', content: 'Great goal! How long have you been working on this?' }, finish_reason: 'stop' }],
-        usage: { prompt_tokens: 50, completion_tokens: 20 },
-      }),
-    }));
-    await page.route('**/api.groq.com/**', r => r.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        choices: [{ message: { role: 'assistant', content: 'Great goal! How long have you been working on this?' }, finish_reason: 'stop' }],
-        usage: { prompt_tokens: 50, completion_tokens: 20 },
+        id: 'msg_test', type: 'message', role: 'assistant',
+        content: [{ type: 'text', text: 'Great goal! How long have you been working on this?' }],
+        model: 'claude-sonnet-4-6', stop_reason: 'end_turn',
+        usage: { input_tokens: 50, output_tokens: 20 },
       }),
     }));
 

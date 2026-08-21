@@ -20,6 +20,7 @@
 import type { Agent1Output, Agent2Output, AgentContext } from '@types-app/agents';
 import { callReasoning } from '@lib/ai-router';
 import { DOMAIN_READINESS_GAPS, STONE_DESCRIPTIONS } from './stone-taxonomy';
+import { parseAgentJSON } from '../llm-output';
 // Note: DOMAIN_GAPS alias also exported for legacy references
 
 function buildSystemPrompt(): string {
@@ -290,11 +291,6 @@ export async function generateQuestions(
     throw new Error('Agent 2 Mode 1: No response received');
   }
 
-  let raw: unknown;
-  try {
-    raw = JSON.parse(content) as unknown;
-  } catch (e) {
-    throw new Error(`Agent 2 Mode 1 (questions): invalid JSON — ${(e as Error).message}`);
-  }
+  const raw = parseAgentJSON(content, 'agent2-questions');
   return validateOutput(raw, context);
 }

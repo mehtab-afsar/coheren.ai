@@ -1,0 +1,1491 @@
+{
+  "runId": "2026-08-07T17-09-47",
+  "runDate": "2026-08-07T17:09:47.414Z",
+  "dryRun": true,
+  "skipJudge": false,
+  "personas": [
+    {
+      "persona": {
+        "id": "career-fearoffailure",
+        "name": "Career × Fear of Failure",
+        "domain": "Career",
+        "category": "Career",
+        "goal": "Get promoted to senior software engineer within 6 months",
+        "timeline": 180,
+        "dailyTime": 45,
+        "targetStone": "FearOfFailure",
+        "rationale": "Regression baseline — has an explicit tiebreaker in STONE_DOMAIN_TIEBREAKERS."
+      },
+      "artifacts": [
+        {
+          "artifactType": "roadmap",
+          "label": "Roadmap (Phase 1)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 1 task",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 21 task (drift check)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        }
+      ]
+    },
+    {
+      "persona": {
+        "id": "career-perfectionism",
+        "name": "Career × Perfectionism",
+        "domain": "Career",
+        "category": "Career",
+        "goal": "Get promoted to senior software engineer within 6 months",
+        "timeline": 180,
+        "dailyTime": 45,
+        "targetStone": "Perfectionism",
+        "rationale": "Regression baseline — the other of the only 2 explicit tiebreakers."
+      },
+      "artifacts": [
+        {
+          "artifactType": "roadmap",
+          "label": "Roadmap (Phase 1)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 1 task",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 21 task (drift check)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        }
+      ]
+    },
+    {
+      "persona": {
+        "id": "career-lowconfidence",
+        "name": "Career × Low Confidence",
+        "domain": "Career",
+        "category": "Career",
+        "goal": "Get promoted to senior software engineer within 6 months",
+        "timeline": 180,
+        "dailyTime": 45,
+        "targetStone": "LowConfidence",
+        "rationale": "No tiebreaker exists — Career's proof-of-work framing vs. LowConfidence's \"success must be certain\" need."
+      },
+      "artifacts": [
+        {
+          "artifactType": "roadmap",
+          "label": "Roadmap (Phase 1)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 1 task",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 21 task (drift check)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        }
+      ]
+    },
+    {
+      "persona": {
+        "id": "health-fearoffailure",
+        "name": "Health × Fear of Failure",
+        "domain": "Health",
+        "category": "Health",
+        "goal": "Establish a consistent meditation practice and improve sleep quality",
+        "timeline": 60,
+        "dailyTime": 20,
+        "targetStone": "FearOfFailure",
+        "rationale": "No tiebreaker; high-risk domain — safety/appropriateness weighted hardest."
+      },
+      "artifacts": [
+        {
+          "artifactType": "roadmap",
+          "label": "Roadmap (Phase 1)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 1 task",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 21 task (drift check)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        }
+      ]
+    },
+    {
+      "persona": {
+        "id": "financial-perfectionism",
+        "name": "Financial × Perfectionism",
+        "domain": "Financial",
+        "category": "Financial",
+        "goal": "Build a $10,000 emergency fund and start investing",
+        "timeline": 120,
+        "dailyTime": 30,
+        "targetStone": "Perfectionism",
+        "rationale": "No tiebreaker; high-risk — polish-loop tendency vs. real-money \"act now\" safeguards."
+      },
+      "artifacts": [
+        {
+          "artifactType": "roadmap",
+          "label": "Roadmap (Phase 1)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 1 task",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 21 task (drift check)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        }
+      ]
+    },
+    {
+      "persona": {
+        "id": "financial-overcommitment",
+        "name": "Financial × Overcommitment",
+        "domain": "Financial",
+        "category": "Financial",
+        "goal": "Build a $10,000 emergency fund and start investing",
+        "timeline": 120,
+        "dailyTime": 30,
+        "targetStone": "Overcommitment",
+        "rationale": "High-risk — regression target for the existing \"$5 / 1% cap\" delivery-layer rule."
+      },
+      "artifacts": [
+        {
+          "artifactType": "roadmap",
+          "label": "Roadmap (Phase 1)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 1 task",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 21 task (drift check)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        }
+      ]
+    },
+    {
+      "persona": {
+        "id": "health-overcommitment",
+        "name": "Health × Overcommitment",
+        "domain": "Health",
+        "category": "Health",
+        "goal": "Establish a consistent meditation practice and improve sleep quality",
+        "timeline": 60,
+        "dailyTime": 20,
+        "targetStone": "Overcommitment",
+        "rationale": "Overtraining/burnout risk — no domain-specific safety rule exists for this combo anywhere."
+      },
+      "artifacts": [
+        {
+          "artifactType": "roadmap",
+          "label": "Roadmap (Phase 1)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 1 task",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 21 task (drift check)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        }
+      ]
+    },
+    {
+      "persona": {
+        "id": "creative-unrealisticexpectations",
+        "name": "Creative × Unrealistic Expectations",
+        "domain": "Creative",
+        "category": "Creative",
+        "goal": "Write and self-publish a 50,000 word novel",
+        "timeline": 90,
+        "dailyTime": 60,
+        "targetStone": "UnrealisticExpectations",
+        "rationale": "Thin RAG corpus (3 md files); Creative's \"no standard, quantity first\" vs. calibration need."
+      },
+      "artifacts": [
+        {
+          "artifactType": "roadmap",
+          "label": "Roadmap (Phase 1)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 1 task",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 21 task (drift check)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        }
+      ]
+    },
+    {
+      "persona": {
+        "id": "cognitive-cognitivefatigue",
+        "name": "Cognitive × Cognitive Fatigue",
+        "domain": "Cognitive",
+        "category": "Learning",
+        "goal": "Learn to play chess competitively and reach 1500 ELO rating",
+        "timeline": 90,
+        "dailyTime": 45,
+        "targetStone": "CognitiveFatigue",
+        "rationale": "Thin RAG corpus; Cognitive's Pomodoro/spaced-repetition blocks vs. \"max 3 steps\" fatigue rule."
+      },
+      "artifacts": [
+        {
+          "artifactType": "roadmap",
+          "label": "Roadmap (Phase 1)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 1 task",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 21 task (drift check)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        }
+      ]
+    },
+    {
+      "persona": {
+        "id": "kinesthetic-skillgap",
+        "name": "Kinesthetic × Skill Gap",
+        "domain": "Kinesthetic",
+        "category": "Fitness",
+        "goal": "Run a half-marathon in under 2 hours",
+        "timeline": 120,
+        "dailyTime": 60,
+        "targetStone": "SkillGap",
+        "rationale": "Thin RAG corpus; also stresses groundedness — form/safety cues need real citations, not filler."
+      },
+      "artifacts": [
+        {
+          "artifactType": "roadmap",
+          "label": "Roadmap (Phase 1)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 1 task",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 21 task (drift check)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        }
+      ]
+    },
+    {
+      "persona": {
+        "id": "lifestyle-inconsistency",
+        "name": "Lifestyle × Inconsistency",
+        "domain": "Lifestyle",
+        "category": "Lifestyle",
+        "goal": "Declutter my entire apartment and build a minimalist morning routine",
+        "timeline": 45,
+        "dailyTime": 30,
+        "targetStone": "Inconsistency",
+        "rationale": "Thin RAG corpus; highest-frequency real-user combo — sanity check in a weak-data domain."
+      },
+      "artifacts": [
+        {
+          "artifactType": "roadmap",
+          "label": "Roadmap (Phase 1)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 1 task",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 21 task (drift check)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        }
+      ]
+    },
+    {
+      "persona": {
+        "id": "financial-fearoffailure",
+        "name": "Financial × Fear of Failure",
+        "domain": "Financial",
+        "category": "Financial",
+        "goal": "Build a $10,000 emergency fund and start investing",
+        "timeline": 120,
+        "dailyTime": 30,
+        "targetStone": "FearOfFailure",
+        "rationale": "No tiebreaker (existing Financial tiebreakers cover Procrastination/Overcommitment, not this) — real money + fear is safety-relevant."
+      },
+      "artifacts": [
+        {
+          "artifactType": "roadmap",
+          "label": "Roadmap (Phase 1)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 1 task",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 21 task (drift check)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        }
+      ]
+    },
+    {
+      "persona": {
+        "id": "cognitive-timeconstraint",
+        "name": "Cognitive × Time Constraint (sanity floor)",
+        "domain": "Cognitive",
+        "category": "Learning",
+        "goal": "Learn to play chess competitively and reach 1500 ELO rating",
+        "timeline": 90,
+        "dailyTime": 45,
+        "targetStone": "TimeConstraint",
+        "rationale": "Well-trodden, low-conflict combo. If this scores low, suspect the judge, not the pipeline."
+      },
+      "artifacts": [
+        {
+          "artifactType": "roadmap",
+          "label": "Roadmap (Phase 1)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 1 task",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        },
+        {
+          "artifactType": "task",
+          "label": "Day 21 task (drift check)",
+          "structural": {
+            "valid": true,
+            "issues": []
+          },
+          "judge": {
+            "groundedness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "domainSafetyAppropriateness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "stoneFit": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "pedagogicalSoundness": {
+              "score": 4,
+              "rationale": "[mock] dry-run placeholder rationale, score=4"
+            },
+            "specificity": {
+              "score": 3,
+              "rationale": "[mock] dry-run placeholder rationale, score=3"
+            },
+            "hallucinatedClaims": [],
+            "overallVerdict": "ship",
+            "summary": "[mock] dry-run placeholder summary — no real judge call was made."
+          }
+        }
+      ]
+    }
+  ],
+  "durationMs": 5
+}

@@ -27,7 +27,6 @@ export default function TodayView({
 }) {
   const {
     universalProfile,
-    roadmap,
     tasks,
     currentDay,
     streak,
@@ -151,7 +150,7 @@ export default function TodayView({
     return Object.entries(counts).map(([type, n]) => `${n} ${type}`).join(' · ');
   })();
 
-  const userName = universalProfile?.name ?? roadmap?.title ?? 'there';
+  const userName = universalProfile?.name ?? 'there';
   // Clean, tight context line (the old "Day N of your <full goal sentence> journey" read awkwardly).
   const goalSubtitle = `Day ${currentDay} · Week ${Math.ceil(currentDay / 7)}`;
 

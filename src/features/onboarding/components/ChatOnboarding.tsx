@@ -27,8 +27,6 @@ import { useAuthGate } from '../hooks/useAuthGate';
 import { track } from '@lib/analytics';
 
 
-// Groq client now imported from groq-client.ts with auto-fallback
-
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
     promise,
@@ -124,6 +122,11 @@ interface Message {
   role: 'ai' | 'user';
   content: string;
   timestamp: Date;
+  /** Set on the fallback message created when a send fails — renders a Retry
+   *  affordance instead of reading as a normal AI reply. */
+  isError?: boolean;
+  /** The user input that failed, so Retry can resend it without the user retyping. */
+  retryInput?: string;
 }
 
 
@@ -362,8 +365,13 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
     return { issue: null };
   }
 
-  const handleSend = async () => {
-    if (!userInput.trim() || isTyping) return;
+  /** `overrideInput` is set on Retry — resends a previously-failed message
+   *  without re-appending a user bubble (it's already in the thread) or
+   *  touching the live input field. */
+  const handleSend = async (overrideInput?: string) => {
+    const isRetry = overrideInput !== undefined;
+    const text = overrideInput ?? userInput;
+    if (!text.trim() || isTyping) return;
 
     // If we've moved past conversation phase, don't process new input
     if (onboardingPhase !== 'conversation') {
@@ -371,16 +379,17 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
       return;
     }
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: userInput,
-      timestamp: new Date(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    const currentInput = userInput;
-    setUserInput('');
+    if (!isRetry) {
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: 'user',
+        content: text,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, userMessage]);
+      setUserInput('');
+    }
+    const currentInput = text;
     setIsTyping(true);
     turnCountRef.current += 1;
 
@@ -579,21 +588,18 @@ The system will automatically detect when the data is complete and transition to
       // No more "Perfect!" string checking - state-driven trigger will handle it
 
     } catch (error: unknown) {
-      // Handle Groq API errors with proper user feedback
-      console.error('❌ Groq API Error:', error);
+      console.error('Chat API error:', error);
 
+      // The Anthropic SDK throws typed errors with a numeric `.status` — check
+      // that directly rather than string-matching `.message` (the old Groq
+      // error shape nested the message under `.error.message` with different
+      // wording; that check silently never matched once the provider switched).
+      const err = error as { status?: number; message?: string };
       let errorMessage = "I'm having trouble connecting. Please try again.";
-
-      // Check for rate limit error with type guards
-      const err = error as { error?: { message?: string }; message?: string };
-      if (err?.error?.message?.includes('Rate limit reached')) {
-        const match = err.error.message.match(/Please try again in (\d+m\d+\.?\d*s)/);
-        const waitTime = match ? match[1] : '10 minutes';
-        errorMessage = `⚠️ I've hit my daily API limit. Please wait ${waitTime} and try again, or contact support to upgrade the API plan.`;
-      } else if (err?.message?.includes('rate_limit')) {
-        errorMessage = "⚠️ API rate limit reached. Please wait a few minutes and try again.";
-      } else if (err?.message?.includes('network') || err?.message?.includes('fetch')) {
-        errorMessage = "⚠️ Network error. Please check your connection and try again.";
+      if (err?.status === 429) {
+        errorMessage = '⚠️ API rate limit reached. Please wait a few minutes and try again.';
+      } else if (err?.message?.includes('network') || err?.message?.includes('fetch') || err?.message?.includes('Failed to fetch')) {
+        errorMessage = '⚠️ Network error. Please check your connection and try again.';
       }
 
       const fallbackMessage: Message = {
@@ -601,10 +607,17 @@ The system will automatically detect when the data is complete and transition to
         role: 'ai',
         content: errorMessage,
         timestamp: new Date(),
+        isError: true,
+        retryInput: currentInput,
       };
       setMessages((prev) => [...prev, fallbackMessage]);
       setIsTyping(false);
     }
+  };
+
+  const handleRetry = (failedMessageId: string, retryInput: string) => {
+    setMessages((prev) => prev.filter((m) => m.id !== failedMessageId));
+    handleSend(retryInput);
   };
 
   // Old regex-based extraction function removed - replaced by Shadow Extractor (AI-based)
@@ -904,7 +917,10 @@ The system will automatically detect when the data is complete and transition to
     const roadmap = {
       title: collectedData.goal,
       category: collectedData.category!,
-      duration: durationInMonths,
+      // Store in days — matches App.tsx's DB-load path and resolveDurationDays'
+      // canonical unit. (Previously stored raw months here, which the reader side
+      // could only tell apart from App.tsx's days by a fragile magnitude guess.)
+      duration: durationInMonths * 30,
       dailyTime: collectedData.dailyTime || '30 minutes',
       recommendedTime: collectedData.energyPattern === 'morning' ? '7:00 AM' :
                       collectedData.energyPattern === 'evening' ? '7:00 PM' : '2:00 PM',
@@ -1109,15 +1125,22 @@ The system will automatically detect when the data is complete and transition to
 
 
   // Render AI message content: split paragraphs on \n\n, render **bold**, single \n as space
-  const renderMessageContent = (content: string) => {
+  const renderMessageContent = (content: string, variant: 'default' | 'hero' = 'default') => {
     const paragraphs = content.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
+    // 'hero' is the opening question — set in Fraunces at display size to give
+    // the conversation an intentional first beat instead of reading like every
+    // other line in the thread.
+    const pClassName = variant === 'hero'
+      ? "text-[28px] sm:text-[32px] font-medium leading-[1.25] tracking-[-0.01em] text-zinc-900 m-0"
+      : "text-[1.05rem] font-normal leading-[1.8] text-zinc-900 m-0";
+    const pStyle = variant === 'hero' ? { fontFamily: "'Fraunces', Georgia, serif" } : undefined;
     return (
       <div className="flex flex-col gap-3">
         {paragraphs.map((para, pi) => {
           // Split on **bold** markers
           const parts = para.split(/\*\*([^*]+)\*\*/g);
           return (
-            <p key={pi} className="text-[1.05rem] font-normal leading-[1.8] text-zinc-900 m-0">
+            <p key={pi} className={pClassName} style={pStyle}>
               {parts.map((part, idx) =>
                 idx % 2 === 1
                   ? <strong key={idx} className="font-semibold text-zinc-900">{part}</strong>
@@ -1342,26 +1365,48 @@ The system will automatically detect when the data is complete and transition to
         <div className="flex flex-1 min-h-0 overflow-hidden relative z-10">
           <div className="w-full flex flex-col h-full">
 
-            {/* Messages scroll area */}
+            {/* Messages scroll area — the opening question centers in the
+                viewport instead of pinning to the top with a wall of empty
+                space below it; once the thread has real back-and-forth it
+                reverts to normal top-anchored chat scrolling. */}
             <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-              <div className="max-w-2xl mx-auto px-6 pt-12 pb-28 flex flex-col gap-1">
+              <div className={`max-w-2xl mx-auto px-6 pb-28 flex flex-col gap-1 ${messages.length <= 1 ? 'min-h-full justify-center' : 'pt-12'}`}>
                 {messages.map((message, i) => (
                   <div
                     key={message.id}
                     className={`animate-[fadeIn_0.3s_ease-out] ${message.role === 'user' ? 'flex justify-end mt-3' : 'flex mt-6'}`}
                   >
-                    {message.role === 'ai' ? (
+                    {message.role === 'ai' && message.isError ? (
+                      <div
+                        className="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm"
+                        style={{ background: 'var(--c-accent-amber-soft)', color: 'var(--c-text-primary)', maxWidth: '88%' }}
+                      >
+                        <span className="flex-1">{message.content}</span>
+                        {message.retryInput && (
+                          <button
+                            onClick={() => handleRetry(message.id, message.retryInput!)}
+                            className="flex-shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors"
+                            style={{ background: 'var(--c-accent-amber)', color: '#fff' }}
+                          >
+                            Retry
+                          </button>
+                        )}
+                      </div>
+                    ) : message.role === 'ai' ? (
                       <div style={{ maxWidth: '88%' }}>
-                        {/* small label on first AI message only */}
+                        {/* eyebrow label on first AI message only */}
                         {i === 0 && (
-                          <p className="text-[11px] font-medium text-zinc-400 mb-2 tracking-wider uppercase">
+                          <p className="text-[11px] font-semibold mb-3 tracking-[0.08em] uppercase" style={{ color: 'var(--c-accent-purple, #C4552D)' }}>
                             coheren
                           </p>
                         )}
-                        {renderMessageContent(message.content)}
+                        {renderMessageContent(message.content, i === 0 ? 'hero' : 'default')}
                       </div>
                     ) : (
-                      <div className="bg-zinc-100 text-zinc-800 rounded-2xl rounded-br-sm px-4 py-2.5 text-[0.9rem] leading-relaxed max-w-[78%]">
+                      <div
+                        className="rounded-2xl rounded-br-sm px-4 py-2.5 text-[0.9rem] leading-relaxed max-w-[78%]"
+                        style={{ background: 'var(--c-accent-purple-soft, #FBF3EE)', color: 'var(--c-accent-purple, #C4552D)' }}
+                      >
                         {message.content}
                       </div>
                     )}
@@ -1372,9 +1417,9 @@ The system will automatically detect when the data is complete and transition to
                 {isTyping && (
                   <div className="flex mt-6">
                     <div className="flex items-center gap-1.5 py-1">
-                      <div className="w-1.5 h-1.5 rounded-full bg-zinc-300" style={{ animation: 'pulse 1.4s infinite ease-in-out both' }} />
-                      <div className="w-1.5 h-1.5 rounded-full bg-zinc-300" style={{ animation: 'pulse 1.4s infinite ease-in-out both 0.2s' }} />
-                      <div className="w-1.5 h-1.5 rounded-full bg-zinc-300" style={{ animation: 'pulse 1.4s infinite ease-in-out both 0.4s' }} />
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--c-accent-purple-border, #DDA189)', animation: 'pulse 1.4s infinite ease-in-out both' }} />
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--c-accent-purple-border, #DDA189)', animation: 'pulse 1.4s infinite ease-in-out both 0.2s' }} />
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--c-accent-purple-border, #DDA189)', animation: 'pulse 1.4s infinite ease-in-out both 0.4s' }} />
                     </div>
                   </div>
                 )}
@@ -1383,37 +1428,50 @@ The system will automatically detect when the data is complete and transition to
               </div>
             </div>
 
-            {/* Input area — floating */}
-            <div className="fixed bottom-0 left-0 right-0 flex justify-center px-5" style={{ zIndex: 50, paddingBottom: 'max(20px, env(safe-area-inset-bottom))', background: 'linear-gradient(to top, #fff 70%, transparent)' }}>
-              {isTyping || onboardingPhase !== 'conversation' ? (
-                <div className="w-full max-w-xl mx-auto flex items-center px-4 h-11 rounded-xl bg-zinc-50 border border-zinc-100 mb-1">
-                  <span className="text-sm text-zinc-400">
-                    {onboardingPhase !== 'conversation' ? 'Building your plan…' : ''}
-                  </span>
-                </div>
-              ) : (
-                <div className="w-full max-w-xl mx-auto flex items-center gap-2 bg-white border border-zinc-200 rounded-xl px-4 h-11 shadow-[0_2px_12px_rgba(0,0,0,0.06)] focus-within:border-zinc-400 transition-colors mb-1">
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={userInput}
-                    onChange={(e) => setUserInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                    placeholder="Reply…"
-                    autoFocus
-                    className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-800 placeholder:text-zinc-400"
-                  />
-                  <button
-                    onClick={handleSend}
-                    disabled={!userInput.trim()}
-                    className="flex-shrink-0 w-6 h-6 rounded-lg bg-zinc-900 disabled:bg-zinc-200 flex items-center justify-center transition-colors"
+            {/* Input area — floating, with a soft ambient glow instead of a
+                hard-edged card so it reads as part of the page, not a widget
+                dropped on top of it. */}
+            <div className="fixed bottom-0 left-0 right-0 flex justify-center px-5" style={{ zIndex: 50, paddingBottom: 'max(20px, env(safe-area-inset-bottom))', background: 'linear-gradient(to top, #FFFCF9 65%, transparent)' }}>
+              <div className="relative w-full max-w-xl mx-auto mb-1">
+                <div
+                  aria-hidden
+                  className="absolute -inset-x-6 -bottom-4 h-16 pointer-events-none"
+                  style={{ background: 'radial-gradient(ellipse 60% 100% at 50% 100%, rgba(196, 85, 45, 0.10), transparent)' }}
+                />
+                {isTyping || onboardingPhase !== 'conversation' ? (
+                  <div className="relative w-full flex items-center px-4 h-[52px] rounded-2xl bg-zinc-50 border border-zinc-100">
+                    <span className="text-sm text-zinc-400">
+                      {onboardingPhase !== 'conversation' ? 'Building your plan…' : ''}
+                    </span>
+                  </div>
+                ) : (
+                  <div
+                    className="relative w-full flex items-center gap-2 bg-white rounded-2xl px-5 h-[52px] border transition-shadow duration-200 shadow-[0_2px_16px_rgba(0,0,0,0.05)] focus-within:shadow-[0_0_0_4px_rgba(196,85,45,0.10),0_8px_24px_rgba(196,85,45,0.12)]"
+                    style={{ borderColor: 'var(--c-border-medium, #EDE6DD)' }}
                   >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M5 12l14 0"/><path d="M13 18l6 -6"/><path d="M13 6l6 6"/>
-                    </svg>
-                  </button>
-                </div>
-              )}
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={userInput}
+                      onChange={(e) => setUserInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                      placeholder="Reply…"
+                      autoFocus
+                      className="flex-1 bg-transparent border-none outline-none focus-visible:shadow-none text-[15px] text-zinc-800 placeholder:text-zinc-400"
+                    />
+                    <button
+                      onClick={handleSend}
+                      disabled={!userInput.trim()}
+                      className="flex-shrink-0 w-8 h-8 rounded-full disabled:bg-zinc-200 flex items-center justify-center transition-all duration-150 enabled:hover:scale-105 enabled:active:scale-95"
+                      style={userInput.trim() ? { background: 'var(--c-accent-purple, #C4552D)' } : undefined}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M5 12l14 0"/><path d="M13 18l6 -6"/><path d="M13 6l6 6"/>
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
           </div>

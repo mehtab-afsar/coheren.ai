@@ -11,6 +11,10 @@ interface DashboardSidebarProps {
   onToggle?: (open: boolean) => void;
 }
 
+/** Fixed sidebar width — single source of truth so DashboardShell's content-column
+ * offset can't drift out of sync with the sidebar's actual rendered width. */
+export const SIDEBAR_WIDTH = 220;
+
 const MICRO_LABEL: React.CSSProperties = {
   fontSize: 10,
   fontWeight: 600,
@@ -117,8 +121,8 @@ export default function DashboardSidebar({ currentView, onViewChange }: Dashboar
 
   return (
     <div style={{
-      width: 220,
-      minWidth: 220,
+      width: SIDEBAR_WIDTH,
+      minWidth: SIDEBAR_WIDTH,
       height: '100vh',
       position: 'fixed',
       left: 0,

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useStore, mapDbTaskToStoreTask } from '@core/store/useStore';
 import LandingPage from '@features/onboarding/components/LandingPage';
-import TodayHero from '@features/dashboard/views/today/TodayHero';
 import ChatOnboarding from '@features/onboarding/components/ChatOnboarding';
 import Dashboard from '@features/dashboard';
 import Settings from '@features/dashboard/components/Settings';
@@ -268,26 +267,6 @@ function App() {
             to { transform: rotate(360deg); }
           }
         `}</style>
-      </div>
-    );
-  }
-
-  // Dev-only isolated preview to screenshot-verify redesigned components without auth.
-  if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('preview') === 'today') {
-    return (
-      <div style={{ minHeight: '100vh', background: 'var(--c-surface-bg)' }}>
-        <TodayHero
-          firstName="Alex" currentDay={12} phaseName="Foundations" streak={11} streakFrozen
-          adjustedThisWeek
-          alsoTodayCount={1}
-          task={{
-            title: 'Hold a 45-second forearm plank', type: 'Practice', duration: 20,
-            whyThisMatters: 'Every rep is a vote for the athlete you are becoming.',
-            successCriteria: 'You completed three 45-second holds.',
-            segments: [{ label: 'Warm up', minutes: 6 }, { label: 'Work', minutes: 10 }, { label: 'Reflect', minutes: 4 }],
-          }}
-          onBegin={() => {}} onMarkDone={() => {}} onSkip={() => {}} onShowAlsoToday={() => {}}
-        />
       </div>
     );
   }

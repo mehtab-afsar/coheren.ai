@@ -22,18 +22,20 @@ import type {
   ChangeStage,
 } from '@types-app/agents';
 import { callReasoning, callWithTools } from '@lib/ai-router';
-import type { GroqTool } from '@lib/ai-router';
+import type { ToolSchema } from '@lib/ai-router';
 import { flags } from '@config/feature-flags';
 import { STONE_DESCRIPTIONS, STONE_TO_CATEGORY, ALL_STONE_TYPES } from './stone-taxonomy';
 import { aggregateLinguisticSignals, linguisticSignalsToStonePriors } from './linguistic-analyzer';
 import { interpretReadiness } from './interview-engine';
 import { lowConfidenceSeverityFromRuler } from './scales';
+import { parseAgentJSON } from '../llm-output';
+import { agent2StoneProfileSchema, safeValidate } from '../schemas';
 
 // ─── Tool Schemas ─────────────────────────────────────────────────────────────
 
 const STONE_TYPE_ENUM = ALL_STONE_TYPES as unknown as string[];
 
-const EXTRACT_STONES_TOOL: GroqTool = {
+const EXTRACT_STONES_TOOL: ToolSchema = {
   type: 'function',
   function: {
     name: 'extract_stone_profile',
@@ -74,7 +76,7 @@ const EXTRACT_STONES_TOOL: GroqTool = {
   },
 };
 
-const EXTRACT_PRELIMINARY_TOOL: GroqTool = {
+const EXTRACT_PRELIMINARY_TOOL: ToolSchema = {
   type: 'function',
   function: {
     name: 'extract_preliminary_stones',
@@ -284,6 +286,9 @@ function validateOutput(
   linguisticSignals?: LinguisticSignals,
   changeStage?:      ChangeStage
 ): Agent2ProfileOutput {
+  // Boundary contract — logs drift, does not throw (taxonomy filtering below covers the failure path).
+  safeValidate(agent2StoneProfileSchema, raw, 'agent2-stone-profile');
+
   const parsed = raw as Agent2ProfileOutput;
   const p = parsed?.stoneProfile;
 
@@ -397,11 +402,7 @@ Return JSON:
       { messages: callMessages, temperature: 0.2, max_tokens: 1000, tools: [EXTRACT_PRELIMINARY_TOOL], tool_name: 'extract_preliminary_stones' },
       'reasoning'
     );
-    try {
-      raw = JSON.parse(args) as StoneRound2Output;
-    } catch (e) {
-      throw new Error(`Agent 2 preliminary (tool): invalid JSON — ${(e as Error).message}`);
-    }
+    raw = parseAgentJSON<StoneRound2Output>(args, 'agent2-preliminary-tool');
   } else {
     const { content } = await callReasoning({
       messages: callMessages,
@@ -410,11 +411,7 @@ Return JSON:
       response_format: { type: 'json_object' },
     });
     if (!content) throw new Error('Agent 2 preliminary extraction: No response');
-    try {
-      raw = JSON.parse(content) as StoneRound2Output;
-    } catch (e) {
-      throw new Error(`Agent 2 preliminary (reasoning): invalid JSON — ${(e as Error).message}`);
-    }
+    raw = parseAgentJSON<StoneRound2Output>(content, 'agent2-preliminary-reasoning');
   }
 
   // Validate preliminary stones
@@ -607,11 +604,7 @@ export async function extractStones(
       { messages: callMessages, temperature: 0.2, max_tokens: 1200, tools: [EXTRACT_STONES_TOOL], tool_name: 'extract_stone_profile' },
       'reasoning'
     );
-    try {
-      raw = JSON.parse(args) as unknown;
-    } catch (e) {
-      throw new Error(`Agent 2 Mode 2 (tool): invalid JSON — ${(e as Error).message}`);
-    }
+    raw = parseAgentJSON(args, 'agent2-extract-tool');
   } else {
     const { content } = await callReasoning({
       messages: callMessages,
@@ -620,11 +613,7 @@ export async function extractStones(
       response_format: { type: 'json_object' },
     });
     if (!content) throw new Error('Agent 2 Mode 2: No response received');
-    try {
-      raw = JSON.parse(content) as unknown;
-    } catch (e) {
-      throw new Error(`Agent 2 Mode 2 (reasoning): invalid JSON — ${(e as Error).message}`);
-    }
+    raw = parseAgentJSON(content, 'agent2-extract-reasoning');
   }
 
   return validateOutput(raw, enrichment?.readinessProfile, linguisticSignals, changeStage);

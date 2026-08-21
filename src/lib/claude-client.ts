@@ -1,13 +1,16 @@
 /**
- * Claude Client — Change 3 (Claude Integration for Complex Agents)
+ * Claude Client — the sole LLM provider for this app.
  *
- * Wraps the Anthropic SDK with three call modes:
- *   callClaude()              — standard JSON output (mirrors callGroqWithFallback)
+ * Wraps the Anthropic SDK with four call modes:
+ *   callClaude()              — standard JSON output
+ *   callClaudeWithForcedTool() — single-shot forced tool call (structured-output trick,
+ *                                mirrors OpenAI-style function calling; used by
+ *                                ai-router's callWithTools())
  *   callClaudeWithTools()     — native multi-turn tool use (Agent 5 tool-use loop)
  *   callClaudeWithThinking()  — extended thinking (Agent 3 curriculum design, 8k tokens)
  *
- * Falls back gracefully — callers in ai-router.ts check isAvailable() before calling.
- * All methods throw on hard errors; ai-router's chain mechanism handles retry/fallback.
+ * All methods throw on hard errors; callers handle retry/fallback (see
+ * orchestrator.ts's withContentRetry and each agent's own error handling).
  */
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -22,6 +25,11 @@ export function isClaudeAvailable(): boolean {
   return env.CLAUDE_ENABLED;
 }
 
+// Conservative ceiling against a genuinely hung request — not tuned for snappy
+// UX (extended-thinking calls with a large budget_tokens can legitimately take
+// well over a minute), just to guarantee no call hangs indefinitely.
+const CALL_TIMEOUT_MS = 120_000;
+
 function makeClient(): Anthropic {
   // Routes through ai-proxy (which injects the real x-api-key). `apiKey` is a
   // dummy; proxyFetch attaches the user's JWT and strips the SDK's x-api-key.
@@ -30,6 +38,7 @@ function makeClient(): Anthropic {
     baseURL: `${env.AI_PROXY_URL}/anthropic`,
     fetch: proxyFetch,
     dangerouslyAllowBrowser: true,
+    timeout: CALL_TIMEOUT_MS,
   });
 }
 
@@ -95,6 +104,62 @@ export async function callClaude(params: ClaudeCallParams): Promise<string> {
     .filter(b => b.type === 'text')
     .map(b => (b as { type: 'text'; text: string }).text)
     .join('');
+}
+
+// ── Forced single tool call (structured-output trick) ─────────────────────────
+// OpenAI-style function-calling shape — the schema itself isn't provider-specific
+// (standard JSON Schema under `parameters`), only the outer wrapper differs from
+// Claude's `input_schema` field. Kept in this shape so existing tool-schema
+// constants (ANALYZE_GOAL_TOOL, GENERATE_TASK_TOOL, etc.) don't need rewriting.
+
+export interface ForcedToolSchema {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>; // JSON Schema
+  };
+}
+
+export interface ClaudeForcedToolParams {
+  messages:      ClaudeMessage[];
+  systemPrompt?: string;
+  temperature?:  number;
+  max_tokens?:   number;
+  tools:         ForcedToolSchema[];
+  tool_name:     string; // forces tool_choice to this specific function
+}
+
+/**
+ * Single-shot forced tool call — a structured-output trick, NOT the multi-turn
+ * agentic loop (see callClaudeWithTools for that). Forces Claude to call exactly
+ * one named tool and returns its raw (stringified) input; caller does
+ * JSON.parse()/parseAgentJSON(). This is the Claude equivalent of the old
+ * Groq-native callGroqWithTools() — same contract, so ai-router's callWithTools()
+ * callers never needed to change.
+ */
+export async function callClaudeWithForcedTool(params: ClaudeForcedToolParams): Promise<string> {
+  const client = makeClient();
+  const anthropicTools: Anthropic.Messages.Tool[] = params.tools.map(t => ({
+    name:         t.function.name,
+    description:  t.function.description,
+    input_schema: t.function.parameters as Anthropic.Messages.Tool['input_schema'],
+  }));
+
+  const response = await client.messages.create({
+    model:       CLAUDE_SONNET,
+    max_tokens:  params.max_tokens ?? 4096,
+    temperature: params.temperature ?? 0.3,
+    system:      params.systemPrompt,
+    messages:    params.messages,
+    tools:       anthropicTools,
+    tool_choice: { type: 'tool', name: params.tool_name },
+  });
+
+  const toolUse = response.content.find(b => b.type === 'tool_use') as
+    { type: 'tool_use'; input: Record<string, unknown> } | undefined;
+  if (!toolUse) throw new Error('Claude did not return a tool call — increase max_tokens or check the tool schema');
+  return JSON.stringify(toolUse.input);
 }
 
 // ── Tool use (multi-turn agentic loop) ────────────────────────────────────────
@@ -208,4 +273,30 @@ export async function callClaudeWithThinking(
   }
 
   return { thinking, output };
+}
+
+// ── Streaming ─────────────────────────────────────────────────────────────────
+
+/**
+ * Stream tokens from Claude. Each yielded string is a content delta. Fails fast —
+ * no retry logic; callers use this for UX-only effects (e.g. a live-typing
+ * coach-voice message) and should suppress errors silently at the call site.
+ */
+export async function* streamClaude(
+  params: ClaudeCallParams,
+): AsyncGenerator<string, void, unknown> {
+  const client = makeClient();
+  const stream = await client.messages.create({
+    model:       CLAUDE_SONNET,
+    max_tokens:  params.max_tokens ?? 4096,
+    temperature: params.temperature ?? 0.7,
+    system:      params.systemPrompt,
+    messages:    params.messages,
+    stream:      true,
+  });
+  for await (const event of stream) {
+    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+      yield event.delta.text;
+    }
+  }
 }

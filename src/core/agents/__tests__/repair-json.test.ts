@@ -1,14 +1,14 @@
 /**
  * Unit tests for repairJSON — LLM output sanitization
  *
- * repairJSON is a pure transformation function used in Agent 3 and Agent 4
- * to handle malformed JSON responses from the language model.
+ * repairJSON is a pure transformation function used by every agent's
+ * parseAgentJSON() call to handle malformed JSON responses from the model.
  *
  * Run: npm test
  */
 
 import { describe, it, expect } from 'vitest';
-import { repairJSON } from '@core/agents/task-generator';
+import { repairJSON, parseAgentJSON } from '@core/agents/llm-output';
 
 // ─── Markdown fence stripping ──────────────────────────────────────────────
 
@@ -172,5 +172,23 @@ describe('repairJSON — edge cases', () => {
     const result = JSON.parse(repairJSON(valid));
     expect(result.a).toEqual([1, 2, 3]);
     expect(result.b.e[0].f).toBe(true);
+  });
+});
+
+// ─── parseAgentJSON — Agent 5 Claude-strategic path ────────────────────────────
+// Agent 5's Claude-strategic branch (USE_CLAUDE_FOR_RECALIBRATION) has no Groq
+// response_format:json_object guarantee, so a markdown-fenced reply is realistic.
+
+describe('parseAgentJSON — Claude-style fenced responses', () => {
+  it('repairs and parses a markdown-fenced Claude response', () => {
+    const claudeStyle = 'Here is the recalibrated week:\n```json\n{"status": "MAINTAIN", "days": [1, 2, 3],}\n```';
+    const result = parseAgentJSON<{ status: string; days: number[] }>(claudeStyle, 'agent5-weekly-claude');
+    expect(result.status).toBe('MAINTAIN');
+    expect(result.days).toEqual([1, 2, 3]);
+  });
+
+  it('throws a labeled error identifying the failing agent on unrecoverable input', () => {
+    expect(() => parseAgentJSON('not json at all', 'agent5-weekly-claude'))
+      .toThrow(/\[agent:agent5-weekly-claude\] invalid JSON/);
   });
 });

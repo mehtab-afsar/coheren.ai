@@ -25,6 +25,19 @@
     touch-action: manipulation;
   }
 
+  /* Keyboard-focus ring. Many components strip the native outline via an
+     inline style, which beats any CSS `outline` rule — box-shadow is the one
+     focus signal those inline styles don't already claim, so it survives.
+     A single soft translucent ring, not a solid double-ring — visible enough
+     for keyboard nav without reading as a hard-edged colored box on inputs
+     that autofocus (a solid 4px accent ring there looked like a UI defect,
+     not an affordance). */
+  a:focus-visible, button:focus-visible, [role="button"]:focus-visible,
+  input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--c-accent-purple-border, rgba(196, 85, 45, 0.25));
+  }
+
   :root {
     /* ── Tailwind / shadcn ── */
     --brand: 27 96% 61%;
@@ -73,6 +86,7 @@
     --c-accent-blue:   #4a90e2;
     --c-accent-green:  #22c55e;
     --c-accent-amber:  #f59e0b;
+    --c-accent-amber-soft: rgba(245, 158, 11, 0.12);
     --c-accent-red:    #ef4444;
 
     /* Streak (warm, distinct from the accent) */

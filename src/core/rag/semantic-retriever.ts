@@ -112,8 +112,10 @@ export async function retrieveKnowledgeSemantic(
     ? Math.ceil((options.matchCount ?? MATCH_COUNT) * RAPTOR_MATCH_MULTIPLIER)
     : (options.matchCount ?? MATCH_COUNT);
 
-  const jinaKey = env.JINA_API_KEY || undefined;
-  if (!jinaKey || !query.trim()) return '';
+  if (!query.trim()) return '';
+  // embedQuery routes through the ai-proxy edge function, which holds the real
+  // Jina key server-side — this value is vestigial and ignored.
+  const jinaKey = env.JINA_API_KEY;
 
   try {
     // Run all queries in parallel
@@ -166,8 +168,10 @@ export async function retrieveKnowledgeHybrid(
     boostKeywords   = [],
   } = options;
 
-  const jinaKey = env.JINA_API_KEY || undefined;
-  if (!jinaKey || !query.trim()) return '';
+  if (!query.trim()) return '';
+  // embedQuery/rerankDocuments route through the ai-proxy edge function, which
+  // holds the real Jina key server-side — this value is vestigial and ignored.
+  const jinaKey = env.JINA_API_KEY;
 
   // RAPTOR: fetch a larger candidate pool when hierarchical summaries are present
   const hybridCandidateCount = flags.USE_RAPTOR_INDEX ? 20 : 12;

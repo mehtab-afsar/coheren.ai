@@ -1,7 +1,7 @@
 // ai-proxy — multi-provider passthrough gateway (Supabase Edge Function, Deno).
 //
-// Keeps the real Groq / Anthropic / Jina API keys server-side. The browser SDKs
-// point their baseURL here and send the user's Supabase JWT; this function:
+// Keeps the real Anthropic / Jina API keys server-side. The browser SDKs point
+// their baseURL here and send the user's Supabase JWT; this function:
 //   1. handles CORS preflight,
 //   2. verifies the JWT (401 if anonymous),
 //   3. enforces a per-user fixed-window rate limit (429 if exceeded),
@@ -20,10 +20,6 @@ interface ProviderRoute {
 }
 
 const PROVIDERS: Record<string, ProviderRoute> = {
-  groq: {
-    base: 'https://api.groq.com',
-    auth: (h) => h.set('Authorization', `Bearer ${Deno.env.get('GROQ_API_KEY') ?? ''}`),
-  },
   anthropic: {
     base: 'https://api.anthropic.com',
     auth: (h) => {
@@ -34,6 +30,13 @@ const PROVIDERS: Record<string, ProviderRoute> = {
   jina: {
     base: 'https://api.jina.ai',
     auth: (h) => h.set('Authorization', `Bearer ${Deno.env.get('JINA_API_KEY') ?? ''}`),
+  },
+  youtube: {
+    base: 'https://www.youtube.com',
+    // oEmbed is keyless — nothing to inject. Routed through the proxy anyway so
+    // the check happens server-side (consistent JWT/rate-limit gate, no reliance
+    // on browser CORS for a third-party call) rather than calling YouTube directly.
+    auth: () => {},
   },
 };
 
@@ -64,7 +67,7 @@ Deno.serve(async (req) => {
   const marker = '/ai-proxy/';
   const idx = url.pathname.indexOf(marker);
   if (idx === -1) return json(404, { error: 'not found' });
-  const rest = url.pathname.slice(idx + marker.length); // e.g. "groq/openai/v1/chat/completions"
+  const rest = url.pathname.slice(idx + marker.length); // e.g. "anthropic/v1/messages"
   const slash = rest.indexOf('/');
   const providerKey = slash === -1 ? rest : rest.slice(0, slash);
   const upstreamPath = slash === -1 ? '' : rest.slice(slash); // includes leading "/"

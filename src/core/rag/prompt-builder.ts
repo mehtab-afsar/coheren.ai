@@ -1,6 +1,6 @@
 /**
  * Coheren RAG - Prompt Builder
- * Builds science-backed prompts for Groq AI coaching
+ * Builds science-backed prompts for AI coaching
  */
 
 import { retrieveKnowledgeWithFallback, type UserContext } from './knowledge-base';

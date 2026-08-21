@@ -275,6 +275,156 @@ Match task difficulty to energy level for better success.`,
     categories: ['productivity', 'neuroscience'],
     keywords: ['morning', 'evening', 'energy', 'time', 'when', 'schedule'],
   },
+
+  // ── FITNESS ───────────────────────────────────────────────────────────────
+  {
+    chunk_id: 'fitness-progressive-overload',
+    content: 'Progressive overload is the single most important principle in fitness: increase training stress by 5–10% each week (more reps, more weight, or shorter rest). Without progressive overload the body adapts and stops improving. Track every session in a log — you cannot manage what you do not measure. Beginners see gains even with random increases; intermediate+ athletes need systematic periodisation.',
+    source: 'Sports Science — NSCA Essentials of Strength Training',
+    categories: ['habit-formation', 'behavior-change'],
+    keywords: ['progressive overload', 'strength', 'weight', 'reps', 'training', 'workout', 'gym', 'fitness', 'muscle', 'gains'],
+  },
+  {
+    chunk_id: 'fitness-recovery',
+    content: 'Muscle growth and fat adaptation happen during rest, not during the workout. The workout is the stimulus; sleep and nutrition are where the adaptation occurs. Skipping rest days accumulates fatigue faster than fitness, leading to injury and burnout. Research shows 48–72 hours recovery between same-muscle sessions is optimal for most people.',
+    source: 'Exercise Physiology — McArdle, Katch & Katch',
+    categories: ['neuroscience', 'behavior-change'],
+    keywords: ['recovery', 'rest day', 'sleep', 'overtraining', 'burnout', 'injury', 'muscle', 'fitness'],
+  },
+  {
+    chunk_id: 'fitness-habit-anchor',
+    content: 'The gym bag by the door is worth more than motivation. Friction-reduction cues — workout clothes laid out the night before, pre-packed bag, same gym time every day — remove the decision that kills most workout habits. Link the gym to an existing anchor (commute, lunch break, wake-up) so it becomes automatic. Research shows environment design predicts gym adherence better than motivation levels.',
+    source: 'BJ Fogg — Tiny Habits; Environment Design Research',
+    categories: ['habit-formation', 'behavior-change'],
+    keywords: ['gym habit', 'workout habit', 'consistency', 'motivation', 'friction', 'environment', 'fitness routine'],
+  },
+  {
+    chunk_id: 'fitness-plateau',
+    content: 'Plateaus in fitness are normal and expected — the body is efficient and adapts to repeated stimuli. Breaking a plateau requires introducing a new variable: deload week (reduce volume 40–50% to let CNS recover), change exercise variation, adjust rep ranges, or add a new modality. Most people quit during plateaus rather than adjusting; those who stay and adjust come back stronger.',
+    source: 'Periodisation Theory — Vladimir Zatsiorsky',
+    categories: ['mindset', 'struggling'],
+    keywords: ['plateau', 'stuck', 'no progress', 'fitness', 'strength', 'deload', 'variation', 'adapt'],
+  },
+
+  // ── EXAM PREP ─────────────────────────────────────────────────────────────
+  {
+    chunk_id: 'exam-spaced-repetition',
+    content: 'Spaced repetition exploits the forgetting curve: reviewing material at increasing intervals (1 day → 3 days → 7 days → 21 days) reduces forgetting by 80% compared to massed study. For competitive exams (UPSC, GRE, GMAT, NEET) spaced repetition via flashcard systems is the highest-ROI study method. Cramming right before an exam produces short-term recall but almost zero retention after 48 hours.',
+    source: 'Hermann Ebbinghaus — Forgetting Curve; Piotr Woźniak — SuperMemo research',
+    categories: ['neuroscience', 'productivity'],
+    keywords: ['spaced repetition', 'flashcards', 'memorise', 'exam', 'UPSC', 'GRE', 'GMAT', 'NEET', 'retain', 'forgetting curve', 'study'],
+  },
+  {
+    chunk_id: 'exam-active-recall',
+    content: 'Active recall — retrieving information from memory rather than re-reading — is 3× more effective for long-term retention. Re-reading and highlighting create an "illusion of knowing." Instead: close the book, write what you remember, then check. Self-testing with past papers, mock exams, and practice questions is the most validated exam preparation method across all competitive exams.',
+    source: 'Henry Roediger — Testing Effect; Make It Stick (Brown, Roediger, McDaniel)',
+    categories: ['neuroscience', 'behavior-change'],
+    keywords: ['active recall', 'self testing', 'past papers', 'mock test', 'exam', 'study', 'UPSC', 'revision', 'retrieval practice'],
+  },
+  {
+    chunk_id: 'exam-pomodoro',
+    content: 'For dense exam material (law, medicine, civil services), the Pomodoro technique — 25 minutes of deep focus followed by a 5-minute break — maintains concentration quality over long study sessions. Longer unbroken sessions (2+ hours) produce diminishing returns as attention degrades. After four Pomodoros take a 20–30 minute break. This structure also prevents the burnout that kills exam prep consistency.',
+    source: 'Francesco Cirillo — The Pomodoro Technique; Attention Research',
+    categories: ['productivity', 'behavior-change'],
+    keywords: ['Pomodoro', 'focus', 'study session', 'exam', 'attention', 'breaks', 'concentration', 'burnout prevention', 'time management'],
+  },
+  {
+    chunk_id: 'exam-mock-tests',
+    content: 'Full-length timed mock tests are non-negotiable for competitive exam success. They build exam stamina, reveal weak topics under pressure, improve time management, and reduce test anxiety through familiarity. Start mocks early — not only after completing the syllabus. Analyse every mistake: categorise errors as knowledge gaps vs careless mistakes, and address them systematically.',
+    source: 'Cognitive Load Theory; UPSC Toppers Strategy Research',
+    categories: ['behavior-change', 'productivity'],
+    keywords: ['mock test', 'practice exam', 'UPSC', 'GRE', 'time management', 'exam strategy', 'weak topics', 'test anxiety', 'full length'],
+  },
+
+  // ── LEARNING ──────────────────────────────────────────────────────────────
+  {
+    chunk_id: 'learning-deliberate-practice',
+    content: 'Deliberate practice (Ericsson) is not the same as just doing something repeatedly. It requires: clear goals at the edge of your ability, immediate feedback, full concentration, and working on weaknesses not strengths. Elite performers spend 4+ hours daily in deliberate practice; casual practitioners spend the same time but in "comfortable repetition." The difference explains the 10,000-hour myth — only deliberate hours count.',
+    source: 'K. Anders Ericsson — Peak: Secrets from the New Science of Expertise',
+    categories: ['mindset', 'behavior-change'],
+    keywords: ['deliberate practice', 'skill', 'expert', 'learning', 'improve', 'mastery', 'feedback', 'weakness'],
+  },
+  {
+    chunk_id: 'learning-feedback-loops',
+    content: 'Fast feedback loops accelerate learning more than any other single variable. Daily micro-tests (write one page, explain to someone, build a small project) produce faster skill growth than weekly reviews of the same material. The quicker the feedback, the faster errors are corrected. Learning programming, language, music, or any skill: build something small every day that forces immediate feedback.',
+    source: 'Feedback Loop Research — Carol Dweck; Learning Science',
+    categories: ['behavior-change', 'habit-formation'],
+    keywords: ['feedback', 'learning', 'daily practice', 'micro project', 'skill', 'coding', 'language', 'music', 'improvement'],
+  },
+  {
+    chunk_id: 'learning-chunking',
+    content: 'Chunking is the process of grouping related pieces of information into a single mental unit, reducing cognitive load. Expert chess players see board positions as meaningful chunks, not individual pieces. When learning any complex skill, identify the core "chunks" (fundamental concepts or patterns) and master them before adding complexity. Trying to learn everything at once overloads working memory and slows acquisition.',
+    source: 'George Miller — Working Memory; Chase & Simon — Chunking in Chess',
+    categories: ['neuroscience', 'productivity'],
+    keywords: ['chunking', 'cognitive load', 'learning', 'memory', 'fundamentals', 'complexity', 'working memory', 'beginner'],
+  },
+  {
+    chunk_id: 'learning-output-driven',
+    content: 'Output-driven learning beats passive consumption. Reading about coding → building a project. Watching guitar tutorials → playing a song. Studying marketing → running a campaign. The act of producing output reveals exactly what you do not know (the "knowledge gap") and forces you to seek targeted answers. Passive consumption (videos, books) creates an illusion of competence without building actual capability.',
+    source: 'Richard Feynman Learning Technique; Project-Based Learning Research',
+    categories: ['behavior-change', 'mindset'],
+    keywords: ['output', 'project', 'build', 'create', 'learning', 'coding', 'guitar', 'Feynman', 'application', 'practice'],
+  },
+
+  // ── CREATIVE ──────────────────────────────────────────────────────────────
+  {
+    chunk_id: 'creative-quantity-not-quality',
+    content: 'A ceramics professor split the class: half were graded on the quantity of pots made, half on the quality of one perfect pot. At the end of the semester, all the best pots came from the quantity group. Making 100 imperfect pots builds skill faster than obsessing over 1 perfect one. For creative work — writing, art, music, design — output volume beats perfection-seeking.',
+    source: 'David Bayles & Ted Orland — Art & Fear',
+    categories: ['mindset', 'behavior-change'],
+    keywords: ['creative', 'quantity', 'perfectionism', 'art', 'writing', 'music', 'output', 'practice', 'ceramics', 'fear of failure'],
+  },
+  {
+    chunk_id: 'creative-constraints',
+    content: 'Constraints spark creativity by eliminating the paralysis of infinite options. Artists given limited colours, poets given strict forms, designers given tight briefs often produce more original work than those given total freedom. Self-impose constraints: write 200 words not 2000, sketch for 5 minutes not an hour, compose one section not the whole piece. Constraints force creative problem-solving.',
+    source: 'Patricia Stokes — Creativity from Constraints; Twyla Tharp — The Creative Habit',
+    categories: ['mindset', 'productivity'],
+    keywords: ['creative', 'constraints', 'creativity', "writer's block", 'art', 'design', 'writing', 'music', 'paralysis', 'inspiration'],
+  },
+  {
+    chunk_id: 'creative-resistance',
+    content: 'Steven Pressfield calls it Resistance: the invisible force that keeps creative people from doing their work. It is strongest just before a breakthrough. The professional shows up every day regardless of inspiration — because inspiration follows action, not the other way around. The amateur waits to feel ready; the professional starts, and readiness follows. Resistance is at its loudest when the work matters most.',
+    source: 'Steven Pressfield — The War of Art',
+    categories: ['mindset', 'motivation'],
+    keywords: ['resistance', 'creative block', 'procrastination', 'creative work', 'art', 'writing', 'music', 'motivation', 'professional', 'showing up'],
+  },
+  {
+    chunk_id: 'creative-public-accountability',
+    content: 'Sharing work-in-progress publicly creates accountability loops that sustain creative habits. "Learning in public" or "building in public" attracts feedback, mentors, and collaborators — and creates mild social pressure to continue. Sharing imperfect work also dismantles perfectionism: once the first imperfect piece is out, the second is easier. Even a small audience (10 followers) produces more consistency than private practice.',
+    source: 'Swyx — Learn in Public; Austin Kleon — Show Your Work',
+    categories: ['motivation', 'habit-formation'],
+    keywords: ['public', 'accountability', 'creative', 'share', 'feedback', 'audience', 'writing', 'art', 'consistency', 'social pressure'],
+  },
+
+  // ── CAREER ────────────────────────────────────────────────────────────────
+  {
+    chunk_id: 'career-skill-stacking',
+    content: "Scott Adams's skill stacking: being in the top 25% at two or three complementary skills is easier than reaching the top 1% in one skill — and more valuable in most careers. Examples: coding + communication = 10× more effective engineer; marketing + data = rare analyst; design + business = product leader. The unique combination, not the individual excellence, is what opens doors.",
+    source: 'Scott Adams — How to Fail at Almost Everything and Still Win Big',
+    categories: ['mindset', 'productivity'],
+    keywords: ['skill stacking', 'career', 'skills', 'complementary', 'unique', 'combination', 'job', 'promotion', 'value'],
+  },
+  {
+    chunk_id: 'career-proof-of-work',
+    content: "Public proof of work — GitHub commits, published articles, a portfolio of projects — is worth more than any resume. It shows what you can do, not what you say you can do. Build your portfolio during learning, not after: every project from your roadmap is a portfolio piece. Hiring managers and clients trust demonstrated work over claimed experience. Even small public projects outperform zero public evidence.",
+    source: "Patrick McKenzie — Don't Call Yourself a Programmer; Proof of Work Research",
+    categories: ['behavior-change', 'motivation'],
+    keywords: ['portfolio', 'proof of work', 'GitHub', 'career', 'job', 'projects', 'hiring', 'resume', 'credibility'],
+  },
+  {
+    chunk_id: 'career-network-quality',
+    content: "Mark Granovetter's \"strength of weak ties\": acquaintances open more career doors than close friends, because they operate in different networks and carry novel information. Close friends already know what you know. Investing in 100 weak ties (people you meet once or twice) produces more opportunities than deepening 5 close friendships. Online: commenting thoughtfully on others' work builds weak ties at scale.",
+    source: 'Mark Granovetter — The Strength of Weak Ties',
+    categories: ['behavior-change', 'motivation'],
+    keywords: ['networking', 'career', 'connections', 'opportunities', 'job', 'weak ties', 'relationships', 'acquaintances'],
+  },
+  {
+    chunk_id: 'career-learning-publicly',
+    content: 'Learning in public accelerates career growth by turning the learning process itself into a credibility signal. Writing about what you are learning — even as a beginner — builds an audience, attracts mentors, and creates a record of growth. The best time to write "I just learned X" is when you learned it. Within 6–12 months of consistent public learning, people arrive at you with opportunities rather than you chasing them.',
+    source: 'Swyx (Shawn Wang) — Learn in Public Essay',
+    categories: ['motivation', 'habit-formation'],
+    keywords: ['learning in public', 'career', 'writing', 'audience', 'credibility', 'Twitter', 'blog', 'mentors', 'opportunities', 'growth'],
+  },
 ];
 
 // ─── Markdown chunk extractor ─────────────────────────────────────────────────

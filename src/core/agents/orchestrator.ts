@@ -60,6 +60,29 @@ interface Task {
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
+ * Retry an agent call once if it throws. The Anthropic SDK already retries
+ * transport failures (429/5xx) on its own before an error ever reaches here —
+ * this covers what it doesn't: content-shape failures (empty response, bad JSON,
+ * failed validation).
+ * Agents 1/2/3/5 have no fallback path (unlike Agent 4's generateFallbackTask), so
+ * a single same-tier retry is the cheapest way to survive an occasional bad
+ * generation instead of failing the whole pipeline outright.
+ */
+export async function withContentRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (firstError) {
+    console.warn(`[orchestrator] ${label} failed, retrying once —`, (firstError as Error).message);
+    try {
+      return await fn();
+    } catch (secondError) {
+      console.error(`[orchestrator] ${label} failed on retry — giving up:`, (secondError as Error).message);
+      throw secondError;
+    }
+  }
+}
+
+/**
  * Run Agents 1 and 2: Analyze goal and identify required stones.
  * NOTE: Agent 2 (stone-identifier) requires Agent 1's output — they are inherently sequential.
  * Parallelization opportunity lives in generateTaskBatch (see below).
@@ -91,12 +114,12 @@ export async function runOnboardingAgents(
 
   const goalAnalysis = await withAgentLogging(
     { agentName: 'agent1_goal_analyzer', runType: 'onboarding', input: { goal, timeline, dailyTime }, metadata: { behavioralFlags } },
-    () => analyzeGoal(context)
+    () => withContentRetry('agent1-goal-analysis', () => analyzeGoal(context))
   );
 
   const stones = await withAgentLogging(
     { agentName: 'agent2_stone_identifier', runType: 'onboarding', input: { goal }, metadata: { category: chatContext?.category } },
-    () => identifyStones(context, goalAnalysis)
+    () => withContentRetry('agent2-identify-stones', () => identifyStones(context, goalAnalysis))
   );
 
   return {
@@ -124,7 +147,7 @@ export async function runCurriculumBuilder(
 
   const curriculum = await withAgentLogging(
     { agentName: 'agent3_curriculum_builder', runType: 'onboarding', input: { goal, timeline, dailyTime } },
-    () => buildCurriculum(context, goalAnalysis, stoneProfile)
+    () => withContentRetry('agent3-curriculum-builder', () => buildCurriculum(context, goalAnalysis, stoneProfile))
   );
 
   return curriculum;
@@ -238,10 +261,12 @@ export async function generateCompleteRoadmap(
   } else {
     // Reuse Agent 1's output from the onboarding phase when available (avoids a
     // second 70B goal-analysis call + latency on every signup).
-    goalAnalysis = preComputedGoalAnalysis ?? await analyzeGoal(context);
+    goalAnalysis = preComputedGoalAnalysis
+      ?? await withContentRetry('agent1-goal-analysis', () => analyzeGoal(context));
     saveAgentCheckpoint(pid, 'goal_analysis', goalAnalysis);
 
-    stoneProfile = preComputedStoneProfile ?? await extractStones(context, goalAnalysis, stoneAnswers);
+    stoneProfile = preComputedStoneProfile
+      ?? await withContentRetry('agent2-extract-stones', () => extractStones(context, goalAnalysis, stoneAnswers));
     saveAgentCheckpoint(pid, 'stone_profile', stoneProfile);
   }
 
@@ -268,7 +293,8 @@ export async function generateCompleteRoadmap(
     const ragString = await prefetchedRag;
     const ragBlock = ragString ? `## Domain Knowledge (RAG)\n${ragString}\n\n` : '';
     const combinedContext = `${priorLearningBlock}${ragBlock}` || undefined;
-    roadmapV2 = await buildCurriculum(context, goalAnalysis, stoneProfile, combinedContext);
+    roadmapV2 = await withContentRetry('agent3-curriculum-builder',
+      () => buildCurriculum(context, goalAnalysis, stoneProfile, combinedContext));
     saveAgentCheckpoint(pid, 'curriculum', roadmapV2);
   }
 
@@ -282,7 +308,7 @@ export async function generateCompleteRoadmap(
   } else {
     // Pre-fetched RAG context (already loaded in parallel with Agent 3 when flag is on)
     const ragContext = await prefetchedRag;
-    firstTask = await generateTask(
+    firstTask = await withContentRetry('agent4-first-task', () => generateTask(
       1,
       legacyRoadmap,
       stoneProfile,
@@ -292,7 +318,7 @@ export async function generateCompleteRoadmap(
       skillLevel || 'beginner',
       ragContext ?? undefined,
       goal
-    );
+    ));
     saveAgentCheckpoint(pid, 'tasks', firstTask);
   }
 
@@ -378,14 +404,14 @@ export async function runCheckpointRecalibration(
 
   const recalibration = await withAgentLogging(
     { agentName: 'agent5_recalibrator', runType: 'checkpoint', input: { currentDay, taskCount: taskFeedback.length } },
-    () => recalibrateCurriculum({
+    () => withContentRetry('agent5-recalibrate-legacy', () => recalibrateCurriculum({
       context,
       roadmap,
       stoneProfile,
       completedTasks: taskFeedback,
       currentDay,
       assessmentSummary
-    })
+    }))
   );
 
 

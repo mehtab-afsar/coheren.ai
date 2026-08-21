@@ -7,7 +7,7 @@
 
 import { vi } from 'vitest';
 
-// ── Mock AI router (Groq) ─────────────────────────────────────────────────────
+// ── Mock AI router ─────────────────────────────────────────────────────────────
 // Tests that exercise pure logic should never make real LLM calls.
 vi.mock('@lib/ai-router', () => ({
   callEconomy:   vi.fn().mockResolvedValue('{}'),

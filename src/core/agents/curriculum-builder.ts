@@ -39,6 +39,9 @@ import type { AgentRoadmapV2, WeekPlan, WeekDay, MonthPlan } from '@core/store/u
 import { callPremium as callReasoning, callStrategicWithThinking, callStrategicWithTools } from '@lib/ai-router';
 import { retrieveKnowledgeSemantic } from '@core/rag/semantic-retriever';
 import { flags } from '@config/feature-flags';
+import { parseAgentJSON } from './llm-output';
+import { agent3RoadmapSchema, safeValidate } from './schemas';
+import { SEVERITY_SORT_ORDER, STONE_MODIFICATIONS } from './stone-identifier/stone-taxonomy';
 
 // Agent3Output now returns AgentRoadmapV2 for the new hierarchical roadmap
 export type Agent3OutputV2 = AgentRoadmapV2;
@@ -124,113 +127,6 @@ PEDAGOGICAL FRAMEWORK: Parallel Track with Integration Points
 - Integration Phases: Deliberately combine both domains into projects that require both skills.
 - Deload sync: When one track needs recovery, accelerate the other.
 Key constraint: Never let time split drop below 25% for either track — below that, one atrophies.`,
-};
-
-// ─── Stone → Curriculum Modification Map ────────────────────────────────────
-// Concrete curriculum changes for each stone type.
-// These are injected into the prompt as explicit instructions.
-
-const STONE_MODIFICATIONS: Record<string, string> = {
-  TimeConstraint: `
-TIME CONSTRAINT DETECTED — Apply these modifications:
-- Compress Phase 1 by 20% (basics-only, cut nice-to-knows)
-- Use "micro-session" format: each task must have a 10-min fallback version
-- Remove all "supplementary" activities — only core actions
-- Add time-blocking instructions to every task ("open at 7am, close at 7:25am")
-- Prioritize depth over breadth — fewer topics, mastered properly`,
-
-  ResourceGap: `
-RESOURCE GAP DETECTED — Apply these modifications:
-- Phase 1 must explicitly list free/low-cost alternatives for all required resources
-- Add a "budget path" note in Phase 1 adaptationRules
-- Replace equipment-dependent tasks with bodyweight/free alternatives where possible
-- Identify which milestones are resource-dependent and flag them as "conditional"`,
-
-  EnvironmentFriction: `
-ENVIRONMENT FRICTION DETECTED — Apply these modifications:
-- Phase 1 must include an Environment Design day (Day 1-3): set up the physical context
-- Add friction-reduction tasks: arrange gear the night before, clear the workspace, etc.
-- Sessions should be schedulable in the available environment (commute, small space, noisy home)
-- Add a "minimal viable environment" specification to each phase`,
-
-  Inconsistency: `
-INCONSISTENCY PATTERN DETECTED — Apply these modifications:
-- Structure as 3-day micro-sprints with built-in "catch-up day" on Day 4
-- Phase 1 intensity must be so low that a bad week still produces something
-- Add "never miss twice" recovery protocol: if Day N is missed, Day N+1 is half-load
-- Reduce phase length: shorter phases mean more frequent sense of completion
-- Add progress visibility (streak tracking, weekly review days) explicitly`,
-
-  FearOfFailure: `
-FEAR OF FAILURE DETECTED — Apply these modifications:
-- Phase 1 must be impossible to fail at (tasks are "do X regardless of quality")
-- Remove assessments from Phase 1 entirely — no evaluation, only practice
-- Label early tasks as "experiments" not "performances"
-- Add explicit "good failure" moments: tasks designed to identify mistakes safely
-- Delay public or evaluated work until Phase 3 minimum`,
-
-  Perfectionism: `
-PERFECTIONISM DETECTED — Apply these modifications:
-- Every task must have an explicit time-box ("spend exactly 25 minutes, then stop")
-- Add "done is better than perfect" principle to Phase 1 primary goals
-- Include deliberate "rough draft" tasks: produce something intentionally imperfect
-- Phase 1 adaptationRules.if_completing_easily must NOT suggest adding more — suggest rest instead
-- Remove any open-ended tasks without a time or quantity limit`,
-
-  LowConfidence: `
-LOW CONFIDENCE DETECTED — Apply these modifications:
-- Front-load Phase 1 with tasks below current skill level — guaranteed wins
-- Add explicit success criteria that are binary (did it/didn't do it) not quality-based
-- Include a "skills inventory" task early: list what the user already knows
-- Phase milestones should be reachable within the first 7 days
-- scienceRationale for Phase 1 must reference Self-Determination Theory (competence need)`,
-
-  UnrealisticExpectations: `
-UNREALISTIC EXPECTATIONS DETECTED — Apply these modifications:
-- Phase 1 primaryGoals must explicitly name what will NOT be achieved by the end
-- Add a "realistic timeline" note to the roadmap description
-- Include "typical learner progress" benchmarks in at least 2 phase scienceRationales
-- Milestone phrasing: use relative language ("better than Day 1") not absolute ("mastered")`,
-
-  FocusFragility: `
-FOCUS FRAGILITY DETECTED — Apply these modifications:
-- Break all sessions into maximum 20-minute focused blocks
-- Add a 2-minute "transition ritual" before each block (review goal, silence phone)
-- Reduce the number of distinct topics per session to 1 (single-focus sessions only)
-- Add "environmental anchoring" to tasks: same location, same time, same cue
-- Phase 2+ can only add complexity after 14 days of consistent single-focus sessions`,
-
-  CognitiveFatigue: `
-COGNITIVE FATIGUE DETECTED — Apply these modifications:
-- Every 5th day is a light review day (no new material, 50% volume)
-- Hardest cognitive work scheduled for the first 30 minutes of the session only
-- Add sleep and recovery reminders to Phase 1 (sleep consolidates what was learned)
-- Phase progression is gated on energy sustainability, not just content mastery
-- Split sessions if daily time > 45 min: two 20-min blocks > one 45-min block`,
-
-  SkillGap: `
-SKILL GAP DETECTED — Apply these modifications:
-- Add a Phase 0 "Prerequisite Sprint" if skill gap is severe (before Phase 1)
-- Phase 1 must focus exclusively on prerequisites — no advanced content yet
-- Include specific learning resources for the identified prerequisite skills
-- Gate Phase 2 entry on a concrete prerequisite check: "can you do X?"
-- Extend Phase 1 timeline by 20% to allow prerequisite acquisition`,
-
-  ProcrastinationPattern: `
-PROCRASTINATION PATTERN DETECTED — Apply these modifications:
-- Front-load the hardest, most aversive tasks in the first 30 minutes of each session
-- Every task must include a specific "implementation intention" (when, where, first action)
-- Phase 1 tasks should take under 5 minutes to start (reduce initiation barrier)
-- Add "minimum viable session" fallback: 10 minutes counts as a win
-- Include "temptation bundling" options: pair the habit with something enjoyable`,
-
-  Overcommitment: `
-OVERCOMMITMENT DETECTED — Apply these modifications:
-- Phase 1 must include an explicit "what to stop doing" section
-- Cap total daily time at 80% of stated availability (buffer for life)
-- Add a "single focus rule" to Phase 1 primary goals: this roadmap is the ONLY new commitment
-- Milestone density must be reduced: only 1 milestone per phase, not 3+
-- Phase adaptationRules.if_completing_easily: "maintain pace, do not add more goals"`,
 };
 
 // ─── Stone × Domain Tiebreakers ──────────────────────────────────────────────
@@ -399,10 +295,7 @@ function buildUserPrompt(
   // Stone modification instructions — severity-weighted
   // Critical/High: full application. Moderate: apply but softer. Low: mention but don't restructure.
   const stoneInstructions = sp.stones
-    .sort((a, b) => {
-      const order: Record<string, number> = { Critical: 0, High: 1, Moderate: 2, Low: 3 };
-      return (order[a.severity] ?? 2) - (order[b.severity] ?? 2);
-    })
+    .sort((a, b) => (SEVERITY_SORT_ORDER[a.severity] ?? 2) - (SEVERITY_SORT_ORDER[b.severity] ?? 2))
     .map(s => {
       const mod = STONE_MODIFICATIONS[s.type];
       if (!mod) return '';
@@ -520,21 +413,6 @@ CRITICAL RULES:
 - Days are numbered absolutely (Day 1, 2, 3... across the whole roadmap).
 - frameworkReason MUST reference the user's specific stones by name: ${sp.stones.map(s => s.type).join(', ')}.
 - Return ONLY valid JSON in the format shown in your system prompt. No markdown, no commentary.`;
-}
-
-// ─── JSON Repair ──────────────────────────────────────────────────────────────
-
-function repairJSON(raw: string): string {
-  const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenceMatch) raw = fenceMatch[1];
-  const start = raw.indexOf('{');
-  const end   = raw.lastIndexOf('}');
-  if (start !== -1 && end !== -1 && end > start) raw = raw.substring(start, end + 1);
-  return raw
-    .replace(/,\s*}/g, '}')
-    .replace(/,\s*]/g, ']')
-    .replace(/[\u2018\u2019]/g, "'")
-    .replace(/[\u201C\u201D]/g, '"');
 }
 
 // ─── Month Count Derivation ───────────────────────────────────────────────────
@@ -674,6 +552,9 @@ export function buildSpacedRepetitionWeek1(
 // ─── Validate + Normalize V2 ─────────────────────────────────────────────────
 
 function validateAndNormalizeV2(raw: unknown, context: AgentContext): AgentRoadmapV2 {
+  // Boundary contract — logs drift, does not throw (force-fill logic below covers the failure path).
+  safeValidate(agent3RoadmapSchema, raw, 'agent3-roadmap');
+
   const parsed = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
 
   const totalDays = typeof parsed.totalDays === 'number' ? parsed.totalDays : context.timeline;
@@ -974,12 +855,7 @@ TOOL USE INSTRUCTIONS:
   }
   if (!content) throw new Error('Agent 3: No response received from model');
 
-  let raw: unknown;
-  try {
-    raw = JSON.parse(repairJSON(content)) as unknown;
-  } catch (e) {
-    throw new Error(`Agent 3: invalid JSON — ${(e as Error).message}\nFirst 200 chars: ${content.slice(0, 200)}`);
-  }
+  const raw = parseAgentJSON(content, 'agent3-curriculum');
   const v2  = validateAndNormalizeV2(raw, context);
 
   // Attach Sprint 1 metadata so buildLegacyAgent3Output can propagate them to Roadmap
@@ -990,6 +866,10 @@ TOOL USE INSTRUCTIONS:
   if (mismatchWarning) {
     (v2 as AgentRoadmapV2 & { _mismatchWarning?: string })._mismatchWarning = mismatchWarning;
   }
+
+  // Bolt-on metadata for eval/observability — the RAG excerpt this roadmap was
+  // actually grounded on, so a judge can check groundedness post-hoc.
+  (v2 as AgentRoadmapV2 & { _ragContextUsed?: string })._ragContextUsed = science;
 
   return v2;
 }
@@ -1053,8 +933,9 @@ function buildCompetencyGate(phase: string, difficulty: number): CompetencyGate 
     },
   };
   const base = gatesByPhase[phase] ?? gatesByPhase['Foundation'];
-  // Adjust gate thresholds for very hard goals (difficulty > 3 means raise bar slightly)
-  if (difficulty > 3) base.minCompletionRate = Math.max(65, base.minCompletionRate - 10);
+  // Very hard goals get a more forgiving bar — perfect execution is less realistic.
+  // Copy before mutating: `base` is a reference into the map above, not an owned value.
+  if (difficulty > 3) return { ...base, minCompletionRate: Math.max(65, base.minCompletionRate - 10) };
   return base;
 }
 

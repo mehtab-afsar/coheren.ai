@@ -54,11 +54,23 @@ interface FeatureFlags {
   USE_AGENT_MEMORY: boolean;
   /** Query sprint_memories for behavioral patterns and inject into Agent 3 + 5 prompts. Default: false — enable after behaviorEmbedder wired. */
   USE_BEHAVIORAL_RAG: boolean;
-  /** Replace hardcoded stone matrices with LLM tool-use loops in Agent 3 + 5. Default: false — shadow-test before enabling. */
+  /**
+   * Replace hardcoded stone-matrix prompt injection with LLM tool-use loops
+   * (Claude's multi-turn tool-use loop — the only provider in this codebase).
+   * Default: false — shadow-test before enabling.
+   * NOT symmetric across agents: Agent 5 (recalibrator.ts) reaches the tool loop
+   * on this flag alone. Agent 3 (curriculum-builder.ts) additionally requires
+   * USE_CLAUDE_FOR_CURRICULUM — this flag alone does nothing for Agent 3.
+   */
   USE_AGENT_TOOL_CALLING: boolean;
-  /** Use Claude claude-sonnet-4-6 with extended thinking for Agent 3 curriculum design. Default: false — requires Claude enabled (VITE_CLAUDE_ENABLED). */
+  /** Use Claude claude-sonnet-4-6 with extended thinking for Agent 3 curriculum design. Default: false — requires Claude enabled (VITE_CLAUDE_ENABLED). Combined with USE_AGENT_TOOL_CALLING, Agent 3 instead uses Claude's multi-turn tool-use loop. */
   USE_CLAUDE_FOR_CURRICULUM: boolean;
-  /** Use Claude claude-sonnet-4-6 with native tool use for Agent 5 recalibration. Default: false — requires USE_AGENT_TOOL_CALLING + VITE_CLAUDE_ENABLED. */
+  /**
+   * Use Claude claude-sonnet-4-6 for Agent 5's plain (non-tool-use) recalibration
+   * call. Default: false — requires VITE_CLAUDE_ENABLED. Has no effect on the
+   * tool-use path (see USE_AGENT_TOOL_CALLING) — that path always uses Claude
+   * regardless of this flag.
+   */
   USE_CLAUDE_FOR_RECALIBRATION: boolean;
   /** Enable stone resolution (severity < 0.2) and emergence (new skip patterns) after each sprint. Default: false. */
   DYNAMIC_STONE_EVOLUTION: boolean;
@@ -123,7 +135,7 @@ const DEFAULTS: FeatureFlags = {
   USE_BEHAVIORAL_RAG:             false, // Off by default — enable after behaviorEmbedder wired
   USE_AGENT_TOOL_CALLING:         false, // Off by default — shadow-test before enabling
   USE_CLAUDE_FOR_CURRICULUM:      false, // Off by default — requires Claude enabled (VITE_CLAUDE_ENABLED)
-  USE_CLAUDE_FOR_RECALIBRATION:   false, // Off by default — requires USE_AGENT_TOOL_CALLING + VITE_CLAUDE_ENABLED
+  USE_CLAUDE_FOR_RECALIBRATION:   false, // Off by default — requires VITE_CLAUDE_ENABLED; only affects the non-tool-use call path, see interface doc
   DYNAMIC_STONE_EVOLUTION:        true,  // On — stone resolution + emergence active
   USE_SPRINT_MEMORY_IN_ALL_AGENTS: false, // Off — enable after USE_AGENT_MEMORY stable
   USE_DYNAMIC_RESOURCES:          true,  // On — static library fallback active immediately

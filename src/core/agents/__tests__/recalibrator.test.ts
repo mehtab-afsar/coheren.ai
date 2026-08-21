@@ -1,15 +1,34 @@
 /**
- * Unit tests for recalibrator.ts pure-logic functions
+ * Unit tests for recalibrator.ts pure-logic functions, plus golden-output
+ * regression tests for recalibrateWeek() (the live weekly recalibration path
+ * wired into useCheckpoint.ts).
  *
- * Tests: computeSignals STATUS matrix, shouldTriggerCheckpoint
- * These are pure functions — no Groq calls, no Supabase, no side-effects.
+ * computeSignals/shouldTriggerCheckpoint are pure — no mocking needed.
+ * recalibrateWeek() mocks the AI router and RAG so it runs fully offline.
  *
  * Run: npm test
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { computeSignals, shouldTriggerCheckpoint } from '@core/agents/recalibrator';
 import type { CompletedTaskFeedback } from '@types-app/agents';
+
+vi.mock('@lib/ai-router', () => ({
+  callReasoning: vi.fn(),
+  callStrategic: vi.fn(),
+  callStrategicWithTools: vi.fn(),
+}));
+vi.mock('@core/rag', () => ({
+  retrieveKnowledgeSemantic: vi.fn().mockResolvedValue(''),
+  retrieveKnowledgeHybrid: vi.fn().mockResolvedValue(''),
+}));
+
+import { callReasoning } from '@lib/ai-router';
+import { recalibrateWeek, DEFAULT_THRESHOLDS } from '@core/agents/recalibrator';
+import type { Agent5WeeklyInput } from '@core/agents/recalibrator';
+import type { AgentRoadmapV2 } from '@core/store/useStore';
+import type { Agent2ProfileOutput } from '@types-app/agents';
+import { queueContent, fence } from './test-utils';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -247,5 +266,131 @@ describe('shouldTriggerCheckpoint', () => {
     expect(shouldTriggerCheckpoint(10, 7)).toBe(false);
     expect(shouldTriggerCheckpoint(30, 10)).toBe(true);
     expect(shouldTriggerCheckpoint(25, 10)).toBe(false);
+  });
+});
+
+// ─── recalibrateWeek — golden-output regression tests ──────────────────────
+// The live weekly recalibration path (useCheckpoint.ts). Status (ACCELERATE/
+// MAINTAIN/SIMPLIFY/RECOVER) is pre-computed deterministically by computeSignals
+// above — the LLM only elaborates the week plan text/days around it.
+
+function baseRoadmap(): AgentRoadmapV2 {
+  return {
+    totalDays: 90, totalWeeks: 13, totalMonths: 3,
+    domainPedagogy: 'x', frameworkName: '', frameworkReason: '', frameworkScience: '', frameworkSources: [],
+    months: [{
+      month: 1, title: 'Foundations', phaseName: 'Foundations', startWeek: 1, endWeek: 4, startDay: 1, endDay: 28,
+      primaryGoals: ['Learn basics'], scienceRationale: '', weeks: [],
+    }],
+    progressionCurve: {}, stoneModificationSummary: '', modifiers_from_stones: {},
+  } as unknown as AgentRoadmapV2;
+}
+
+function baseStoneProfile(): Agent2ProfileOutput {
+  return {
+    stoneProfile: {
+      userArchetype: 'The Overwhelmed Beginner', primaryStone: 'ProcrastinationPattern',
+      stones: [{ type: 'ProcrastinationPattern', category: 'Behavioural', trigger: 'Evenings', severity: 'High', riskImpact: 0.8 }],
+      agent3Guidance: [], agent5Note: '', confidence: 0.75,
+    },
+  };
+}
+
+function weekPlanJSON(overrides: Record<string, unknown> = {}): string {
+  return JSON.stringify({
+    checkpointAnalysis: {
+      checkpointDay: 7, overallMastery: 'on-track', strugglingAreas: [], masteringAreas: [],
+      paceAdjustment: 'maintain', motivationalInsights: 'Great consistency', recommendations: [], nextSprintFocus: 'Chord transitions',
+    },
+    recalibratedWeek: {
+      weekNumber: 2, title: 'Week 2', theme: 'Building fluency', startDay: 8, endDay: 14,
+      paceAdjustment: 'maintain', rationale: 'Steady progress', personalizedMessage: 'Keep it up!',
+      days: Array.from({ length: 7 }, (_, i) => ({
+        day: 8 + i, weekDay: i + 1, type: i === 6 ? 'rest' : 'practice',
+        title: `Day ${8 + i}`, theme: 'Chords', intensity: 0.3, focusArea: 'technique',
+      })),
+    },
+    ...overrides,
+  });
+}
+
+function weeklyInput(tasks: CompletedTaskFeedback[]): Agent5WeeklyInput {
+  return {
+    context: { goal: 'Learn to play guitar', timeline: 90, dailyMinutes: 30 },
+    roadmap: baseRoadmap(),
+    stoneProfile: baseStoneProfile(),
+    completedTasks: tasks,
+    currentDay: 7,
+    weekNumber: 1,
+    thresholds: DEFAULT_THRESHOLDS,
+  };
+}
+
+beforeEach(() => {
+  vi.mocked(callReasoning).mockReset();
+});
+
+describe('recalibrateWeek — MAINTAIN status (clean LLM output)', () => {
+  it('produces a valid Agent5WeeklyOutput with a full 7-day week', async () => {
+    const tasks = [done(1, 3, 28), done(2, 3, 30), done(3, 3, 27), done(4, 3, 29), done(5, 3, 28), done(6, 3, 30)];
+    queueContent(callReasoning as unknown as Parameters<typeof queueContent>[0], weekPlanJSON());
+    const result = await recalibrateWeek(weeklyInput(tasks));
+    expect(result.checkpointAnalysis.overallMastery).toBe('on-track');
+    expect(result.recalibratedWeek.days).toHaveLength(7);
+    expect(result.recalibratedWeek.days[6].type).toBe('rest');
+  });
+});
+
+describe('recalibrateWeek — ACCELERATE status', () => {
+  it('reflects a high-completion, low-difficulty sprint', async () => {
+    const tasks = [done(1, 2, 25), done(2, 2, 24), done(3, 2, 26), done(4, 2, 28), done(5, 2, 22), done(6, 2, 27)];
+    queueContent(
+      callReasoning as unknown as Parameters<typeof queueContent>[0],
+      weekPlanJSON({ checkpointAnalysis: { checkpointDay: 7, overallMastery: 'excelling', strugglingAreas: [], masteringAreas: ['Chords'], paceAdjustment: 'accelerate', motivationalInsights: 'Crushing it', recommendations: [], nextSprintFocus: 'Advanced chords' } }),
+    );
+    const result = await recalibrateWeek(weeklyInput(tasks));
+    expect(result.checkpointAnalysis.overallMastery).toBe('excelling');
+  });
+});
+
+describe('recalibrateWeek — SIMPLIFY status', () => {
+  it('reflects a low-completion sprint and still returns a full week', async () => {
+    const tasks = [done(1, 4, 30), skip(2, 'difficulty'), skip(3, 'difficulty'), done(4, 4, 30), skip(5, 'time')];
+    queueContent(
+      callReasoning as unknown as Parameters<typeof queueContent>[0],
+      weekPlanJSON({ checkpointAnalysis: { checkpointDay: 7, overallMastery: 'struggling', strugglingAreas: ['Chords'], masteringAreas: [], paceAdjustment: 'slow-down', motivationalInsights: 'Let’s ease up', recommendations: [], nextSprintFocus: 'Fundamentals' } }),
+    );
+    const result = await recalibrateWeek(weeklyInput(tasks));
+    expect(result.checkpointAnalysis.overallMastery).toBe('struggling');
+    expect(result.recalibratedWeek.days).toHaveLength(7);
+  });
+});
+
+describe('recalibrateWeek — RECOVER status', () => {
+  it('reflects a burnout/consecutive-skip sprint', async () => {
+    const tasks = [skip(1, 'health'), skip(2, 'health'), skip(3, 'health'), skip(4, 'health')];
+    queueContent(
+      callReasoning as unknown as Parameters<typeof queueContent>[0],
+      weekPlanJSON({ checkpointAnalysis: { checkpointDay: 7, overallMastery: 'struggling', strugglingAreas: [], masteringAreas: [], paceAdjustment: 'slow-down', motivationalInsights: 'Time to recover', recommendations: [], nextSprintFocus: 'Rest and reset' } }),
+    );
+    const result = await recalibrateWeek(weeklyInput(tasks));
+    expect(result.checkpointAnalysis.overallMastery).toBe('struggling');
+    expect(result.recalibratedWeek.days).toHaveLength(7);
+  });
+});
+
+describe('recalibrateWeek — messy LLM output (markdown fence + trailing comma)', () => {
+  it('repairs and parses a fenced response with a trailing comma', async () => {
+    const messy = fence(weekPlanJSON()).replace(/}\n```/, ',}\n```');
+    const tasks = [done(1, 3, 28), done(2, 3, 30)];
+    queueContent(callReasoning as unknown as Parameters<typeof queueContent>[0], messy);
+    const result = await recalibrateWeek(weeklyInput(tasks));
+    expect(result.recalibratedWeek.days).toHaveLength(7);
+  });
+
+  it('throws a labeled error on unrecoverable JSON — this is what the pre-Phase-1 Claude-strategic path had no protection against', async () => {
+    const tasks = [done(1, 3, 28)];
+    queueContent(callReasoning as unknown as Parameters<typeof queueContent>[0], 'the model rambled with no JSON at all');
+    await expect(recalibrateWeek(weeklyInput(tasks))).rejects.toThrow(/\[agent:agent5-weekly\] invalid JSON/);
   });
 });

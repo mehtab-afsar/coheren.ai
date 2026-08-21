@@ -1,4 +1,4 @@
-import { Home, Map, MessageSquare, BarChart2, User } from 'lucide-react';
+import { Home, Map, MessageSquare, BarChart2, BookMarked, User } from 'lucide-react';
 import type { ViewType } from '../hooks/useDashboardNav';
 import { useCoachMessages } from '../hooks/useCoachMessages';
 
@@ -16,6 +16,7 @@ const TABS: {
   { id: 'roadmap',  label: 'Journey',  icon: Map },
   { id: 'coach',    label: 'Coach',    icon: MessageSquare },
   { id: 'insights', label: 'Progress', icon: BarChart2 },
+  { id: 'library',  label: 'Library',  icon: BookMarked },
   { id: 'you',      label: 'You',      icon: User },
 ];
 

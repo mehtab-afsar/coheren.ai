@@ -19,9 +19,11 @@
 
 import type { Agent1Output, AgentContext, GoalClarificationOutput } from '@types-app/agents';
 import { callReasoning, callWithTools } from '@lib/ai-router';
-import type { GroqTool } from '@lib/ai-router';
+import type { ToolSchema } from '@lib/ai-router';
 import { flags } from '@config/feature-flags';
 import { assessFeasibility } from './feasibility';
+import { parseAgentJSON } from './llm-output';
+import { agent1GoalAnalysisSchema, safeValidate } from './schemas';
 
 const SYSTEM_PROMPT = `You are Agent 1: Goal Analyzer — a precision intelligence module.
 
@@ -220,6 +222,9 @@ function detectGoalType(goalText: string): import('@types-app/agents').GoalType 
 }
 
 function validateAndNormalize(raw: unknown, goalText?: string): Agent1Output {
+  // Boundary contract — logs drift, does not throw (coercion below covers the failure path).
+  safeValidate(agent1GoalAnalysisSchema, raw, 'agent1-goal-analysis');
+
   const parsed = raw as Agent1Output;
   const g = parsed?.goalAnalysis;
 
@@ -448,7 +453,7 @@ function buildSpecificityOptions(
   ];
 }
 
-const ANALYZE_GOAL_TOOL: GroqTool = {
+const ANALYZE_GOAL_TOOL: ToolSchema = {
   type: 'function',
   function: {
     name: 'analyze_goal',
@@ -526,11 +531,7 @@ export async function analyzeGoal(context: AgentContext): Promise<Agent1Output> 
       { messages: callMessages, temperature: 0.2, max_tokens: 1500, tools: [ANALYZE_GOAL_TOOL], tool_name: 'analyze_goal' },
       'reasoning'
     );
-    try {
-      raw = JSON.parse(args) as unknown;
-    } catch (e) {
-      throw new Error(`Agent 1: invalid JSON from tool call — ${(e as Error).message}`);
-    }
+    raw = parseAgentJSON(args, 'agent1-tool');
   } else {
     const { content } = await callReasoning({
       messages: callMessages,
@@ -539,11 +540,7 @@ export async function analyzeGoal(context: AgentContext): Promise<Agent1Output> 
       response_format: { type: 'json_object' },
     });
     if (!content) throw new Error('Agent 1: No response received from model');
-    try {
-      raw = JSON.parse(content) as unknown;
-    } catch (e) {
-      throw new Error(`Agent 1: invalid JSON from reasoning — ${(e as Error).message}`);
-    }
+    raw = parseAgentJSON(content, 'agent1-reasoning');
   }
 
   const output = validateAndNormalize(raw, context.goal);

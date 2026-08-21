@@ -13,6 +13,7 @@ import { generateFallbackTask } from '@core/agents/fallback-task-generator';
 import { track } from '@lib/analytics';
 import { flags } from '@config/feature-flags';
 import { type BanditState, type BanditContext, type VariantArm, getInitialBanditState, selectVariant, recordSelection, computeReward, updateArm } from '@lib/bandit';
+import { resolveDurationDays } from '@lib/roadmapDuration';
 
 // ── New hierarchical roadmap types ──────────────────────────────────────────
 /** Tracks what resource (video/article) was consumed on a given day.
@@ -642,12 +643,7 @@ export const useStore = create<AppStore>()(
         const state = get();
         const startDate = state.roadmap?.startDate;
         if (!startDate) return;
-        // Total days is unit-ambiguous on roadmap.duration: the onboarding path stores
-        // it in MONTHS while App.tsx's DB-load stores it in DAYS. agentRoadmapV2.totalDays
-        // is always in days, so prefer it; otherwise treat small values (≤ 24) as months.
-        const rawDur = state.roadmap?.duration ?? 0;
-        const durationDays = state.agentRoadmapV2?.totalDays
-          ?? (rawDur > 0 ? (rawDur <= 24 ? rawDur * 30 : rawDur) : 365);
+        const durationDays = resolveDurationDays(state.roadmap?.duration, state.agentRoadmapV2?.totalDays);
         const daysSinceStart = Math.floor((Date.now() - new Date(startDate).getTime()) / 86400000);
         const calendarDay = Math.min(Math.max(daysSinceStart + 1, 1), durationDays);
         if (calendarDay !== state.currentDay) {

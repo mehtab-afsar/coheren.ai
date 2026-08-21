@@ -5,6 +5,7 @@ import type { Task } from '@core/store/useStore';
 import { useBreakpoint } from '@hooks/useBreakpoint';
 import ResourceCard from '../../components/ResourceCard';
 import { extractYouTubeFromText } from '@lib/youtube';
+import { useStreamingTask } from '../../hooks/useStreamingTask';
 
 // ─── Inline YouTube Mini Player ───────────────────────────────────────────────
 
@@ -132,6 +133,11 @@ export default function FocusCard({
   const typeInfo = TASK_TYPE_MAP[task.type] ?? { label: task.type, Icon: Zap };
   const TypeIcon = typeInfo.Icon;
 
+  // While Agent 4 is still generating today's task, `task` is a lightweight
+  // placeholder — show the live one-sentence streaming preview instead of its
+  // static copy, and hold off letting the user act on it as if it were real.
+  const { isStreaming, streamingText } = useStreamingTask(currentDay ?? task.day);
+
   // Rich agent data
   const taskExt = task as unknown as Record<string, unknown>;
   const whyThisMatters = typeof taskExt.whyThisMatters === 'string' ? taskExt.whyThisMatters : null;
@@ -148,7 +154,7 @@ export default function FocusCard({
       })
     : [];
 
-  const quote = whyThisMatters;
+  const quote = isStreaming ? (streamingText || 'Preparing your task…') : whyThisMatters;
   const dayLabel = currentDay ? `Day ${currentDay}` : null;
 
   return (
@@ -264,6 +270,13 @@ export default function FocusCard({
           }}
         >
           {quote}
+          {isStreaming && (
+            <motion.span
+              animate={{ opacity: [1, 0] }}
+              transition={{ duration: 0.6, repeat: Infinity, repeatType: 'reverse' }}
+              style={{ display: 'inline-block', width: 2, height: 14, marginLeft: 2, background: 'currentColor', verticalAlign: 'text-bottom' }}
+            />
+          )}
         </motion.p>
       )}
 
@@ -441,13 +454,14 @@ export default function FocusCard({
 
       {/* ── Begin Session (primary CTA) ── */}
       <button
-        onClick={() => onStartFocus(task)}
+        onClick={() => { if (!isStreaming) onStartFocus(task); }}
+        disabled={isStreaming}
         style={{
           width: '100%',
           height: 52,
           borderRadius: 14,
           border: 'none',
-          cursor: 'pointer',
+          cursor: isStreaming ? 'default' : 'pointer',
           backgroundColor: 'var(--c-accent-purple)',
           color: '#ffffff',
           fontSize: 15,
@@ -459,13 +473,14 @@ export default function FocusCard({
           justifyContent: 'center',
           gap: 8,
           marginBottom: 12,
+          opacity: isStreaming ? 0.6 : 1,
           transition: 'opacity 0.15s ease',
         }}
-        onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; }}
-        onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+        onMouseEnter={e => { if (!isStreaming) e.currentTarget.style.opacity = '0.88'; }}
+        onMouseLeave={e => { if (!isStreaming) e.currentTarget.style.opacity = '1'; }}
       >
         <Play size={14} strokeWidth={2.5} fill="#ffffff" color="#ffffff" />
-        Begin Session
+        {isStreaming ? 'Preparing…' : 'Begin Session'}
       </button>
 
       {/* ── Secondary actions ── */}

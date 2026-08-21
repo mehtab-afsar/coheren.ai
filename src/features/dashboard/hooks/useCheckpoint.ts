@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import { useStore, type Task, type WeekPlan } from '@core/store/useStore';
 import { getRecentFeedback, updateRoadmapStoneProfile, loadThresholdAdjustments, saveThresholdAdjustments } from '@lib/database';
 import { track } from '@lib/analytics';
-import { handleCheckpoint } from '@core/agents/orchestrator';
+import { handleCheckpoint, withContentRetry } from '@core/agents/orchestrator';
 import { recalibrateWeek, computeSignals, adaptThresholds, DEFAULT_THRESHOLDS } from '@core/agents/recalibrator';
 import { isCheckpointDay, buildAssessmentSummary } from '@lib/checkpointHelpers';
 import { flags } from '@config/feature-flags';
 import { updateStoneSeverities } from '@lib/stoneUpdater';
 import { embedAndSaveSprintMemory } from '@lib/sprintMemory';
 import { compress } from '@lib/sprintCompressor';
+import { resolveDurationDays } from '@lib/roadmapDuration';
 import type { Agent2ProfileOutput } from '@types-app/agents';
 
 interface CheckpointData {
@@ -122,10 +123,13 @@ export function useCheckpoint() {
         throw new Error('Missing required data for checkpoint');
       }
 
-      // Derive timeline and dailyTime from real store data
+      // Derive timeline and dailyTime from real store data. roadmap.duration's unit
+      // has historically differed by write path (days vs. months, never weeks) —
+      // resolveDurationDays is the single place that disambiguates it; the old
+      // `* 7` here assumed weeks, which matched neither actual producer.
       const timelineDays = agentRoadmapV2?.totalDays
         ?? agentRoadmap?.roadmap?.totalDays
-        ?? (roadmap.duration ? roadmap.duration * 7 : 90);
+        ?? resolveDurationDays(roadmap.duration);
       const dailyMinutes = (() => {
         const raw = roadmap.dailyTime ?? '';
         const match = String(raw).match(/(\d+)/);
@@ -217,7 +221,7 @@ export function useCheckpoint() {
           }),
         );
 
-        const result = await recalibrateWeek({
+        const result = await withContentRetry('agent5-recalibrate-week', () => recalibrateWeek({
           context: { goal: goalText, timeline: timelineDays, dailyMinutes },
           roadmap: agentRoadmapV2,
           stoneProfile: updatedProfile,
@@ -227,7 +231,7 @@ export function useCheckpoint() {
           weeklyCheckInAnswers,
           thresholds,
           assessmentSummary,
-        });
+        }));
 
         // If stone evolution produced an updated profile, apply it now (overrides updateStoneSeverities above)
         if (result.evolvedStoneProfile) {

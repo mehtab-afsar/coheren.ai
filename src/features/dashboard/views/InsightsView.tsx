@@ -8,6 +8,7 @@ import StreakCalendar, { type CalendarDay } from './progress/StreakCalendar';
 import CoachSummary from './progress/CoachSummary';
 import TaskTypeBreakdown from './progress/TaskTypeBreakdown';
 import { useFeedbackMetrics } from '../hooks/useFeedbackMetrics';
+import { resolveDurationDays } from '@lib/roadmapDuration';
 
 // ── Ring Progress ────────────────────────────────────────────────────────────
 function RingProgress({ pct, size = 120, stroke = 9, color = '#C4552D' }: {
@@ -96,8 +97,10 @@ export default function InsightsView() {
 
   // ── Data ───────────────────────────────────────────────────────────────────
   const currentWeek = Math.ceil(currentDay / 7);
+  // roadmap.duration's unit has historically differed by write path (days vs.
+  // months) — resolveDurationDays is the single place that disambiguates it.
   const totalDays = agentRoadmap?.roadmap?.totalDays
-    ?? ((roadmap?.strategicPlan?.totalWeeks ?? Math.ceil((roadmap?.duration || 3) * 4)) * 7);
+    ?? (roadmap?.strategicPlan?.totalWeeks ? roadmap.strategicPlan.totalWeeks * 7 : resolveDurationDays(roadmap?.duration));
   const totalWeeks = Math.ceil(totalDays / 7);
 
   const completedTasks = tasks.filter(t => t.completed).length;

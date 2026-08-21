@@ -40,11 +40,12 @@ interface BehavioralMemoryRow {
 export async function retrieveUserHistory(
   params: BehavioralRetrievalParams,
 ): Promise<string> {
-  const jinaKey = env.JINA_API_KEY;
-  if (!jinaKey || !params.query.trim()) return '';
+  if (!params.query.trim()) return '';
 
   try {
-    const embedding = await embedQuery(params.query, jinaKey);
+    // embedQuery routes through the ai-proxy edge function, which holds the real
+    // Jina key server-side — this value is vestigial and ignored.
+    const embedding = await embedQuery(params.query, env.JINA_API_KEY);
     if (embedding.length === 0) return '';
 
     const { data, error } = await supabase

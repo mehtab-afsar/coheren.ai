@@ -1,9 +1,13 @@
 import { ChevronLeft, User, Bell, Target, Trash2, Edit2, Check, X } from 'lucide-react';
 import { useState } from 'react';
 import { useStore } from '@core/store/useStore';
+import { resolveDurationDays } from '@lib/roadmapDuration';
 
 export default function Settings() {
-  const { universalProfile, roadmap, checkInTime, resetOnboarding, setStep, setCheckInTime } = useStore();
+  const { universalProfile, roadmap, checkInTime, resetOnboarding, setStep, setCheckInTime, agentRoadmap } = useStore();
+  // roadmap.duration's unit has historically differed by write path (days vs.
+  // months) — resolveDurationDays is the single place that disambiguates it.
+  const durationMonths = Math.max(1, Math.round(resolveDurationDays(roadmap?.duration, agentRoadmap?.roadmap?.totalDays) / 30));
 
   const [isEditingCheckIn, setIsEditingCheckIn] = useState(false);
   const [tempCheckInTime, setTempCheckInTime] = useState(checkInTime);
@@ -303,7 +307,7 @@ export default function Settings() {
               <div style={{ marginBottom: '12px' }}>
                 <div style={{ fontSize: '13px', fontWeight: 300, color: '#999' }}>Duration</div>
                 <div style={{ fontSize: '15px', fontWeight: 300, color: 'black' }}>
-                  {roadmap.duration} months
+                  {durationMonths} month{durationMonths !== 1 ? 's' : ''}
                 </div>
               </div>
               <div style={{ marginBottom: '12px' }}>

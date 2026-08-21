@@ -15,8 +15,10 @@ import { retrieveKnowledgeSemantic, retrieveKnowledgeHybrid } from '@core/rag';
 import { flags } from '@config/feature-flags';
 import { compress } from '@lib/sprintCompressor';
 import { retrieveSprintMemories } from '@lib/sprintMemory';
+import { parseAgentJSON } from './llm-output';
+import { agent5RecalibratedWeekSchema, safeValidate } from './schemas';
+import { STONE_RECALIBRATION_MATRIX, type RecalibrationStatus } from './stone-identifier/stone-taxonomy';
 import type {
-  StoneType,
   CompletedTaskFeedback,
   CheckpointAnalysis,
   RecalibratedSprint,
@@ -77,111 +79,6 @@ interface Task {
   skipped: boolean;
   skipReason?: 'time' | 'health' | 'difficulty' | 'external';
 }
-
-// ============================================================
-// STATUS ENUM
-// ============================================================
-
-type RecalibrationStatus = 'ACCELERATE' | 'MAINTAIN' | 'SIMPLIFY' | 'RECOVER';
-
-// ============================================================
-// STONE RECALIBRATION MATRIX
-// Per-stone directive for each recalibration status.
-// Agent 5 includes the directive for the user's primary stone.
-// ============================================================
-
-const STONE_RECALIBRATION_MATRIX: Partial<Record<StoneType, Record<RecalibrationStatus, string>>> = {
-  TimeConstraint: {
-    ACCELERATE: 'User is thriving within time limits. Keep micro-block structure but allow slightly longer sessions (up to 10% over budget). Introduce one optional extension step per task marked BONUS.',
-    MAINTAIN: 'Keep strict time-boxing. Reconfirm every task fits the daily budget. Add one "parking lot" tip so they can stop guilt-free if time runs out.',
-    SIMPLIFY: 'Reduce every task by 20% in scope. Split any 2-step tasks into 2 separate day entries. Never exceed budget. Add micro-win at start of each task (<3 min Starter Step).',
-    RECOVER: 'Sprint must be completable in 50% of declared daily time. All tasks start with a 2-minute Starter Step. Include a "15-minute win" fallback inside every task description.'
-  },
-
-  ProcrastinationPattern: {
-    ACCELERATE: 'User is initiating consistently. Introduce slightly more open-ended tasks — reduce scripted micro-steps; trust them to start. Add one reflective question at task end.',
-    MAINTAIN: 'Keep Starter Step on every task. Vary the Starter Step so it doesn\'t feel routine (mix physical set-up, verbal declaration, or time-lapse write). Implementation intention tip weekly.',
-    SIMPLIFY: 'Starter Step must be ≤90 seconds and physical (open the app, put on gloves, uncap the pen). Add "When–Then" prompt before the main task steps. Reduce step count to ≤3 per task.',
-    RECOVER: 'Every task is a Starter Step only — nothing beyond a 3-minute entry point. Label them "Ignition Day". No multi-step sequences. Goal is to re-establish the initiation habit.'
-  },
-
-  Inconsistency: {
-    ACCELERATE: 'Streak is healthy. Introduce a weekly "make-up" option so they know missing once is safe. Add one creative exploration day mid-sprint to break monotony.',
-    MAINTAIN: 'Keep Never Miss Twice rule prominent. Add a "minimum viable session" footnote to each task (e.g., "If short on time: just do Step 1 — 3 min counts"). Celebrate streaks verbally in tips.',
-    SIMPLIFY: 'Reduce task variety — repeat similar task structures so the habit feels automatic. Each task ends with "minimum viable tomorrow" preview. Add explicit rest day framing.',
-    RECOVER: 'Sprint goal: show up 8 out of 14 days — not 14 out of 14. Each task labelled "Consistency Day". Micro-win first, rest is bonus. Never Miss Twice reminder in personalizedMessage.'
-  },
-
-  FearOfFailure: {
-    ACCELERATE: 'User is building confidence. Introduce one "challenge rep" at the end of each task — optional, higher difficulty, framed as an experiment. Keep observation-based success criteria.',
-    MAINTAIN: 'Keep "Experiment:" framing and observation-based criteria. One task per week is explicitly labelled "Safe Attempt" — outcome irrelevant, data collection only.',
-    SIMPLIFY: 'All tasks reframe failure as data. Replace success criteria with "What did you notice?" prompts. Add a "This is allowed to be messy" line in every task tip.',
-    RECOVER: 'Sprint is a "Curiosity Sprint" — no performance goals, only observations. Each task starts with "This is an experiment". Success = showing up, not results. Coach\'s Brief must validate that struggling is information, not failure.'
-  },
-
-  Perfectionism: {
-    ACCELERATE: 'User is releasing good work. Introduce one "polish day" per week — a dedicated refinement session — so perfectionism has a sanctioned outlet. Rest is rough-draft mode.',
-    MAINTAIN: 'Keep ROUGH DRAFT TASK framing. Each task has an explicit time-box. Add "Done > Perfect" reminder in tips. One task per week: practise on purpose letting something be "good enough".',
-    SIMPLIFY: 'Every task is labelled "ROUGH DRAFT". Hard time-box on every step. Add STOP HERE marker after 80% of budget. Permission to Fail tip required in every task. Success criteria: started AND stopped on time.',
-    RECOVER: 'Sprint goal: finish on time, not perfectly. Each task ends with a mandatory "Exit at time" step. Coach\'s Brief must reframe productivity as showing up, not output quality. Add "abandon cleanly" practise task.'
-  },
-
-  Overcommitment: {
-    ACCELERATE: 'User is staying in scope — great signal. Introduce optional stretch task at end of sprint week (not mid-week). Keep hard cap but widen to 95% of budget.',
-    MAINTAIN: 'Keep hard cap at 85% of budget. STOP HERE marker required. Weekly "scope check" in tips: "Is your list of tasks this week realistic?"',
-    SIMPLIFY: 'Hard cap reduced to 75% of budget. Each task must have a "minimum viable version" that fits in 50% of budget. Remove any optional steps entirely.',
-    RECOVER: 'Cap estimatedMinutes at 60% of budget. Each task is single-focus — one skill, one drill, one output. All multi-part tasks split across separate days. Coach\'s Brief: recovery means doing less, not failing.'
-  },
-
-  SkillGap: {
-    ACCELERATE: 'Foundation is solid. Push into intermediate concepts. Replace review repetitions with novel applications of the skill. Reduce scaffolding.',
-    MAINTAIN: 'Keep scaffolded steps. One review task per week to consolidate. Progressive complexity: each week adds one new micro-skill on top of last week.',
-    SIMPLIFY: 'Insert 2 dedicated "foundation review" days this sprint. Break complex tasks into single-skill drills. Add a "prerequisite check" step at start of each task.',
-    RECOVER: 'Sprint is a foundation rebuild. Map every task to one specific prerequisite skill. No advancement until fundamentals are confirmed. Coach\'s Brief explains why rebuilding is faster than continuing.'
-  },
-
-  CognitiveFatigue: {
-    ACCELERATE: 'Cognitive load is manageable. Introduce one "deep work" session (uninterrupted, 1.5× normal time) per week as an optional upgrade.',
-    MAINTAIN: 'Keep Pomodoro framing. Space complex tasks across days. Avoid back-to-back high-load tasks in the same sprint week.',
-    SIMPLIFY: 'No task should require more than one major cognitive operation. Split complex analysis + creation tasks into 2 days. Add a 5-min decompression step at task end.',
-    RECOVER: 'Sprint is low-intensity — review and consolidation only. No new concepts. Short sessions (50% budget). End each task with a 2-min "brain dump" journaling step to offload working memory.'
-  },
-
-  FocusFragility: {
-    ACCELERATE: 'Focus is strong. Introduce one extended session per week with fewer interruption safeguards. Let them work with fewer micro-breaks.',
-    MAINTAIN: 'Keep environment setup step at start. Pomodoro blocks. Clear "end trigger" at task close so they know when to stop.',
-    SIMPLIFY: 'Tasks must start with a 3-step environment setup ritual (phone away, timer set, water ready). Reduce task scope to one uninterrupted block. Add "distraction log" optional step.',
-    RECOVER: 'Sprint is a "focus rehabilitation" sprint. Each task starts with a 5-min body scan + environment check. Sessions capped at 20 min with mandatory 5-min rest. No context-switching within a session.'
-  },
-
-  LowConfidence: {
-    ACCELERATE: 'Confidence is building. Introduce peer comparison context ("Most beginners reach X by week N — you\'re on track"). Add one "teach it back" moment per week.',
-    MAINTAIN: 'Keep evidence-building language. Each task ends with a "what I proved today" prompt. Celebrate incremental wins explicitly in tips.',
-    SIMPLIFY: 'All tasks start with a recap of what they already know ("You can already X — today builds on that"). Success criteria emphasise effort, not outcome. Eliminate any language implying judgment.',
-    RECOVER: 'Sprint is a "proof of competence" sprint — tasks are reviews of already-learned skills at reduced difficulty. Goal: rebuild evidence of capability. Coach\'s Brief must list 3 specific things they have already learned this sprint.'
-  },
-
-  UnrealisticExpectations: {
-    ACCELERATE: 'User is recalibrating well. Introduce milestone preview: show them the next phase outcome so they can see how far they\'ve come and where they\'re going.',
-    MAINTAIN: 'Keep expectation-setting language. Weekly "reality check" in tips: "Here\'s where most learners are at this point — you\'re [comparison]."',
-    SIMPLIFY: 'Reframe sprint goal as a process milestone, not an outcome milestone. Reduce declared success criteria. Add "typical learner timeline" note to each task to normalise pace.',
-    RECOVER: 'Sprint opens with a Coach\'s Brief that recalibrates the overall goal timeline based on actual data. Explicit statement: "You\'re not behind — the original plan was optimistic." All tasks are process-focused, no outcome metrics.'
-  },
-
-  ResourceGap: {
-    ACCELERATE: 'Access to resources is not a blocker. Maintain resource links but allow them to explore alternative channels if they\'ve found better ones.',
-    MAINTAIN: 'Keep curated resource links. Provide one backup resource per task in case primary is unavailable.',
-    SIMPLIFY: 'All resources must be free and immediately accessible (no sign-up, no paywall). Provide offline-capable alternatives where possible.',
-    RECOVER: 'Sprint uses only zero-cost, no-barrier resources. Add a "no-resource fallback" step to each task that requires only practice, not content consumption.'
-  },
-
-  EnvironmentFriction: {
-    ACCELERATE: 'Environment is optimised. Introduce one "novel environment" challenge per sprint (practise in a different location) to build adaptability.',
-    MAINTAIN: 'Keep environment setup step. Weekly "environment audit" tip: "Is your practice space still serving you?"',
-    SIMPLIFY: 'Each task includes a "minimum viable environment" note — what is the least setup required to do this task. Tasks are designed to work in sub-optimal conditions.',
-    RECOVER: 'Sprint tasks are fully environment-agnostic — can be done anywhere, anytime, with no equipment. Coach\'s Brief identifies one specific environment barrier and offers a concrete workaround.'
-  },
-};
 
 // ============================================================
 // PERFORMANCE SIGNAL PRE-COMPUTATION
@@ -494,12 +391,7 @@ Return JSON only.`;
   });
   if (!response) throw new Error('Agent 5 returned no response');
 
-  let parsed: Agent5Output;
-  try {
-    parsed = JSON.parse(response) as Agent5Output;
-  } catch (e) {
-    throw new Error(`Agent 5: invalid JSON — ${(e as Error).message}`);
-  }
+  const parsed = parseAgentJSON<Agent5Output>(response, 'agent5-legacy');
   return validateAndNormalize(parsed, signals, currentDay, nextStart, nextEnd, sprintNumber);
 }
 
@@ -754,7 +646,9 @@ OUTPUT FORMAT — return ONLY valid JSON:
 
   let response: string;
   if (flags.USE_AGENT_TOOL_CALLING) {
-    // Tool-use loop — Agent 5 reasons via tools, then produces JSON
+    // Tool-use loop — Agent 5 reasons via tools, then produces JSON. Claude's
+    // multi-turn loop is the only tool-calling path now (previously branched
+    // on USE_CLAUDE_FOR_RECALIBRATION for a Groq single-shot alternative).
     const { makeRecalibratorToolHandler, RECALIBRATOR_TOOL_SCHEMAS } = await import('@lib/agentTools');
     const toolHandler = makeRecalibratorToolHandler(completedTasks, context.dailyMinutes);
     const systemWithInstructions = AGENT5_WEEKLY_SYSTEM_PROMPT + `
@@ -765,40 +659,14 @@ TOOL USE INSTRUCTIONS:
 3. If USE_BEHAVIORAL_RAG is available, call retrieve_behavioral_context.
 4. Synthesize all tool outputs, then produce the JSON recalibration plan.`;
 
-    const toolMessages = [
-      { role: 'user' as const, content: userPrompt },
-    ];
-
-    let toolResult: { finalText: string };
-    if (flags.USE_CLAUDE_FOR_RECALIBRATION) {
-      toolResult = await callStrategicWithTools({
-        messages:      toolMessages,
-        systemPrompt:  systemWithInstructions,
-        tools:         RECALIBRATOR_TOOL_SCHEMAS,
-        toolHandler,
-        temperature:   0.3,
-        max_tokens:    4000,
-      });
-    } else {
-      // Groq tool-use — single-shot function calling (no multi-turn)
-      const { callWithTools } = await import('@lib/ai-router');
-      const { toGroqTools } = await import('@lib/agentTools');
-      const groqTools = toGroqTools(RECALIBRATOR_TOOL_SCHEMAS);
-      // Run compute_performance_signals deterministically and inject result
-      const sigJson = await toolHandler('compute_performance_signals', { tasks: completedTasks, dailyBudget: context.dailyMinutes });
-      const sigNote = `\n\nPERFORMANCE SIGNALS (pre-computed):\n${sigJson}\n\nProceed to generate the recalibration JSON.`;
-      const args = await callWithTools({
-        messages:  [
-          { role: 'system', content: AGENT5_WEEKLY_SYSTEM_PROMPT },
-          { role: 'user',   content: userPrompt + sigNote },
-        ],
-        tools:     groqTools,
-        tool_name: 'generate_recalibration_plan',
-        temperature: 0.3,
-        max_tokens:  4000,
-      }, 'reasoning');
-      toolResult = { finalText: args };
-    }
+    const toolResult = await callStrategicWithTools({
+      messages:      [{ role: 'user', content: userPrompt }],
+      systemPrompt:  systemWithInstructions,
+      tools:         RECALIBRATOR_TOOL_SCHEMAS,
+      toolHandler,
+      temperature:   0.3,
+      max_tokens:    4000,
+    });
 
     if (!toolResult.finalText) throw new Error('Agent 5 Weekly (tool-use): returned no response');
     response = toolResult.finalText;
@@ -864,12 +732,10 @@ TOOL USE INSTRUCTIONS:
     response = singleResponse;
   }
 
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(response) as Record<string, unknown>;
-  } catch (e) {
-    throw new Error(`Agent 5 Weekly: invalid JSON — ${(e as Error).message}`);
-  }
+  const parsed = parseAgentJSON<Record<string, unknown>>(response, 'agent5-weekly');
+
+  // Boundary contract — logs drift, does not throw (normalization below covers the failure path).
+  safeValidate(agent5RecalibratedWeekSchema, parsed, 'agent5-recalibrated-week');
 
   // Normalize checkpointAnalysis
   const ca = (parsed.checkpointAnalysis as Record<string, unknown>) ?? {};

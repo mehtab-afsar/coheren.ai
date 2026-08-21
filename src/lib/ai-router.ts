@@ -1,36 +1,30 @@
 /**
- * Multi-Provider AI Router — Groq + Claude
+ * AI Router — Claude is the sole provider.
  *
- * All agents call one of five public functions:
- *   callEconomy()                → Groq llama-3.1-8b-instant    Task Generator (fast + cheap JSON)
- *   callReasoning()              → Groq llama-3.3-70b-versatile  Goal Analyzer, Stone Identifier, Recalibrator
- *   callPremium()                → Groq llama-3.3-70b-versatile  Curriculum Builder (same model, max quality)
- *   callStrategic()              → Claude claude-sonnet-4-6       Agent 3 + 5 when USE_CLAUDE_FOR_* flags on
- *   callStrategicWithThinking()  → Claude extended thinking        Agent 3 curriculum design
+ * All agents call one of these public functions:
+ *   callEconomy()                → Claude claude-sonnet-4-6   Task Generator (fast, cheap JSON)
+ *   callReasoning()              → Claude claude-sonnet-4-6   Goal Analyzer, Stone Identifier, Recalibrator
+ *   callPremium()                → Claude claude-sonnet-4-6   Curriculum Builder
+ *   callStrategic()              → Claude claude-sonnet-4-6   Agent 3 + 5 when USE_CLAUDE_FOR_* flags on
+ *   callStrategicWithThinking()  → Claude extended thinking   Agent 3 curriculum design
+ *   callWithTools()              → Claude forced single tool call (structured-output trick)
+ *   callStrategicWithTools()     → Claude multi-turn agentic tool-use loop
  *
  * Adding a new provider: add a ProviderAdapter and push into the relevant chain.
- * Switching primary: reorder chain arrays — no agent changes needed.
  */
 
 import {
-  callGroqWithFallback,
-  callGroqEconomy,
-  callGroqWithTools,
-  streamGroq,
-  getGroqSessionStats,
-  resetGroqSessionStats,
-} from './groq-client';
-import type { GroqTool } from './groq-client';
-import {
   callClaude,
   callClaudeWithThinking,
+  callClaudeWithForcedTool,
+  streamClaude,
   isClaudeAvailable,
   type ClaudeMessage,
   type ClaudeThinkingResult,
   type ClaudeToolCallParams,
+  type ForcedToolSchema,
   callClaudeWithTools as _callClaudeWithTools,
 } from './claude-client';
-import { env } from '@config/env';
 
 // ── Shared types (agents depend on these) ─────────────────────────────────────
 
@@ -63,43 +57,35 @@ interface ProviderAdapter {
   call: (params: RouterCallParams) => Promise<RouterCompletion>;
 }
 
-// ── Groq adapters ─────────────────────────────────────────────────────────────
+// ── Claude adapter ────────────────────────────────────────────────────────────
+// Same shape callStrategic() already builds inline below — extracted so the base
+// tiers (economy/reasoning/premium) can use Claude too, not just the strategic tier.
 
-const groqFast: ProviderAdapter = {
-  name: 'groq', model: 'llama-3.1-8b-instant',
-  isAvailable: () => env.GROQ_ENABLED,
+const claudeAdapter: ProviderAdapter = {
+  name: 'claude', model: 'claude-sonnet-4-6',
+  isAvailable: () => isClaudeAvailable(),
   async call(params) {
-    const completion = await callGroqEconomy({
-      messages: params.messages,
-      temperature: params.temperature,
-      max_tokens: params.max_tokens,
-      response_format: params.response_format,
+    const content = await callClaude({
+      messages: params.messages.filter(m => m.role !== 'system').map(m => ({
+        role:    m.role as 'user' | 'assistant',
+        content: m.content,
+      })) as ClaudeMessage[],
+      systemPrompt: params.messages.find(m => m.role === 'system')?.content,
+      temperature:  params.temperature,
+      max_tokens:   params.max_tokens,
     });
-    const content = completion.choices[0]?.message?.content ?? '';
-    return { content, provider: 'groq', model: 'llama-3.1-8b-instant' };
-  },
-};
-
-const groqStandard: ProviderAdapter = {
-  name: 'groq', model: 'llama-3.3-70b-versatile',
-  isAvailable: () => env.GROQ_ENABLED,
-  async call(params) {
-    const completion = await callGroqWithFallback({
-      messages: params.messages,
-      temperature: params.temperature,
-      max_tokens: params.max_tokens,
-      response_format: params.response_format,
-    }, 'premium');
-    const content = completion.choices[0]?.message?.content ?? '';
-    return { content, provider: 'groq', model: 'llama-3.3-70b-versatile' };
+    return { content, provider: 'claude', model: 'claude-sonnet-4-6' };
   },
 };
 
 // ── Provider chains ───────────────────────────────────────────────────────────
+// Claude is the only provider in the codebase now — one adapter per chain. Kept
+// as an array (not a single value) so a second provider could be added later
+// without changing routeCall's shape.
 
-const ECONOMY_CHAIN:   ProviderAdapter[] = [groqFast];     // llama-3.1-8b-instant
-const REASONING_CHAIN: ProviderAdapter[] = [groqStandard]; // llama-3.3-70b-versatile
-const PREMIUM_CHAIN:   ProviderAdapter[] = [groqStandard]; // llama-3.3-70b-versatile
+const ECONOMY_CHAIN:   ProviderAdapter[] = [claudeAdapter];
+const REASONING_CHAIN: ProviderAdapter[] = [claudeAdapter];
+const PREMIUM_CHAIN:   ProviderAdapter[] = [claudeAdapter];
 
 // ── Core router ───────────────────────────────────────────────────────────────
 
@@ -113,7 +99,7 @@ async function routeCall(
   if (available.length === 0) {
     throw new Error(
       `[AI Router] No providers available for ${tierLabel} tier. ` +
-      'Set VITE_GROQ_ENABLED=true and ensure the ai-proxy edge function is deployed.',
+      'Set VITE_CLAUDE_ENABLED=true and ensure the ai-proxy edge function is deployed.',
     );
   }
 
@@ -143,7 +129,7 @@ async function routeCall(
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Economy — Groq llama-3.1-8b-instant.
+ * Economy — Claude claude-sonnet-4-6.
  * Shadow Extractor, Task Generator. High-volume cheap JSON calls.
  */
 export async function callEconomy(params: RouterCallParams): Promise<RouterCompletion> {
@@ -151,7 +137,7 @@ export async function callEconomy(params: RouterCallParams): Promise<RouterCompl
 }
 
 /**
- * Reasoning — Groq llama-3.3-70b-versatile.
+ * Reasoning — Claude claude-sonnet-4-6.
  * Goal Analyzer (Agent 1), Stone Identifier (Agent 2), Recalibrator (Agent 5), Chat.
  */
 export async function callReasoning(params: RouterCallParams): Promise<RouterCompletion> {
@@ -159,7 +145,7 @@ export async function callReasoning(params: RouterCallParams): Promise<RouterCom
 }
 
 /**
- * Premium — Groq llama-3.3-70b-versatile.
+ * Premium — Claude claude-sonnet-4-6.
  * Curriculum Builder (Agent 3) only. Complex long structured output.
  */
 export async function callPremium(params: RouterCallParams): Promise<RouterCompletion> {
@@ -168,60 +154,70 @@ export async function callPremium(params: RouterCallParams): Promise<RouterCompl
 
 // ── Tool calling ──────────────────────────────────────────────────────────────
 
-export type { GroqTool };
+export type { ForcedToolSchema as ToolSchema };
 
 export interface ToolCallParams extends Omit<RouterCallParams, 'response_format'> {
-  tools: GroqTool[];
+  tools: ForcedToolSchema[];
   tool_name: string;
 }
 
 /**
- * Call any tier with native function calling.
- * Returns the raw arguments string — caller does JSON.parse().
+ * Forced single tool call (structured-output trick) — returns the raw arguments
+ * string, caller does JSON.parse()/parseAgentJSON(). `tier` is accepted for call-
+ * site compatibility but Claude has one model; it doesn't change which model runs.
  */
 export async function callWithTools(
   params: ToolCallParams,
-  tier: 'economy' | 'reasoning' | 'premium' = 'reasoning'
+  _tier: 'economy' | 'reasoning' | 'premium' = 'reasoning'
 ): Promise<string> {
-  const groqTier = tier === 'economy' ? 'economy' : tier === 'premium' ? 'premium' : 'standard';
-  return callGroqWithTools(
-    {
-      messages: params.messages,
-      temperature: params.temperature,
-      max_tokens: params.max_tokens,
-      tools: params.tools,
-      tool_name: params.tool_name,
-    },
-    groqTier as Parameters<typeof callGroqWithTools>[1]
-  );
+  return callClaudeWithForcedTool({
+    messages: params.messages.filter(m => m.role !== 'system').map(m => ({
+      role:    m.role as 'user' | 'assistant',
+      content: m.content,
+    })) as ClaudeMessage[],
+    systemPrompt: params.messages.find(m => m.role === 'system')?.content,
+    temperature:  params.temperature,
+    max_tokens:   params.max_tokens,
+    tools:        params.tools,
+    tool_name:    params.tool_name,
+  });
 }
 
 // ── Streaming ─────────────────────────────────────────────────────────────────
 
 /**
- * Stream tokens from the reasoning tier (llama-3.3-70b).
- * Use for UX-only parallel calls — fail fast, suppress errors at call site.
+ * Stream tokens from Claude. Use for UX-only parallel calls — fail fast,
+ * suppress errors at call site. `tier` is accepted for call-site compatibility.
  */
 export async function* callReasoningStream(
   params: Omit<RouterCallParams, 'response_format'>
 ): AsyncGenerator<string> {
-  yield* streamGroq(
-    { messages: params.messages, temperature: params.temperature, max_tokens: params.max_tokens },
-    'standard'
-  );
+  yield* streamClaude({
+    messages: params.messages.filter(m => m.role !== 'system').map(m => ({
+      role:    m.role as 'user' | 'assistant',
+      content: m.content,
+    })) as ClaudeMessage[],
+    systemPrompt: params.messages.find(m => m.role === 'system')?.content,
+    temperature:  params.temperature,
+    max_tokens:   params.max_tokens,
+  });
 }
 
 /**
- * Stream tokens from the economy tier (llama-3.1-8b).
- * Use for cheap preview text during Agent 4 generation.
+ * Stream tokens from Claude. Use for cheap preview text during Agent 4 generation.
  */
 export async function* callEconomyStream(
   params: Omit<RouterCallParams, 'response_format'>
 ): AsyncGenerator<string> {
-  yield* streamGroq(
-    { messages: params.messages, temperature: params.temperature, max_tokens: params.max_tokens },
-    'economy'
-  );
+  yield* streamClaude({
+    messages: params.messages.filter(m => m.role !== 'system').map(m => ({
+      role:    m.role as 'user' | 'assistant',
+      content: m.content,
+    })) as ClaudeMessage[],
+    systemPrompt: params.messages.find(m => m.role === 'system')?.content,
+    temperature:  params.temperature,
+    max_tokens:   params.max_tokens,
+  });
 }
 
 // ── Claude strategic tier ─────────────────────────────────────────────────────
@@ -229,7 +225,6 @@ export async function* callEconomyStream(
 /**
  * Strategic — Claude claude-sonnet-4-6.
  * Agent 3 (Curriculum Builder) and Agent 5 (Recalibrator) when USE_CLAUDE_FOR_* flags are on.
- * Falls back to callPremium() (Groq 70b) when Claude is disabled (VITE_CLAUDE_ENABLED).
  */
 export async function callStrategic(params: RouterCallParams): Promise<RouterCompletion> {
   if (!isClaudeAvailable()) return callPremium(params);
@@ -286,9 +281,3 @@ export async function callStrategicWithTools(
   }
   return _callClaudeWithTools(params);
 }
-
-// ── Telemetry ─────────────────────────────────────────────────────────────────
-
-export { getGroqSessionStats as getSessionStats, resetGroqSessionStats as resetSessionStats };
-// Legacy aliases — keeps any existing imports from breaking
-export { getGroqSessionStats as getGroqSessionStats_, resetGroqSessionStats as resetGroqSessionStats_ };

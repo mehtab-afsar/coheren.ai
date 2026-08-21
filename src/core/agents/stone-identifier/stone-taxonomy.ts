@@ -121,6 +121,11 @@ export const DOMAIN_GAPS = DOMAIN_READINESS_GAPS;
 // Flat list of all valid stone types for validation
 export const ALL_STONE_TYPES = Object.keys(STONE_TO_CATEGORY) as StoneType[];
 
+// Severity sort order — used wherever stones are ranked so Critical/High get full
+// treatment and Low gets a brief mention (Agent 3 modification instructions, Agent 4
+// delivery rules).
+export const SEVERITY_SORT_ORDER: Record<string, number> = { Critical: 0, High: 1, Moderate: 2, Low: 3 };
+
 // ─────────────────────────────────────────────────────────────────────────────
 // STONE PERSONALITIES — Evidence-based behavioral archetypes
 //
@@ -424,5 +429,220 @@ export const STONE_PERSONALITIES: Record<StoneType, StonePersonality> = {
       'Decision log: document what they are choosing NOT to do to protect this goal',
     ],
     recalibration_note: 'Severity predictably peaks at Week 4-6; design a lighter week at Day 28 preemptively',
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STONE → CURRICULUM MODIFICATION MAP
+// Concrete curriculum changes for each stone type. Single source of truth,
+// consumed both by Agent 3's default prompt-injection path (curriculum-builder.ts)
+// and by the get_stone_interventions tool (src/lib/agentTools.ts) when
+// USE_AGENT_TOOL_CALLING is on — so the two paths can never drift apart.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const STONE_MODIFICATIONS: Record<string, string> = {
+  TimeConstraint: `
+TIME CONSTRAINT DETECTED — Apply these modifications:
+- Compress Phase 1 by 20% (basics-only, cut nice-to-knows)
+- Use "micro-session" format: each task must have a 10-min fallback version
+- Remove all "supplementary" activities — only core actions
+- Add time-blocking instructions to every task ("open at 7am, close at 7:25am")
+- Prioritize depth over breadth — fewer topics, mastered properly`,
+
+  ResourceGap: `
+RESOURCE GAP DETECTED — Apply these modifications:
+- Phase 1 must explicitly list free/low-cost alternatives for all required resources
+- Add a "budget path" note in Phase 1 adaptationRules
+- Replace equipment-dependent tasks with bodyweight/free alternatives where possible
+- Identify which milestones are resource-dependent and flag them as "conditional"`,
+
+  EnvironmentFriction: `
+ENVIRONMENT FRICTION DETECTED — Apply these modifications:
+- Phase 1 must include an Environment Design day (Day 1-3): set up the physical context
+- Add friction-reduction tasks: arrange gear the night before, clear the workspace, etc.
+- Sessions should be schedulable in the available environment (commute, small space, noisy home)
+- Add a "minimal viable environment" specification to each phase`,
+
+  Inconsistency: `
+INCONSISTENCY PATTERN DETECTED — Apply these modifications:
+- Structure as 3-day micro-sprints with built-in "catch-up day" on Day 4
+- Phase 1 intensity must be so low that a bad week still produces something
+- Add "never miss twice" recovery protocol: if Day N is missed, Day N+1 is half-load
+- Reduce phase length: shorter phases mean more frequent sense of completion
+- Add progress visibility (streak tracking, weekly review days) explicitly`,
+
+  FearOfFailure: `
+FEAR OF FAILURE DETECTED — Apply these modifications:
+- Phase 1 must be impossible to fail at (tasks are "do X regardless of quality")
+- Remove assessments from Phase 1 entirely — no evaluation, only practice
+- Label early tasks as "experiments" not "performances"
+- Add explicit "good failure" moments: tasks designed to identify mistakes safely
+- Delay public or evaluated work until Phase 3 minimum`,
+
+  Perfectionism: `
+PERFECTIONISM DETECTED — Apply these modifications:
+- Every task must have an explicit time-box ("spend exactly 25 minutes, then stop")
+- Add "done is better than perfect" principle to Phase 1 primary goals
+- Include deliberate "rough draft" tasks: produce something intentionally imperfect
+- Phase 1 adaptationRules.if_completing_easily must NOT suggest adding more — suggest rest instead
+- Remove any open-ended tasks without a time or quantity limit`,
+
+  LowConfidence: `
+LOW CONFIDENCE DETECTED — Apply these modifications:
+- Front-load Phase 1 with tasks below current skill level — guaranteed wins
+- Add explicit success criteria that are binary (did it/didn't do it) not quality-based
+- Include a "skills inventory" task early: list what the user already knows
+- Phase milestones should be reachable within the first 7 days
+- scienceRationale for Phase 1 must reference Self-Determination Theory (competence need)`,
+
+  UnrealisticExpectations: `
+UNREALISTIC EXPECTATIONS DETECTED — Apply these modifications:
+- Phase 1 primaryGoals must explicitly name what will NOT be achieved by the end
+- Add a "realistic timeline" note to the roadmap description
+- Include "typical learner progress" benchmarks in at least 2 phase scienceRationales
+- Milestone phrasing: use relative language ("better than Day 1") not absolute ("mastered")`,
+
+  FocusFragility: `
+FOCUS FRAGILITY DETECTED — Apply these modifications:
+- Break all sessions into maximum 20-minute focused blocks
+- Add a 2-minute "transition ritual" before each block (review goal, silence phone)
+- Reduce the number of distinct topics per session to 1 (single-focus sessions only)
+- Add "environmental anchoring" to tasks: same location, same time, same cue
+- Phase 2+ can only add complexity after 14 days of consistent single-focus sessions`,
+
+  CognitiveFatigue: `
+COGNITIVE FATIGUE DETECTED — Apply these modifications:
+- Every 5th day is a light review day (no new material, 50% volume)
+- Hardest cognitive work scheduled for the first 30 minutes of the session only
+- Add sleep and recovery reminders to Phase 1 (sleep consolidates what was learned)
+- Phase progression is gated on energy sustainability, not just content mastery
+- Split sessions if daily time > 45 min: two 20-min blocks > one 45-min block`,
+
+  SkillGap: `
+SKILL GAP DETECTED — Apply these modifications:
+- Add a Phase 0 "Prerequisite Sprint" if skill gap is severe (before Phase 1)
+- Phase 1 must focus exclusively on prerequisites — no advanced content yet
+- Include specific learning resources for the identified prerequisite skills
+- Gate Phase 2 entry on a concrete prerequisite check: "can you do X?"
+- Extend Phase 1 timeline by 20% to allow prerequisite acquisition`,
+
+  ProcrastinationPattern: `
+PROCRASTINATION PATTERN DETECTED — Apply these modifications:
+- Front-load the hardest, most aversive tasks in the first 30 minutes of each session
+- Every task must include a specific "implementation intention" (when, where, first action)
+- Phase 1 tasks should take under 5 minutes to start (reduce initiation barrier)
+- Add "minimum viable session" fallback: 10 minutes counts as a win
+- Include "temptation bundling" options: pair the habit with something enjoyable`,
+
+  Overcommitment: `
+OVERCOMMITMENT DETECTED — Apply these modifications:
+- Phase 1 must include an explicit "what to stop doing" section
+- Cap total daily time at 80% of stated availability (buffer for life)
+- Add a "single focus rule" to Phase 1 primary goals: this roadmap is the ONLY new commitment
+- Milestone density must be reduced: only 1 milestone per phase, not 3+
+- Phase adaptationRules.if_completing_easily: "maintain pace, do not add more goals"`,
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STONE RECALIBRATION MATRIX
+// Per-stone directive for each recalibration status. Single source of truth,
+// consumed both by Agent 5's default prompt-injection path (recalibrator.ts)
+// and by the get_stone_recalibration_directives tool (src/lib/agentTools.ts)
+// when USE_AGENT_TOOL_CALLING is on.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** ACCELERATE | MAINTAIN | SIMPLIFY | RECOVER — Agent 5's weekly recalibration status. */
+export type RecalibrationStatus = 'ACCELERATE' | 'MAINTAIN' | 'SIMPLIFY' | 'RECOVER';
+
+export const STONE_RECALIBRATION_MATRIX: Partial<Record<StoneType, Record<RecalibrationStatus, string>>> = {
+  TimeConstraint: {
+    ACCELERATE: 'User is thriving within time limits. Keep micro-block structure but allow slightly longer sessions (up to 10% over budget). Introduce one optional extension step per task marked BONUS.',
+    MAINTAIN: 'Keep strict time-boxing. Reconfirm every task fits the daily budget. Add one "parking lot" tip so they can stop guilt-free if time runs out.',
+    SIMPLIFY: 'Reduce every task by 20% in scope. Split any 2-step tasks into 2 separate day entries. Never exceed budget. Add micro-win at start of each task (<3 min Starter Step).',
+    RECOVER: 'Sprint must be completable in 50% of declared daily time. All tasks start with a 2-minute Starter Step. Include a "15-minute win" fallback inside every task description.'
+  },
+
+  ProcrastinationPattern: {
+    ACCELERATE: 'User is initiating consistently. Introduce slightly more open-ended tasks — reduce scripted micro-steps; trust them to start. Add one reflective question at task end.',
+    MAINTAIN: 'Keep Starter Step on every task. Vary the Starter Step so it doesn\'t feel routine (mix physical set-up, verbal declaration, or time-lapse write). Implementation intention tip weekly.',
+    SIMPLIFY: 'Starter Step must be ≤90 seconds and physical (open the app, put on gloves, uncap the pen). Add "When–Then" prompt before the main task steps. Reduce step count to ≤3 per task.',
+    RECOVER: 'Every task is a Starter Step only — nothing beyond a 3-minute entry point. Label them "Ignition Day". No multi-step sequences. Goal is to re-establish the initiation habit.'
+  },
+
+  Inconsistency: {
+    ACCELERATE: 'Streak is healthy. Introduce a weekly "make-up" option so they know missing once is safe. Add one creative exploration day mid-sprint to break monotony.',
+    MAINTAIN: 'Keep Never Miss Twice rule prominent. Add a "minimum viable session" footnote to each task (e.g., "If short on time: just do Step 1 — 3 min counts"). Celebrate streaks verbally in tips.',
+    SIMPLIFY: 'Reduce task variety — repeat similar task structures so the habit feels automatic. Each task ends with "minimum viable tomorrow" preview. Add explicit rest day framing.',
+    RECOVER: 'Sprint goal: show up 8 out of 14 days — not 14 out of 14. Each task labelled "Consistency Day". Micro-win first, rest is bonus. Never Miss Twice reminder in personalizedMessage.'
+  },
+
+  FearOfFailure: {
+    ACCELERATE: 'User is building confidence. Introduce one "challenge rep" at the end of each task — optional, higher difficulty, framed as an experiment. Keep observation-based success criteria.',
+    MAINTAIN: 'Keep "Experiment:" framing and observation-based criteria. One task per week is explicitly labelled "Safe Attempt" — outcome irrelevant, data collection only.',
+    SIMPLIFY: 'All tasks reframe failure as data. Replace success criteria with "What did you notice?" prompts. Add a "This is allowed to be messy" line in every task tip.',
+    RECOVER: 'Sprint is a "Curiosity Sprint" — no performance goals, only observations. Each task starts with "This is an experiment". Success = showing up, not results. Coach\'s Brief must validate that struggling is information, not failure.'
+  },
+
+  Perfectionism: {
+    ACCELERATE: 'User is releasing good work. Introduce one "polish day" per week — a dedicated refinement session — so perfectionism has a sanctioned outlet. Rest is rough-draft mode.',
+    MAINTAIN: 'Keep ROUGH DRAFT TASK framing. Each task has an explicit time-box. Add "Done > Perfect" reminder in tips. One task per week: practise on purpose letting something be "good enough".',
+    SIMPLIFY: 'Every task is labelled "ROUGH DRAFT". Hard time-box on every step. Add STOP HERE marker after 80% of budget. Permission to Fail tip required in every task. Success criteria: started AND stopped on time.',
+    RECOVER: 'Sprint goal: finish on time, not perfectly. Each task ends with a mandatory "Exit at time" step. Coach\'s Brief must reframe productivity as showing up, not output quality. Add "abandon cleanly" practise task.'
+  },
+
+  Overcommitment: {
+    ACCELERATE: 'User is staying in scope — great signal. Introduce optional stretch task at end of sprint week (not mid-week). Keep hard cap but widen to 95% of budget.',
+    MAINTAIN: 'Keep hard cap at 85% of budget. STOP HERE marker required. Weekly "scope check" in tips: "Is your list of tasks this week realistic?"',
+    SIMPLIFY: 'Hard cap reduced to 75% of budget. Each task must have a "minimum viable version" that fits in 50% of budget. Remove any optional steps entirely.',
+    RECOVER: 'Cap estimatedMinutes at 60% of budget. Each task is single-focus — one skill, one drill, one output. All multi-part tasks split across separate days. Coach\'s Brief: recovery means doing less, not failing.'
+  },
+
+  SkillGap: {
+    ACCELERATE: 'Foundation is solid. Push into intermediate concepts. Replace review repetitions with novel applications of the skill. Reduce scaffolding.',
+    MAINTAIN: 'Keep scaffolded steps. One review task per week to consolidate. Progressive complexity: each week adds one new micro-skill on top of last week.',
+    SIMPLIFY: 'Insert 2 dedicated "foundation review" days this sprint. Break complex tasks into single-skill drills. Add a "prerequisite check" step at start of each task.',
+    RECOVER: 'Sprint is a foundation rebuild. Map every task to one specific prerequisite skill. No advancement until fundamentals are confirmed. Coach\'s Brief explains why rebuilding is faster than continuing.'
+  },
+
+  CognitiveFatigue: {
+    ACCELERATE: 'Cognitive load is manageable. Introduce one "deep work" session (uninterrupted, 1.5× normal time) per week as an optional upgrade.',
+    MAINTAIN: 'Keep Pomodoro framing. Space complex tasks across days. Avoid back-to-back high-load tasks in the same sprint week.',
+    SIMPLIFY: 'No task should require more than one major cognitive operation. Split complex analysis + creation tasks into 2 days. Add a 5-min decompression step at task end.',
+    RECOVER: 'Sprint is low-intensity — review and consolidation only. No new concepts. Short sessions (50% budget). End each task with a 2-min "brain dump" journaling step to offload working memory.'
+  },
+
+  FocusFragility: {
+    ACCELERATE: 'Focus is strong. Introduce one extended session per week with fewer interruption safeguards. Let them work with fewer micro-breaks.',
+    MAINTAIN: 'Keep environment setup step at start. Pomodoro blocks. Clear "end trigger" at task close so they know when to stop.',
+    SIMPLIFY: 'Tasks must start with a 3-step environment setup ritual (phone away, timer set, water ready). Reduce task scope to one uninterrupted block. Add "distraction log" optional step.',
+    RECOVER: 'Sprint is a "focus rehabilitation" sprint. Each task starts with a 5-min body scan + environment check. Sessions capped at 20 min with mandatory 5-min rest. No context-switching within a session.'
+  },
+
+  LowConfidence: {
+    ACCELERATE: 'Confidence is building. Introduce peer comparison context ("Most beginners reach X by week N — you\'re on track"). Add one "teach it back" moment per week.',
+    MAINTAIN: 'Keep evidence-building language. Each task ends with a "what I proved today" prompt. Celebrate incremental wins explicitly in tips.',
+    SIMPLIFY: 'All tasks start with a recap of what they already know ("You can already X — today builds on that"). Success criteria emphasise effort, not outcome. Eliminate any language implying judgment.',
+    RECOVER: 'Sprint is a "proof of competence" sprint — tasks are reviews of already-learned skills at reduced difficulty. Goal: rebuild evidence of capability. Coach\'s Brief must list 3 specific things they have already learned this sprint.'
+  },
+
+  UnrealisticExpectations: {
+    ACCELERATE: 'User is recalibrating well. Introduce milestone preview: show them the next phase outcome so they can see how far they\'ve come and where they\'re going.',
+    MAINTAIN: 'Keep expectation-setting language. Weekly "reality check" in tips: "Here\'s where most learners are at this point — you\'re [comparison]."',
+    SIMPLIFY: 'Reframe sprint goal as a process milestone, not an outcome milestone. Reduce declared success criteria. Add "typical learner timeline" note to each task to normalise pace.',
+    RECOVER: 'Sprint opens with a Coach\'s Brief that recalibrates the overall goal timeline based on actual data. Explicit statement: "You\'re not behind — the original plan was optimistic." All tasks are process-focused, no outcome metrics.'
+  },
+
+  ResourceGap: {
+    ACCELERATE: 'Access to resources is not a blocker. Maintain resource links but allow them to explore alternative channels if they\'ve found better ones.',
+    MAINTAIN: 'Keep curated resource links. Provide one backup resource per task in case primary is unavailable.',
+    SIMPLIFY: 'All resources must be free and immediately accessible (no sign-up, no paywall). Provide offline-capable alternatives where possible.',
+    RECOVER: 'Sprint uses only zero-cost, no-barrier resources. Add a "no-resource fallback" step to each task that requires only practice, not content consumption.'
+  },
+
+  EnvironmentFriction: {
+    ACCELERATE: 'Environment is optimised. Introduce one "novel environment" challenge per sprint (practise in a different location) to build adaptability.',
+    MAINTAIN: 'Keep environment setup step. Weekly "environment audit" tip: "Is your practice space still serving you?"',
+    SIMPLIFY: 'Each task includes a "minimum viable environment" note — what is the least setup required to do this task. Tasks are designed to work in sub-optimal conditions.',
+    RECOVER: 'Sprint tasks are fully environment-agnostic — can be done anywhere, anytime, with no equipment. Coach\'s Brief identifies one specific environment barrier and offers a concrete workaround.'
   },
 };

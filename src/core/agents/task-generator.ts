@@ -25,15 +25,16 @@ import type {
   AssessmentQuestion,
 } from '@types-app/agents';
 import { callEconomy, callReasoning, callWithTools } from '@lib/ai-router';
-import type { GroqTool } from '@lib/ai-router';
-import { STONE_PERSONALITIES } from './stone-identifier/stone-taxonomy';
+import type { ToolSchema } from '@lib/ai-router';
+import { STONE_PERSONALITIES, SEVERITY_SORT_ORDER } from './stone-identifier/stone-taxonomy';
 import { dailyTaskOutputSchema, safeValidate } from './schemas';
 import { flags } from '@config/feature-flags';
 import { retrieveKnowledgeSemantic, retrieveKnowledgeHybrid } from '@core/rag/semantic-retriever';
 import { getSimilarTaskPatterns } from '@lib/sprintMemory';
 import { getResourcesForTask, getEmbeddableVideoFallback } from '@lib/resourceRetriever';
-import { isEmbeddableVideoUrl } from '@lib/youtube';
+import { isEmbeddableVideoUrl, verifyYouTubeVideoLive } from '@lib/youtube';
 import { planSession, serializeBlueprint } from './session-planner';
+import { parseAgentJSON } from './llm-output';
 
 // ─── Stone Delivery Rules ─────────────────────────────────────────────────────
 // Each stone type changes HOW the task is delivered, not what it teaches.
@@ -188,10 +189,7 @@ function buildSystemPrompt(
   const domainCtx  = DOMAIN_DELIVERY_CONTEXT[domain] ?? '';
   // Severity-weighted: Critical/High stones get full rules, Moderate get condensed, Low are mentioned only
   const stoneRules = stones
-    .sort((a, b) => {
-      const order: Record<string, number> = { Critical: 0, High: 1, Moderate: 2, Low: 3 };
-      return (order[a.severity] ?? 2) - (order[b.severity] ?? 2);
-    })
+    .sort((a, b) => (SEVERITY_SORT_ORDER[a.severity] ?? 2) - (SEVERITY_SORT_ORDER[b.severity] ?? 2))
     .map(s => {
       const rule = STONE_DELIVERY_RULES[s.type] ?? '';
       if (!rule) return '';
@@ -432,31 +430,6 @@ export function sanitizeResourceUrl(url: unknown, taskTitle?: string): string | 
   return null;
 }
 
-// ─── JSON Repair ──────────────────────────────────────────────────────────────
-// LLMs often wrap JSON in markdown code fences or produce minor syntax errors.
-
-export function repairJSON(raw: string): string {
-  // Strip markdown code fences (```json ... ``` or ``` ... ```)
-  const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenceMatch) raw = fenceMatch[1];
-
-  // Find the outermost JSON object boundaries
-  const start = raw.indexOf('{');
-  const end   = raw.lastIndexOf('}');
-  if (start !== -1 && end !== -1 && end > start) {
-    raw = raw.substring(start, end + 1);
-  }
-
-  // Fix common LLM JSON errors
-  raw = raw
-    .replace(/,\s*}/g, '}')       // trailing commas before }
-    .replace(/,\s*]/g, ']')       // trailing commas before ]
-    .replace(/[\u2018\u2019]/g, "'") // smart single quotes
-    .replace(/[\u201C\u201D]/g, '"'); // smart double quotes
-
-  return raw;
-}
-
 // ─── Task Validator ───────────────────────────────────────────────────────────
 // Catches low-quality outputs before they reach the user.
 // Returns a list of issues; empty array = valid.
@@ -487,12 +460,12 @@ const VAGUE_CRITERIA_PATTERNS = [
   /\bfamiliar\b/i,
 ];
 
-interface TaskValidationResult {
+export interface TaskValidationResult {
   valid: boolean;
   issues: string[];
 }
 
-function validateTaskQuality(task: DailyTask['task'], dailyTimeAvailable?: number): TaskValidationResult {
+export function validateTaskQuality(task: DailyTask['task'], dailyTimeAvailable?: number): TaskValidationResult {
   const issues: string[] = [];
 
   // Must have at least 3 steps
@@ -842,12 +815,7 @@ async function generateAssessmentQuestions(
 
   if (!content) throw new Error('Agent 4 Assessment: No response from model');
 
-  let raw: AssessmentLLMOutput;
-  try {
-    raw = JSON.parse(repairJSON(content)) as AssessmentLLMOutput;
-  } catch (e) {
-    throw new Error(`Agent 4 Assessment: invalid JSON — ${(e as Error).message}`);
-  }
+  const raw = parseAgentJSON<AssessmentLLMOutput>(content, 'agent4-assessment');
 
   // Validate
   if (!Array.isArray(raw.assessmentQuestions) || raw.assessmentQuestions.length === 0) {
@@ -868,7 +836,7 @@ async function generateAssessmentQuestions(
 
 // ─── Tool Schema (for native function calling) ────────────────────────────────
 
-const GENERATE_TASK_TOOL: GroqTool = {
+const GENERATE_TASK_TOOL: ToolSchema = {
   type: 'function',
   function: {
     name: 'generate_daily_task',
@@ -1114,11 +1082,7 @@ export async function generateTask(
       { messages: callMessages, temperature: 0.5, max_tokens: 2500, tools: [GENERATE_TASK_TOOL], tool_name: 'generate_daily_task' },
       'economy'
     );
-    try {
-      raw = JSON.parse(args) as unknown;
-    } catch (e) {
-      throw new Error(`Agent 4 (tool): invalid JSON — ${(e as Error).message}`);
-    }
+    raw = parseAgentJSON(args, 'agent4-tool');
   } else {
     const { content } = await callEconomy({
       messages: callMessages,
@@ -1127,22 +1091,29 @@ export async function generateTask(
       response_format: { type: 'json_object' },
     });
     if (!content) throw new Error('Agent 4: No response from model');
-    try {
-      raw = JSON.parse(repairJSON(content)) as unknown;
-    } catch (e) {
-      throw new Error(`Agent 4 (reasoning): invalid JSON — ${(e as Error).message}`);
-    }
+    raw = parseAgentJSON(content, 'agent4-economy');
   }
 
   let result = validateAndNormalize(raw, dayNumber, phase.phaseNumber, week, dailyTimeAvailable);
 
-  // Assign the primary resource. Guarantee it is a real, embeddable video so the
-  // study card always plays something — never a dead "Search" link when a library
-  // video exists for this goal.
-  const isEmbeddablePrimary = primaryResource?.type === 'video' && isEmbeddableVideoUrl(primaryResource.url);
+  // Assign the primary resource. Guarantee it is a real, LIVE, embeddable video so
+  // the study card always plays something — never a dead embed or a video that's
+  // been deleted/made private since it was matched.
+  //
+  // This re-verifies even though getResourcesForTask's semantic-match branch
+  // already verifies before returning — NOT pure redundancy: primaryResource can
+  // also come from that function's staticFallback() branch (network/empty-result
+  // paths), which returns library resources without verifying them. There's no
+  // way to tell from primaryResource's shape which branch produced it, so this is
+  // the one place that can guarantee the property for every path. In the common
+  // case (already-verified semantic match) verifyYouTubeVideoLive's in-memory
+  // cache makes this call a no-op cache hit, not a second network round-trip.
+  const isEmbeddablePrimary = primaryResource?.type === 'video'
+    && isEmbeddableVideoUrl(primaryResource.url)
+    && (await verifyYouTubeVideoLive(primaryResource.url));
   const embeddable = isEmbeddablePrimary
     ? primaryResource
-    : (getEmbeddableVideoFallback(goalText ?? result.task.title, dailyTimeAvailable) ?? primaryResource);
+    : (await getEmbeddableVideoFallback(goalText ?? result.task.title, dailyTimeAvailable)) ?? primaryResource;
 
   if (embeddable) {
     result.task.resources = {
@@ -1192,7 +1163,7 @@ export async function generateTask(
           { messages: retryMessages, temperature: 0.5, max_tokens: 2500, tools: [GENERATE_TASK_TOOL], tool_name: 'generate_daily_task' },
           'reasoning'
         );
-        retryRaw = JSON.parse(retryArgs) as unknown;
+        retryRaw = parseAgentJSON(retryArgs, 'agent4-retry-tool');
       } else {
         const { content: retryContent } = await callReasoning({
           messages: retryMessages,
@@ -1201,7 +1172,7 @@ export async function generateTask(
           response_format: { type: 'json_object' },
         });
         if (!retryContent) throw new Error('empty retry');
-        retryRaw = JSON.parse(repairJSON(retryContent)) as unknown;
+        retryRaw = parseAgentJSON(retryContent, 'agent4-retry-reasoning');
       }
       const retryResult = validateAndNormalize(retryRaw, dayNumber, phase.phaseNumber, week, dailyTimeAvailable);
       const retryValidation = validateTaskQuality(retryResult.task, dailyTimeAvailable);
@@ -1219,6 +1190,10 @@ export async function generateTask(
   // ── Step Duration Validation (F2.4) ──
   // Ensure step durations sum close to dailyTimeAvailable
   validateStepDurations(result, dailyTimeAvailable);
+
+  // Bolt-on metadata for eval/observability — the RAG excerpt this task was
+  // actually grounded on, so a judge can check groundedness post-hoc.
+  (result as DailyTask & { _ragContextUsed?: string })._ragContextUsed = science;
 
   return result;
 }

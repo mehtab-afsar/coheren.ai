@@ -1,7 +1,7 @@
 /**
  * proxyFetch — the browser side of the ai-proxy gateway.
  *
- * Provider SDKs (groq-sdk, @anthropic-ai/sdk) are pointed at the ai-proxy edge
+ * Provider SDKs (@anthropic-ai/sdk) are pointed at the ai-proxy edge
  * function via `baseURL`, and given this fetch implementation. Per request it:
  *   1. reads a FRESH Supabase access token (handles token refresh),
  *   2. overwrites whatever auth header the SDK set (the SDK's `apiKey` is a

@@ -14,7 +14,7 @@ import { supabase } from './supabase';
 import { embedQuery } from './jina-client';
 import { env } from '@config/env';
 import { getResourcesForGoal } from './resourceLibrary';
-import { timeToSeconds, minutesToTimestamp, isEmbeddableVideoUrl } from './youtube';
+import { timeToSeconds, minutesToTimestamp, isEmbeddableVideoUrl, verifyYouTubeVideoLive } from './youtube';
 import type { TaskResource } from '@types-app/agents';
 import type { ResourceLink } from './resourceLibrary';
 
@@ -117,6 +117,19 @@ function resourceLinkToTaskResource(r: ResourceLink): TaskResource {
   };
 }
 
+/**
+ * Verify a list of video candidates concurrently (not sequentially — each check
+ * is an independent oEmbed round-trip, so awaiting them one at a time pays up to
+ * N× the necessary latency), then return the first one that's confirmed live IN
+ * ORIGINAL PRIORITY ORDER (semantic-similarity rank / library order) — not simply
+ * whichever check happens to resolve fastest.
+ */
+async function firstLiveVideo<T>(candidates: T[], getUrl: (c: T) => string): Promise<T | null> {
+  const results = await Promise.all(candidates.map(c => verifyYouTubeVideoLive(getUrl(c))));
+  const idx = results.findIndex(Boolean);
+  return idx === -1 ? null : candidates[idx];
+}
+
 // ─── Main Export ──────────────────────────────────────────────────────────────
 
 /**
@@ -128,11 +141,6 @@ function resourceLinkToTaskResource(r: ResourceLink): TaskResource {
 export async function getResourcesForTask(
   params: ResourceRetrievalParams,
 ): Promise<{ primary: TaskResource | null; supplementary: TaskResource[] }> {
-  const jinaKey = env.JINA_API_KEY;
-
-  // No Jina key → fall back to static library immediately
-  if (!jinaKey) return staticFallback(params);
-
   try {
     // Build a rich query combining task title + domain + stone context
     const stoneContext = params.stoneTypes.slice(0, 2).join(' ');
@@ -143,7 +151,9 @@ export async function getResourcesForTask(
       stoneContext,
     ].filter(Boolean).join(' ');
 
-    const embedding = await embedQuery(query, jinaKey);
+    // embedQuery routes through the ai-proxy edge function, which holds the real
+    // Jina key server-side — the apiKey arg here is vestigial and ignored.
+    const embedding = await embedQuery(query, env.JINA_API_KEY);
     if (embedding.length === 0) return staticFallback(params);
 
     const difficultyLabel = DIFFICULTY_LABEL[Math.round(params.difficultyLevel)] ?? 'beginner';
@@ -168,12 +178,19 @@ export async function getResourcesForTask(
 
     const candidates = fitting.length > 0 ? fitting : rows;
     const watchBudget = watchBudgetFor(params.durationAvailable);
-    const [primary, ...rest] = candidates.map(row =>
+    const mapped = candidates.map(row =>
       withWatchWindow(mapToTaskResource(row), row.duration_minutes, watchBudget)
     );
 
+    // match_resources is queried with filter_type: 'video', so every candidate is
+    // a video — verify the top few are still live before trusting one as primary
+    // (semantic similarity says nothing about whether the video still exists).
+    const primary = await firstLiveVideo(mapped.slice(0, 3), r => r.url);
+    if (!primary) return staticFallback(params);
+
+    const rest = mapped.filter(r => r !== primary);
     return {
-      primary:       primary ?? null,
+      primary,
       supplementary: rest.slice(0, 2),
     };
   } catch {
@@ -185,16 +202,24 @@ export async function getResourcesForTask(
  * Find a guaranteed-embeddable YouTube video for a goal from the static library,
  * sized to the daily budget. Used as a last resort so the study card always has a
  * real, playable video rather than a dead "Search" link.
+ *
+ * "Embeddable" here means both URL-shape-valid AND verified live via oEmbed —
+ * a hand-curated library still goes stale (videos get deleted/made private), so
+ * this checks every video candidate before trusting it, not just its URL shape.
  */
-export function getEmbeddableVideoFallback(goalText: string, dailyMinutes: number): TaskResource | null {
+export async function getEmbeddableVideoFallback(goalText: string, dailyMinutes: number): Promise<TaskResource | null> {
   const watchBudget = watchBudgetFor(dailyMinutes);
   const links = getResourcesForGoal(goalText);
-  const fitting = links.find(l => l.type === 'video' && isEmbeddableVideoUrl(l.url));
+  // Cap candidates checked — the library rarely has more than a couple of video
+  // entries per topic, and this bounds worst-case oEmbed round-trips per call.
+  const candidates = links.filter(l => l.type === 'video' && isEmbeddableVideoUrl(l.url)).slice(0, 3);
+  const fitting = await firstLiveVideo(candidates, l => l.url);
   if (fitting) {
     const lengthMin = fitting.duration ? Math.round(timeToSeconds(fitting.duration) / 60) : null;
     return withWatchWindow(resourceLinkToTaskResource(fitting), lengthMin, watchBudget);
   }
-  // No curated video for THIS topic. Return an honest topic-specific search link
+  // No curated video for THIS topic (or every candidate failed live verification).
+  // Return an honest topic-specific search link
   // (ResourceCard renders it as a "Search YouTube" card) rather than substituting
   // an unrelated evergreen "study" video and pretending it's on-topic.
   const query = goalText.trim();

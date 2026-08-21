@@ -1,8 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { Bell } from 'lucide-react';
 import { ap } from '@core/design-system/appleTokens';
-import DashboardSidebar from '@features/dashboard/components/DashboardSidebar';
-import BottomNav from '@features/dashboard/components/BottomNav';
+import { DashboardShell } from '@features/dashboard/components/DashboardShell';
 import { ViewErrorBoundary } from '@features/dashboard/components/ViewErrorBoundary';
 import { ViewSkeleton } from '@features/dashboard/components/ViewSkeleton';
 // TodayView is the default landing — keep static for instant first paint
@@ -145,153 +144,111 @@ export default function Dashboard() {
     }
   };
 
+  const shellNavProps = {
+    currentView,
+    onViewChange: setCurrentView,
+    onCoachOpen: () => setCoachOpen(true),
+    sidebarOpen,
+    onSidebarToggle: setSidebarOpen,
+    isMobile,
+  };
+
   // If it's a checkpoint day, show checkpoint screen instead of normal views
   if (checkpointData) {
     return (
-      <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: ap.bg, fontFamily: ap.font }}>
-        {!isMobile && (
-          <DashboardSidebar
-            currentView={currentView}
-            onViewChange={setCurrentView}
-            onCoachOpen={() => setCoachOpen(true)}
-            isOpen={sidebarOpen}
-            onToggle={setSidebarOpen}
+      <DashboardShell {...shellNavProps} maxWidth={780}>
+        <ViewErrorBoundary>
+          <CheckpointScreen
+            checkpointDay={currentDay}
+            sprintNumber={getSprintNumber(currentDay)}
+            completedTasks={checkpointData.completedTasks}
+            totalTasks={checkpointData.totalTasks}
+            avgDifficulty={checkpointData.avgDifficulty}
+            strugglingAreas={checkpointData.strugglingAreas}
+            masteringAreas={checkpointData.masteringAreas}
+            onComplete={(fb) => {
+              // Reconnect the user's reflection (previously discarded): map the
+              // checkpoint feedback into the weekly check-in shape the recalibrator reads.
+              handleCheckpointComplete({
+                pacing: `Confidence ${fb.overallConfidence}/10; time felt: ${fb.timeManagement}`,
+                hardTopics: fb.specificStruggles || '',
+                taskTypesFeedback: fb.qualitativeFeedback || '',
+                raw: [
+                  `confidence: ${fb.overallConfidence}/10`,
+                  `time: ${fb.timeManagement}`,
+                  fb.qualitativeFeedback,
+                  fb.specificStruggles,
+                ].filter(Boolean) as string[],
+              });
+            }}
+            isRecalibrating={isRecalibrating}
+            recalibrationResult={recalibrationResult}
           />
-        )}
-
-        <div style={{
-          flex: 1,
-          marginLeft: isMobile ? 0 : 220,
-          minHeight: '100vh',
-          paddingBottom: isMobile ? 80 : 0,
-        }}>
-          <div style={{ maxWidth: 780, margin: '0 auto', padding: isMobile ? '20px 16px' : '28px 36px' }}>
-            <ViewErrorBoundary>
-              <CheckpointScreen
-                checkpointDay={currentDay}
-                sprintNumber={getSprintNumber(currentDay)}
-                completedTasks={checkpointData.completedTasks}
-                totalTasks={checkpointData.totalTasks}
-                avgDifficulty={checkpointData.avgDifficulty}
-                strugglingAreas={checkpointData.strugglingAreas}
-                masteringAreas={checkpointData.masteringAreas}
-                onComplete={(fb) => {
-                  // Reconnect the user's reflection (previously discarded): map the
-                  // checkpoint feedback into the weekly check-in shape the recalibrator reads.
-                  handleCheckpointComplete({
-                    pacing: `Confidence ${fb.overallConfidence}/10; time felt: ${fb.timeManagement}`,
-                    hardTopics: fb.specificStruggles || '',
-                    taskTypesFeedback: fb.qualitativeFeedback || '',
-                    raw: [
-                      `confidence: ${fb.overallConfidence}/10`,
-                      `time: ${fb.timeManagement}`,
-                      fb.qualitativeFeedback,
-                      fb.specificStruggles,
-                    ].filter(Boolean) as string[],
-                  });
-                }}
-                isRecalibrating={isRecalibrating}
-                recalibrationResult={recalibrationResult}
-              />
-            </ViewErrorBoundary>
-          </div>
-        </div>
-
-        {isMobile && (
-          <BottomNav activeTab={currentView} onTabChange={setCurrentView} />
-        )}
-      </div>
+        </ViewErrorBoundary>
+      </DashboardShell>
     );
   }
 
-  // Normal dashboard view
+  // Top bar — bell icon + offline banner
+  const topBar = (
+    <div style={{
+      position: 'sticky', top: 0, zIndex: 30,
+      backgroundColor: ap.bg,
+      borderBottom: `1px solid ${ap.border}`,
+      padding: '12px 36px',
+      display: 'flex', justifyContent: 'flex-end',
+      alignItems: 'center',
+    }}>
+      {!isOnline && <OfflineBanner pendingCount={pendingCount} />}
+      <button
+        onClick={() => { setShowNotificationCenter(true); setUnreadCount(0); }}
+        style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', color: ap.textSecondary, display: 'flex', alignItems: 'center' }}
+      >
+        <Bell size={19} strokeWidth={1.2} />
+        {unreadCount > 0 && (
+          <span style={{
+            position: 'absolute', top: -3, right: -3,
+            width: 14, height: 14, borderRadius: 7,
+            backgroundColor: ap.streak, color: '#fff',
+            fontSize: 9, fontWeight: 700,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>{unreadCount}</span>
+        )}
+      </button>
+    </div>
+  );
+
+  // Normal dashboard view — Today gets the widest canvas (task grid);
+  // reading-heavy views use a slightly tighter max so single-column content
+  // doesn't over-stretch.
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: ap.bg, fontFamily: ap.font }}>
-      {/* Sidebar — desktop only */}
-      {!isMobile && (
-        <DashboardSidebar
-          currentView={currentView}
-          onViewChange={setCurrentView}
-          onCoachOpen={() => setCoachOpen(true)}
-          isOpen={sidebarOpen}
-          onToggle={setSidebarOpen}
-        />
-      )}
+    <>
+      <DashboardShell {...shellNavProps} maxWidth={currentView === 'today' ? 1280 : 1120} topBar={topBar}>
+        {/* Difficulty prompt — inline coach card (only on Today view) */}
+        {showDifficultyPrompt && currentView === 'today' && (
+          <DifficultyPrompt
+            onSimplify={handleSimplify}
+            onExtend={handleExtend}
+            onKeep={handleKeep}
+          />
+        )}
 
-      {/* Main content */}
-      <div style={{
-        flex: 1,
-        marginLeft: isMobile ? 0 : 220,
-        minHeight: '100vh',
-        paddingBottom: isMobile ? 80 : 0,
-      }}>
-        {/* Top bar — bell icon */}
-        <div style={{
-          position: 'sticky', top: 0, zIndex: 30,
-          backgroundColor: ap.bg,
-          borderBottom: `1px solid ${ap.border}`,
-          padding: '12px 36px',
-          display: 'flex', justifyContent: 'flex-end',
-          alignItems: 'center',
-        }}>
-          {/* Offline banner inline */}
-          {!isOnline && <OfflineBanner pendingCount={pendingCount} />}
-          <button
-            onClick={() => { setShowNotificationCenter(true); setUnreadCount(0); }}
-            style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', color: ap.textSecondary, display: 'flex', alignItems: 'center' }}
-          >
-            <Bell size={19} strokeWidth={1.2} />
-            {unreadCount > 0 && (
-              <span style={{
-                position: 'absolute', top: -3, right: -3,
-                width: 14, height: 14, borderRadius: 7,
-                backgroundColor: ap.streak, color: '#fff',
-                fontSize: 9, fontWeight: 700,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>{unreadCount}</span>
-            )}
-          </button>
-        </div>
-
-        {/* Page content — fills available width up to a comfortable max; views lay
-            out multi-column on wide screens so there's no dead gutter space.
-            Today uses the widest canvas (task grid); reading-heavy views use a
-            slightly tighter max so single-column content doesn't over-stretch. */}
-        <div style={{
-          maxWidth: currentView === 'today' ? 1280 : 1120,
-          margin: '0 auto',
-          padding: isMobile ? '20px 16px' : '28px 40px',
-          animation: 'apFadeIn 0.3s ease',
-        }}>
-          {/* Difficulty prompt — inline coach card (only on Today view) */}
-          {showDifficultyPrompt && currentView === 'today' && (
-            <DifficultyPrompt
-              onSimplify={handleSimplify}
-              onExtend={handleExtend}
-              onKeep={handleKeep}
-            />
-          )}
-
-          <ViewErrorBoundary>
-            <Suspense fallback={
-              <ViewSkeleton type={
-                currentView === 'insights' ? 'progress'
-                : currentView === 'roadmap'  ? 'journey'
-                : currentView === 'you'      ? 'me'
-                : currentView === 'today'    ? 'today'
-                : 'generic'
-              } />
-            }>
-              <div key={currentView} style={{ animation: 'apFadeIn 0.3s ease' }}>
-                {renderView()}
-              </div>
-            </Suspense>
-          </ViewErrorBoundary>
-        </div>
-      </div>
-
-      {/* BottomNav on mobile */}
-      {isMobile && <BottomNav activeTab={currentView} onTabChange={setCurrentView} />}
+        <ViewErrorBoundary>
+          <Suspense fallback={
+            <ViewSkeleton type={
+              currentView === 'insights' ? 'progress'
+              : currentView === 'roadmap'  ? 'journey'
+              : currentView === 'you'      ? 'me'
+              : currentView === 'today'    ? 'today'
+              : 'generic'
+            } />
+          }>
+            <div key={currentView} style={{ animation: 'apFadeIn 0.3s ease' }}>
+              {renderView()}
+            </div>
+          </Suspense>
+        </ViewErrorBoundary>
+      </DashboardShell>
 
       {/* Coach Thread */}
       <CoachThread isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
@@ -342,6 +299,6 @@ export default function Dashboard() {
           </button>
         </div>
       )}
-    </div>
+    </>
   );
 }

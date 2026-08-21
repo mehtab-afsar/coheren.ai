@@ -17,7 +17,34 @@ import Anthropic from '@anthropic-ai/sdk';
 import { env } from '@config/env';
 import { proxyFetch } from './ai-proxy-fetch';
 
-const CLAUDE_SONNET = 'claude-sonnet-4-6';
+/**
+ * Per-agent-tier models (single source of truth; ai-router maps tiers → these).
+ *   economy   → high-volume cheap JSON        (A4 Task Generator)
+ *   reasoning → nuanced structured reasoning  (A1 Goal, A2 Stone, A5 Recal, retries)
+ *   premium   → hardest reasoning/generation   (A3 Curriculum, strategic recalibration)
+ */
+export const TIER_MODELS = {
+  economy:   'claude-haiku-4-5',
+  reasoning: 'claude-sonnet-5',
+  premium:   'claude-opus-5',
+} as const;
+export type ModelTier = keyof typeof TIER_MODELS;
+
+const DEFAULT_MODEL: string = TIER_MODELS.reasoning;
+
+/**
+ * Models that REJECT `temperature`/`top_p`/`top_k` and `thinking.budget_tokens`
+ * with a 400 (the 5-gen + Opus 4.7/4.8 family). For these we omit sampling and
+ * use adaptive thinking + `output_config.effort` instead of a fixed token budget.
+ * Older models (Haiku 4.5, Sonnet/Opus 4.6) still accept temperature + budget_tokens.
+ */
+const NO_SAMPLING_MODELS = new Set<string>([
+  'claude-opus-5', 'claude-sonnet-5', 'claude-fable-5', 'claude-mythos-5',
+  'claude-opus-4-8', 'claude-opus-4-7',
+]);
+function acceptsSampling(model: string): boolean {
+  return !NO_SAMPLING_MODELS.has(model);
+}
 
 export function isClaudeAvailable(): boolean {
   // Availability is a secret-free feature flag; the real key lives in the edge
@@ -54,6 +81,7 @@ export interface ClaudeCallParams {
   systemPrompt?:   string;
   temperature?:    number;
   max_tokens?:     number;
+  model?:          string;  // defaults to TIER_MODELS.reasoning; router passes the tier's model
 }
 
 export interface ClaudeToolSchema {
@@ -71,8 +99,9 @@ export interface ClaudeToolCallParams extends ClaudeCallParams {
 export interface ClaudeThinkingParams {
   messages:      ClaudeMessage[];
   systemPrompt?: string;
-  budgetTokens?: number;  // default 8000
-  max_tokens?:   number;  // default 12000 (must exceed budgetTokens)
+  budgetTokens?: number;  // only used on older models (budget_tokens); ignored on 5-gen
+  max_tokens?:   number;  // default 16000
+  model?:        string;  // defaults to TIER_MODELS.premium (Opus 5)
 }
 
 export interface ClaudeThinkingResult {
@@ -93,10 +122,11 @@ export interface ClaudeToolResult {
  */
 export async function callClaude(params: ClaudeCallParams): Promise<string> {
   const client = makeClient();
+  const model = params.model ?? DEFAULT_MODEL;
   const response = await client.messages.create({
-    model:       CLAUDE_SONNET,
+    model,
     max_tokens:  params.max_tokens ?? 4096,
-    temperature: params.temperature ?? 0.3,
+    ...(acceptsSampling(model) ? { temperature: params.temperature ?? 0.3 } : {}),
     system:      params.systemPrompt,
     messages:    params.messages,
   });
@@ -126,6 +156,7 @@ export interface ClaudeForcedToolParams {
   systemPrompt?: string;
   temperature?:  number;
   max_tokens?:   number;
+  model?:        string;
   tools:         ForcedToolSchema[];
   tool_name:     string; // forces tool_choice to this specific function
 }
@@ -146,10 +177,11 @@ export async function callClaudeWithForcedTool(params: ClaudeForcedToolParams): 
     input_schema: t.function.parameters as Anthropic.Messages.Tool['input_schema'],
   }));
 
+  const model = params.model ?? DEFAULT_MODEL;
   const response = await client.messages.create({
-    model:       CLAUDE_SONNET,
+    model,
     max_tokens:  params.max_tokens ?? 4096,
-    temperature: params.temperature ?? 0.3,
+    ...(acceptsSampling(model) ? { temperature: params.temperature ?? 0.3 } : {}),
     system:      params.systemPrompt,
     messages:    params.messages,
     tools:       anthropicTools,
@@ -184,12 +216,13 @@ export async function callClaudeWithTools(params: ClaudeToolCallParams): Promise
     content: m.content,
   }));
 
+  const model = params.model ?? DEFAULT_MODEL;
   const MAX_ROUNDS = 10;
   for (let round = 0; round < MAX_ROUNDS; round++) {
     const response = await client.messages.create({
-      model:       CLAUDE_SONNET,
+      model,
       max_tokens:  params.max_tokens ?? 4096,
-      temperature: params.temperature ?? 0.3,
+      ...(acceptsSampling(model) ? { temperature: params.temperature ?? 0.3 } : {}),
       system:      params.systemPrompt,
       messages,
       tools:       anthropicTools,
@@ -247,18 +280,34 @@ export async function callClaudeWithTools(params: ClaudeToolCallParams): Promise
 export async function callClaudeWithThinking(
   params: ClaudeThinkingParams,
 ): Promise<ClaudeThinkingResult> {
-  const budgetTokens = params.budgetTokens ?? 8000;
-  const maxTokens    = params.max_tokens   ?? 12000;
-
+  const model     = params.model ?? TIER_MODELS.premium; // A3 curriculum → Opus 5
+  const maxTokens = params.max_tokens ?? 16000;
   const client = makeClient();
-  const response = await client.messages.create({
-    model:       CLAUDE_SONNET,
-    max_tokens:  maxTokens,
-    temperature: 1, // extended thinking requires temperature=1
-    system:      params.systemPrompt,
-    messages:    params.messages,
-    thinking:    { type: 'enabled', budget_tokens: budgetTokens },
-  } as Parameters<typeof client.messages.create>[0]);
+
+  // 5-gen (Opus 5 / Sonnet 5): adaptive thinking + effort; NO temperature, NO
+  // budget_tokens (both 400). Older gen (4.6 / Haiku): the classic enabled +
+  // budget_tokens + temperature=1 shape.
+  const base = {
+    model,
+    max_tokens: maxTokens,
+    system:     params.systemPrompt,
+    messages:   params.messages,
+  };
+  const requestBody = acceptsSampling(model)
+    ? {
+        ...base,
+        temperature: 1,
+        thinking: { type: 'enabled', budget_tokens: params.budgetTokens ?? 8000 },
+      }
+    : {
+        ...base,
+        thinking: { type: 'adaptive', display: 'summarized' },
+        output_config: { effort: 'high' },
+      };
+
+  const response = await client.messages.create(
+    requestBody as Parameters<typeof client.messages.create>[0],
+  );
 
   let thinking = '';
   let output   = '';
@@ -286,10 +335,11 @@ export async function* streamClaude(
   params: ClaudeCallParams,
 ): AsyncGenerator<string, void, unknown> {
   const client = makeClient();
+  const model = params.model ?? DEFAULT_MODEL;
   const stream = await client.messages.create({
-    model:       CLAUDE_SONNET,
+    model,
     max_tokens:  params.max_tokens ?? 4096,
-    temperature: params.temperature ?? 0.7,
+    ...(acceptsSampling(model) ? { temperature: params.temperature ?? 0.7 } : {}),
     system:      params.systemPrompt,
     messages:    params.messages,
     stream:      true,

@@ -15,6 +15,7 @@ import type { GoalCategory } from '@types-app/index';
 
 // Import agent system
 import { runOnboardingAgents, generateCompleteRoadmap, generateTaskBatch, getCurriculumPreview, getPaceCalibration, buildLegacyAgent3Output, buildClarifications } from '@core/agents';
+import { parseAgentJSON } from '@core/agents/llm-output';
 import type { BuildingStone, StoneAnswer, Agent1Output, DailyTask, CurriculumPreview, PaceCalibration, PaceChoice } from '@core/agents';
 import type { AgentRoadmapV2 } from '@core/store/useStore';
 import StoneQuestions from '@features/onboarding/components/StoneQuestions';
@@ -25,6 +26,7 @@ import CurriculumPreviewComponent from '@features/onboarding/components/Curricul
 import { syncCompleteRoadmap } from '@lib/database';
 import { useAuthGate } from '../hooks/useAuthGate';
 import { track } from '@lib/analytics';
+import GoogleIcon from '@shared/components/ui/google-icon';
 
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -242,7 +244,8 @@ export default function ChatOnboarding({ onLoginSuccess: _onLoginSuccess }: Chat
     authLoading,
     authError, setAuthError,
     setPendingSyncData,
-    handleAuthGateSubmit
+    handleAuthGateSubmit,
+    handleGoogleAuthGate
   } = useAuthGate({ collectedData, setInitialGoal, setStep });
 
   // Rotating loading messages shown while generating the roadmap
@@ -433,7 +436,23 @@ Current Data Already Collected: ${JSON.stringify(collectedData)}`
         response_format: { type: "json_object" }
       });
 
-      const newData = JSON.parse(extractRaw || '{}');
+      // Best-effort extraction — Claude has no API-level JSON mode (unlike the old
+      // Groq response_format: json_object, which the router silently drops now),
+      // so it occasionally answers conversationally instead of with pure JSON.
+      // Repair markdown-fenced/prose-wrapped output the same way the agent
+      // pipeline does; if it's genuinely not JSON, skip merging rather than
+      // breaking the conversation over a single missed extraction turn.
+      type ExtractedData = Partial<{
+        goal: string; skillLevel: string; category: string; timeline: string;
+        dailyTime: string; energyPattern: string; behavioralFlags: string[];
+        practiceEnvironment: string;
+      }>;
+      let newData: ExtractedData = {};
+      try {
+        newData = parseAgentJSON<ExtractedData>(extractRaw || '{}', 'chat-shadow-extractor');
+      } catch {
+        // no new fields this turn
+      }
 
       // Clean Merge: compute synchronously so whisper logic uses up-to-date values
       const mergedData = { ...collectedData };
@@ -518,6 +537,14 @@ Current Data Already Collected: ${JSON.stringify(collectedData)}`
       const systemPrompt = `You are Coheren, an enthusiastic AI goal coach. Your mission is to help the user define their dream and prepare them for a personalized strategic roadmap.${scientificKnowledge}
 
 ---
+IF THEY ASK WHAT COHEREN DOES / OFFERS:
+Answer honestly and briefly (1-2 sentences) — don't deflect back into the script.
+Coheren builds a personalized, day-by-day roadmap for their specific goal, tailored
+to the psychological blockers that typically derail people (procrastination,
+perfectionism, low confidence, etc.), and adapts the plan weekly based on what
+they actually complete — not a generic course.
+
+---
 CORE GOAL:
 Guide the user through a warm, natural conversation to understand their:
 1. Goal (what they want to achieve)
@@ -544,16 +571,33 @@ IMPORTANT:
 The system will automatically detect when the data is complete and transition to the next phase. You do not need to use any specific 'magic words' or commands. Just be a helpful coach until the screen changes.`;
 
       // --- STEP 3: AI WHISPERING (Dynamic Guidance) ---
-      // Use mergedData (not stale collectedData) so whisper reflects what was just extracted
-      let nextQuestion: string | null = null;
-      if (!mergedData.timeline) nextQuestion = 'their target timeline or deadline (e.g. "3 months", "6 weeks", "by December")';
-      else if (!mergedData.dailyTime) nextQuestion = 'how much time per day they can commit (e.g. "30 minutes", "1 hour")';
-      else if (!mergedData.skillLevel) nextQuestion = 'their current experience level (beginner / intermediate / advanced)';
+      // Use mergedData (not stale collectedData) so whisper reflects what was just extracted.
+      // Single declarative list of "must actively ask about" fields, checked in
+      // priority order — add an entry here instead of hand-editing a growing
+      // if/else chain. (energyPattern used to be extracted but never included in
+      // this check, so it silently stayed unasked forever — see REQUIRED_FIELDS.)
+      const REQUIRED_FIELDS: Array<{ isMissing: (d: typeof mergedData) => boolean; prompt: string }> = [
+        { isMissing: d => !d.goal, prompt: 'what they actually want to achieve — you don\'t know their goal yet, so ask that before anything else' },
+        { isMissing: d => !d.timeline, prompt: 'their target timeline or deadline (e.g. "3 months", "6 weeks", "by December")' },
+        { isMissing: d => !d.dailyTime, prompt: 'how much time per day they can commit (e.g. "30 minutes", "1 hour")' },
+        { isMissing: d => !d.skillLevel, prompt: 'their current experience level (beginner / intermediate / advanced)' },
+        { isMissing: d => !d.energyPattern, prompt: 'when they tend to have the most energy or focus (morning / afternoon / evening / night)' },
+      ];
+      const nextQuestion = REQUIRED_FIELDS.find(f => f.isMissing(mergedData))?.prompt ?? null;
+
+      // Detect whether the user's message reads like a genuine question rather than
+      // an answer (e.g. "what do you offer?") — the whisper below force-redirects
+      // to the next required field regardless of what they said, which previously
+      // meant a real question from the user got steamrolled by a scripted prompt.
+      const userAskedSomething = /\?\s*$/.test(currentInput.trim());
+      const answerFirstNote = userAskedSomething
+        ? 'The user just asked you something — answer it warmly and honestly in 1 short sentence first (yes, really answer it, don\'t deflect). Then, in the same reply, '
+        : '';
 
       // Create the "Whisper"
       let whisper: string;
       if (nextQuestion) {
-        whisper = `\n\n(SYSTEM WHISPER: Your ONLY job in this reply is to ask specifically about: ${nextQuestion}. Ask it as a single warm question. Do NOT wrap up or say the plan is ready yet.)`;
+        whisper = `\n\n(SYSTEM WHISPER: ${answerFirstNote}your job is to ask specifically about: ${nextQuestion}. Ask it as a single warm question. Do NOT wrap up or say the plan is ready yet.)`;
       } else {
         // All fields collected — run realism check before declaring ready
         const realism = validateGoalRealism(mergedData);
@@ -1460,7 +1504,7 @@ The system will automatically detect when the data is complete and transition to
                       className="flex-1 bg-transparent border-none outline-none focus-visible:shadow-none text-[15px] text-zinc-800 placeholder:text-zinc-400"
                     />
                     <button
-                      onClick={handleSend}
+                      onClick={() => handleSend()}
                       disabled={!userInput.trim()}
                       className="flex-shrink-0 w-8 h-8 rounded-full disabled:bg-zinc-200 flex items-center justify-center transition-all duration-150 enabled:hover:scale-105 enabled:active:scale-95"
                       style={userInput.trim() ? { background: 'var(--c-accent-purple, #C4552D)' } : undefined}
@@ -1637,6 +1681,30 @@ The system will automatically detect when the data is complete and transition to
                     {authError}
                   </div>
                 )}
+
+                <button
+                  type="button"
+                  onClick={handleGoogleAuthGate}
+                  disabled={authLoading}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                    padding: '11px 0', borderRadius: 11, border: '1.5px solid #e5e7eb',
+                    background: '#fff', cursor: authLoading ? 'not-allowed' : 'pointer',
+                    fontSize: 14, fontWeight: 600, color: '#374151', letterSpacing: '-0.01em',
+                    transition: 'background 0.15s, border-color 0.15s',
+                  }}
+                  onMouseEnter={(e) => { if (!authLoading) e.currentTarget.style.background = '#fafafa'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
+                >
+                  <GoogleIcon />
+                  Continue with Google
+                </button>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '20px 0' }}>
+                  <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                  <span style={{ fontSize: 12, color: '#9ca3af' }}>or</span>
+                  <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                </div>
 
                 <form onSubmit={handleAuthGateSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   {authGateMode === 'signup' && (

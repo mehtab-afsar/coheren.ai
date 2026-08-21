@@ -1,16 +1,18 @@
 /**
- * AI Router — Claude is the sole provider.
+ * AI Router — Claude, per-agent-tier models (see TIER_MODELS in claude-client).
  *
  * All agents call one of these public functions:
- *   callEconomy()                → Claude claude-sonnet-4-6   Task Generator (fast, cheap JSON)
- *   callReasoning()              → Claude claude-sonnet-4-6   Goal Analyzer, Stone Identifier, Recalibrator
- *   callPremium()                → Claude claude-sonnet-4-6   Curriculum Builder
- *   callStrategic()              → Claude claude-sonnet-4-6   Agent 3 + 5 when USE_CLAUDE_FOR_* flags on
- *   callStrategicWithThinking()  → Claude extended thinking   Agent 3 curriculum design
- *   callWithTools()              → Claude forced single tool call (structured-output trick)
- *   callStrategicWithTools()     → Claude multi-turn agentic tool-use loop
+ *   callEconomy()                → Claude Haiku 4.5   Task Generator (fast, cheap JSON)
+ *   callReasoning()              → Claude Sonnet 5    Goal Analyzer, Stone Identifier, Recalibrator, retries
+ *   callPremium()                → Claude Opus 5      Curriculum Builder
+ *   callStrategic()              → Claude Opus 5      Agent 3 + 5 strategic path
+ *   callStrategicWithThinking()  → Claude Opus 5 + adaptive thinking   Agent 3 curriculum design
+ *   callWithTools(tier)          → forced single tool call on the tier's model (structured-output trick)
+ *   callStrategicWithTools()     → multi-turn agentic tool-use loop
  *
- * Adding a new provider: add a ProviderAdapter and push into the relevant chain.
+ * The client is model-aware: it drops `temperature` and uses adaptive thinking on
+ * the 5-gen models (Opus 5 / Sonnet 5), which reject sampling + budget_tokens.
+ * Adding a fallback provider: append a ProviderAdapter to the relevant chain.
  */
 
 import {
@@ -19,6 +21,8 @@ import {
   callClaudeWithForcedTool,
   streamClaude,
   isClaudeAvailable,
+  TIER_MODELS,
+  type ModelTier,
   type ClaudeMessage,
   type ClaudeThinkingResult,
   type ClaudeToolCallParams,
@@ -61,31 +65,37 @@ interface ProviderAdapter {
 // Same shape callStrategic() already builds inline below — extracted so the base
 // tiers (economy/reasoning/premium) can use Claude too, not just the strategic tier.
 
-const claudeAdapter: ProviderAdapter = {
-  name: 'claude', model: 'claude-sonnet-4-6',
-  isAvailable: () => isClaudeAvailable(),
-  async call(params) {
-    const content = await callClaude({
-      messages: params.messages.filter(m => m.role !== 'system').map(m => ({
-        role:    m.role as 'user' | 'assistant',
-        content: m.content,
-      })) as ClaudeMessage[],
-      systemPrompt: params.messages.find(m => m.role === 'system')?.content,
-      temperature:  params.temperature,
-      max_tokens:   params.max_tokens,
-    });
-    return { content, provider: 'claude', model: 'claude-sonnet-4-6' };
-  },
-};
+// One Claude adapter per tier, each pinned to its own model (Haiku / Sonnet 5 /
+// Opus 5). The client is model-aware (drops temperature + uses adaptive thinking
+// on the 5-gen models), so the router just passes the tier's model through.
+function makeClaudeAdapter(tier: ModelTier): ProviderAdapter {
+  const model = TIER_MODELS[tier];
+  return {
+    name: 'claude', model,
+    isAvailable: () => isClaudeAvailable(),
+    async call(params) {
+      const content = await callClaude({
+        model,
+        messages: params.messages.filter(m => m.role !== 'system').map(m => ({
+          role:    m.role as 'user' | 'assistant',
+          content: m.content,
+        })) as ClaudeMessage[],
+        systemPrompt: params.messages.find(m => m.role === 'system')?.content,
+        temperature:  params.temperature,
+        max_tokens:   params.max_tokens,
+      });
+      return { content, provider: 'claude', model };
+    },
+  };
+}
 
 // ── Provider chains ───────────────────────────────────────────────────────────
-// Claude is the only provider in the codebase now — one adapter per chain. Kept
-// as an array (not a single value) so a second provider could be added later
-// without changing routeCall's shape.
+// One adapter per tier. Kept as arrays so a second provider could be appended as
+// a fallback later without changing routeCall's shape.
 
-const ECONOMY_CHAIN:   ProviderAdapter[] = [claudeAdapter];
-const REASONING_CHAIN: ProviderAdapter[] = [claudeAdapter];
-const PREMIUM_CHAIN:   ProviderAdapter[] = [claudeAdapter];
+const ECONOMY_CHAIN:   ProviderAdapter[] = [makeClaudeAdapter('economy')];
+const REASONING_CHAIN: ProviderAdapter[] = [makeClaudeAdapter('reasoning')];
+const PREMIUM_CHAIN:   ProviderAdapter[] = [makeClaudeAdapter('premium')];
 
 // ── Core router ───────────────────────────────────────────────────────────────
 
@@ -168,9 +178,10 @@ export interface ToolCallParams extends Omit<RouterCallParams, 'response_format'
  */
 export async function callWithTools(
   params: ToolCallParams,
-  _tier: 'economy' | 'reasoning' | 'premium' = 'reasoning'
+  tier: ModelTier = 'reasoning'
 ): Promise<string> {
   return callClaudeWithForcedTool({
+    model: TIER_MODELS[tier],
     messages: params.messages.filter(m => m.role !== 'system').map(m => ({
       role:    m.role as 'user' | 'assistant',
       content: m.content,
@@ -229,6 +240,7 @@ export async function* callEconomyStream(
 export async function callStrategic(params: RouterCallParams): Promise<RouterCompletion> {
   if (!isClaudeAvailable()) return callPremium(params);
   const content = await callClaude({
+    model: TIER_MODELS.premium,
     messages: params.messages.filter(m => m.role !== 'system').map(m => ({
       role:    m.role as 'user' | 'assistant',
       content: m.content,
@@ -237,7 +249,7 @@ export async function callStrategic(params: RouterCallParams): Promise<RouterCom
     temperature:  params.temperature,
     max_tokens:   params.max_tokens,
   });
-  return { content, provider: 'claude', model: 'claude-sonnet-4-6' };
+  return { content, provider: 'claude', model: TIER_MODELS.premium };
 }
 
 /**
@@ -253,19 +265,20 @@ export async function callStrategicWithThinking(
     return result;
   }
   const result: ClaudeThinkingResult = await callClaudeWithThinking({
+    model: TIER_MODELS.premium,
     messages: params.messages.filter(m => m.role !== 'system').map(m => ({
       role:    m.role as 'user' | 'assistant',
       content: m.content,
     })) as ClaudeMessage[],
     systemPrompt: params.messages.find(m => m.role === 'system')?.content,
     budgetTokens: params.budgetTokens ?? 8000,
-    max_tokens:   params.max_tokens ?? 12000,
+    max_tokens:   params.max_tokens ?? 16000,
   });
   return {
     content:  result.output,
     thinking: result.thinking,
     provider: 'claude',
-    model:    'claude-sonnet-4-6',
+    model:    TIER_MODELS.premium,
   };
 }
 

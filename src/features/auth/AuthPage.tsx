@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { DitheringShader } from '@shared/components/ui/dithering-shader';
+import GoogleIcon from '@shared/components/ui/google-icon';
 import { useStore } from '@core/store/useStore';
 import { tokens } from '@core/design-system';
-import { supabase } from '@lib/supabase';
+import { supabase, signInWithGoogle } from '@lib/supabase';
 
 interface AuthPageProps {
   mode: 'signup' | 'signin';
@@ -19,6 +20,12 @@ export default function AuthPage({ mode }: AuthPageProps) {
   const [loading, setLoading]   = useState(false);
 
   const isSignUp = mode === 'signup';
+
+  const handleGoogleSignIn = async () => {
+    setError('');
+    const { error: err } = await signInWithGoogle();
+    if (err) setError(err.message);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,6 +160,30 @@ export default function AuthPage({ mode }: AuthPageProps) {
                 {error}
               </div>
             )}
+
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              disabled={loading}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                padding: '11px 0', borderRadius: 11, border: '1.5px solid #e5e7eb',
+                background: '#fff', cursor: loading ? 'not-allowed' : 'pointer',
+                fontSize: 14, fontWeight: 600, color: '#374151', letterSpacing: '-0.01em',
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = '#fafafa'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
+            >
+              <GoogleIcon />
+              Continue with Google
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '20px 0' }}>
+              <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+              <span style={{ fontSize: 12, color: '#9ca3af' }}>or</span>
+              <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+            </div>
 
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {isSignUp && (

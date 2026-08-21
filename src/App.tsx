@@ -7,9 +7,10 @@ import Settings from '@features/dashboard/components/Settings';
 import AuthPage from '@features/auth/AuthPage';
 import ErrorBoundary from '@shared/components/ErrorBoundary';
 import { onAuthStateChange, supabase } from '@lib/supabase';
-import { getTasksByRoadmapId, calculateStreak } from '@lib/database';
+import { getTasksByRoadmapId, calculateStreak, syncCompleteRoadmap, upsertProfile } from '@lib/database';
 import { identifyUser, resetAnalyticsUser, track } from '@lib/analytics';
 import { expireStaleCheckpoints } from '@lib/checkpointHelpers';
+import { readPendingOAuthSync, clearPendingOAuthSync } from '@lib/oauthSyncStash';
 
 function App() {
   const step = useStore((state) => state.step);
@@ -57,6 +58,12 @@ function App() {
         // id maps back to the user in Supabase if you ever need to join server-side.
         identifyUser(session.user.id);
 
+        // Email/password signup creates this row via createProfile(); Google
+        // OAuth never calls that, so ensure it here too. Idempotent — no-ops
+        // for returning users (ignoreDuplicates), never overwrites edits.
+        const googleName = session.user.user_metadata?.full_name ?? session.user.user_metadata?.name ?? null;
+        upsertProfile(session.user.id, googleName).catch(() => {});
+
         // Activation funnel: fire `signup` only for a genuinely NEW account, not a
         // returning login. `SIGNED_IN` fires on both, so gate on account age — a
         // just-created account is <5 min old. This is the real signup conversion step.
@@ -81,8 +88,38 @@ function App() {
         }
 
         // If on onboarding with roadmap already generated (value-first funnel: user just signed up),
-        // the ChatOnboarding component handles the sync — don't interfere
+        // the ChatOnboarding component handles the sync in-place — don't interfere.
+        // EXCEPTION: a Google OAuth sign-in navigates away and back, so ChatOnboarding's
+        // in-memory handler never runs — finish the sync here from the stashed data instead.
         if (liveStep === 1 && useStore.getState().roadmap) {
+          const pendingSync = readPendingOAuthSync();
+          if (pendingSync) {
+            try {
+              const { currentGoal, agentRoadmap, stoneProfile, tasks } = useStore.getState();
+              if (agentRoadmap && currentGoal) {
+                const result = await syncCompleteRoadmap(
+                  session.user.id,
+                  currentGoal.specificGoal,
+                  `Generated via AI multi-agent system for ${currentGoal.category}`,
+                  pendingSync.goalAnalysis,
+                  pendingSync.answers,
+                  agentRoadmap,
+                  tasks,
+                  stoneProfile ?? undefined
+                );
+                const goalId = (result as { goal?: { id?: string } }).goal?.id;
+                const roadmapId = (result as { roadmap?: { id?: string } }).roadmap?.id;
+                if (goalId && roadmapId) {
+                  await useStore.getState().reconcileSyncedRoadmap(goalId, roadmapId);
+                }
+              }
+            } catch (err) {
+              console.warn('Post-OAuth roadmap sync failed:', err);
+            } finally {
+              clearPendingOAuthSync();
+            }
+            useStore.setState({ step: 2 });
+          }
           return;
         }
 

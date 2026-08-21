@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useStore } from '@core/store/useStore';
-import { signIn, signUp } from '@lib/supabase';
+import { signIn, signUp, signInWithGoogle } from '@lib/supabase';
 import { syncCompleteRoadmap } from '@lib/database';
 import { generateInitialTasks } from '@shared/utils/taskGenerator';
+import { stashPendingOAuthSync } from '@lib/oauthSyncStash';
 import type { Agent1Output, StoneAnswer, Agent2ProfileOutput } from '@core/agents';
 import type { GoalCategory } from '@types-app/index';
 
@@ -104,6 +105,21 @@ export function useAuthGate({
     }
   };
 
+  // Google redirects the whole page away and back, so stash the two pieces of
+  // pendingSyncData that aren't already in the persisted zustand store — App.tsx
+  // picks them up via readPendingOAuthSync() once the session comes back.
+  const handleGoogleAuthGate = async () => {
+    setAuthError(null);
+    if (pendingSyncData) {
+      stashPendingOAuthSync({
+        goalAnalysis: pendingSyncData.goalAnalysisData,
+        answers: pendingSyncData.answers,
+      });
+    }
+    const { error } = await signInWithGoogle();
+    if (error) setAuthError(error.message);
+  };
+
   return {
     showAuthGate,
     setShowAuthGate,
@@ -121,5 +137,6 @@ export function useAuthGate({
     pendingSyncData,
     setPendingSyncData,
     handleAuthGateSubmit,
+    handleGoogleAuthGate,
   };
 }

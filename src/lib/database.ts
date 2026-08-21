@@ -380,6 +380,22 @@ export async function createProfile(
   );
 }
 
+/** Idempotent: creates the profile row on first sign-in (needed for Google OAuth,
+ * which never calls `createProfile`), no-ops on every later sign-in so it can't
+ * clobber fields the user has since edited (location/bio/persona_traits). */
+export async function upsertProfile(userId: string, fullName?: string | null) {
+  return runOptionalQuery('upserting profile',
+    supabase
+      .from('profiles')
+      .upsert(
+        { id: userId, full_name: fullName || null },
+        { onConflict: 'id', ignoreDuplicates: true }
+      )
+      .select()
+      .maybeSingle()
+  );
+}
+
 export async function updateProfile(userId: string, updates: {
   full_name?: string;
   location?: string;

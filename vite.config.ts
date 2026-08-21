@@ -27,6 +27,13 @@ export default defineConfig({
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.ts',
+      // injectManifest only emits a real /sw.js on production build; without this,
+      // dev requests for /sw.js fall through to the SPA's index.html (text/html),
+      // which is what main.tsx's unconditional registration was failing on.
+      devOptions: {
+        enabled: true,
+        type: 'module',
+      },
       includeAssets: ['icon-192.png', 'icon-512.png'],
       manifest: {
         name: 'Coheren.ai - AI Goal Coach',

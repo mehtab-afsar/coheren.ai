@@ -21,6 +21,26 @@ export const supabase = createClient(
   }
 );
 
+// supabase.auth.getSession() serializes across tabs via the Web Locks API in the
+// browser. A tab that died mid-refresh (killed dev server, hard reload, HMR) can
+// leave that lock held, and every later getSession() call in ANY tab hangs
+// forever — no error, no rejection, just a promise that never settles. Bound it
+// here once so every caller (auth init, proxyFetch, etc.) degrades to "no
+// session" instead of hanging the whole app.
+const GET_SESSION_TIMEOUT_MS = 5000;
+
+export async function getSessionSafe() {
+  return Promise.race([
+    supabase.auth.getSession(),
+    new Promise<null>(resolve => {
+      setTimeout(() => {
+        console.warn('[supabase] getSession() timed out after', GET_SESSION_TIMEOUT_MS, 'ms — a stuck cross-tab auth lock is the likely cause; treating as no session');
+        resolve(null);
+      }, GET_SESSION_TIMEOUT_MS);
+    }),
+  ]);
+}
+
 // Types for database tables
 export interface Profile {
   id: string;
@@ -81,7 +101,8 @@ export interface DailyTaskRecord {
 export const getCurrentUser = async () => {
   try {
     // First check if there's an active session
-    const { data: { session } } = await supabase.auth.getSession();
+    const result = await getSessionSafe();
+    const session = result?.data.session;
     if (!session) {
       return null; // No session, user not logged in
     }

@@ -96,7 +96,7 @@ function App() {
           if (pendingSync) {
             try {
               const { currentGoal, agentRoadmap, stoneProfile, tasks } = useStore.getState();
-              if (agentRoadmap && currentGoal) {
+              if (agentRoadmap && currentGoal.specificGoal) {
                 const result = await syncCompleteRoadmap(
                   session.user.id,
                   currentGoal.specificGoal,
@@ -104,7 +104,7 @@ function App() {
                   pendingSync.goalAnalysis,
                   pendingSync.answers,
                   agentRoadmap,
-                  tasks,
+                  tasks as unknown as Array<Record<string, unknown>>,
                   stoneProfile ?? undefined
                 );
                 const goalId = (result as { goal?: { id?: string } }).goal?.id;

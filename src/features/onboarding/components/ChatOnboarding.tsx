@@ -447,6 +447,8 @@ Current Data Already Collected: ${JSON.stringify(collectedData)}`
         dailyTime: string; energyPattern: string; behavioralFlags: string[];
         practiceEnvironment: string;
       }>;
+      const VALID_SKILL_LEVELS = ['beginner', 'intermediate', 'advanced'] as const;
+      const VALID_GOAL_CATEGORIES: GoalCategory[] = ['Fitness', 'Exam', 'Hobby', 'Learning', 'Habit', 'Creative'];
       let newData: ExtractedData = {};
       try {
         newData = parseAgentJSON<ExtractedData>(extractRaw || '{}', 'chat-shadow-extractor');
@@ -457,10 +459,14 @@ Current Data Already Collected: ${JSON.stringify(collectedData)}`
       // Clean Merge: compute synchronously so whisper logic uses up-to-date values
       const mergedData = { ...collectedData };
       if (newData.goal) mergedData.goal = newData.goal;
-      if (newData.skillLevel) mergedData.skillLevel = newData.skillLevel;
+      if (newData.skillLevel && VALID_SKILL_LEVELS.includes(newData.skillLevel as typeof VALID_SKILL_LEVELS[number])) {
+        mergedData.skillLevel = newData.skillLevel as typeof mergedData.skillLevel;
+      }
       if (newData.timeline) mergedData.timeline = newData.timeline;
       if (newData.dailyTime) mergedData.dailyTime = newData.dailyTime;
-      if (newData.category) mergedData.category = newData.category;
+      if (newData.category && VALID_GOAL_CATEGORIES.includes(newData.category as GoalCategory)) {
+        mergedData.category = newData.category as GoalCategory;
+      }
       if (newData.energyPattern) mergedData.energyPattern = newData.energyPattern;
       if (Array.isArray(newData.behavioralFlags) && newData.behavioralFlags.length > 0) {
         const combined = new Set([...mergedData.behavioralFlags, ...newData.behavioralFlags]);

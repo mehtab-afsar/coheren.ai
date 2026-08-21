@@ -13,14 +13,16 @@
  * real provider key, and forwards — so the real keys never reach the browser.
  */
 
-import { supabase } from './supabase';
+import { getSessionSafe } from './supabase';
 
 export async function proxyFetch(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
+  // getSessionSafe() bounds the otherwise-unbounded getSession() call — see its
+  // definition in supabase.ts for why that call can hang indefinitely.
+  const result = await getSessionSafe();
+  const token = result?.data.session?.access_token;
 
   const headers = new Headers(init?.headers);
   // The SDK put a dummy key here; replace with the caller's Supabase JWT.

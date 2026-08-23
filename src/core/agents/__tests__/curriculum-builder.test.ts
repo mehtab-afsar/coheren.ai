@@ -13,11 +13,21 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('@lib/ai-router', () => ({
-  callPremium: vi.fn(),
-  callStrategicWithThinking: vi.fn(),
-  callStrategicWithTools: vi.fn(),
-}));
+vi.mock('@lib/ai-router', () => {
+  const callPremium = vi.fn();
+  return {
+    callPremium,
+    // buildCurriculum's default path streams via callPremiumStream. Delegate to the
+    // callPremium mock so the existing tests (which set callPremium.mockResolvedValueOnce)
+    // keep working — yield the mocked content as a single chunk.
+    callPremiumStream: vi.fn(async function* () {
+      const r = await callPremium();
+      yield (r as { content?: string })?.content ?? '';
+    }),
+    callStrategicWithThinking: vi.fn(),
+    callStrategicWithTools: vi.fn(),
+  };
+});
 vi.mock('@core/rag/semantic-retriever', () => ({
   retrieveKnowledgeSemantic: vi.fn().mockResolvedValue(''),
   retrieveKnowledgeHybrid: vi.fn().mockResolvedValue(''),

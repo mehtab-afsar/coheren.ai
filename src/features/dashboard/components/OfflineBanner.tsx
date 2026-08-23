@@ -20,8 +20,8 @@ export default function OfflineBanner({ pendingCount }: Props) {
       <span style={{ fontSize: '13px', color: '#92400e', fontWeight: 500, lineHeight: 1.4 }}>
         You're offline.{' '}
         {pendingCount > 0
-          ? `${pendingCount} action${pendingCount > 1 ? 's' : ''} will sync when connected.`
-          : 'Tasks are cached locally.'}
+          ? `${pendingCount} recent change${pendingCount > 1 ? 's' : ''} may not be saved.`
+          : 'Changes may not be saved until you reconnect.'}
       </span>
     </div>
   );

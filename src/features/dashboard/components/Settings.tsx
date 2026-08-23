@@ -23,9 +23,9 @@ export default function Settings() {
     setIsEditingCheckIn(false);
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     if (!confirmReset) { setConfirmReset(true); return; }
-    resetOnboarding();
+    await resetOnboarding(); // await the DB delete before navigating (avoids re-onboard race)
     setStep(0);
   };
 

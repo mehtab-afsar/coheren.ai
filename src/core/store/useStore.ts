@@ -226,6 +226,9 @@ interface AppStore extends OnboardingState {
   user: User | null;
   isAuthenticated: boolean;
 
+  /** true when the last roadmap sync to Supabase failed — dashboard shows a recoverable banner. */
+  syncDegraded: boolean;
+
   // Pre-auth goal from landing page
   initialGoal: string | null;
   setInitialGoal: (goal: string | null) => void;
@@ -293,7 +296,7 @@ interface AppStore extends OnboardingState {
   setStreamingTaskDescription: (text: string | null) => void;
   completeAssessment: (taskId: string, results: AssessmentResult[]) => void;
   trackWeekPerformance: () => void;
-  resetOnboarding: () => void;
+  resetOnboarding: () => Promise<void>;
 }
 
 export const useStore = create<AppStore>()(
@@ -302,6 +305,7 @@ export const useStore = create<AppStore>()(
       // Auth state
       user: null,
       isAuthenticated: false,
+      syncDegraded: false,
 
       // Pre-auth goal from landing page
       initialGoal: null,
@@ -432,7 +436,11 @@ export const useStore = create<AppStore>()(
               task.feedbackTags
             );
           } catch (error) {
-            console.error('Failed to sync task to Supabase:', error);
+            // Don't fake success — the task shows done in the UI but the DB write
+            // failed. Flag it so the dashboard banner tells the user their progress
+            // may not persist (same contract as sync failures).
+            console.error('Failed to sync task completion to Supabase:', error);
+            set({ syncDegraded: true });
           }
         }
 
@@ -519,7 +527,7 @@ export const useStore = create<AppStore>()(
           await updateTaskCompletion(taskId, true, difficultyRating, actualDuration, userComment, feedbackTags);
 
           // Write to task_feedback table (used by checkpoint recalibration)
-          const goalId = (state.currentGoal as { id?: string }).id;
+          const goalId = state.currentGoal.id;
           if (goalId) {
             await saveTaskFeedback(state.user.id, taskId, goalId, {
               difficultyScore: difficultyRating,
@@ -545,6 +553,7 @@ export const useStore = create<AppStore>()(
             await updateTaskSkip(taskId, reason);
           } catch (error) {
             console.error('Failed to sync skip to Supabase:', error);
+            set({ syncDegraded: true });
           }
         }
 
@@ -1171,15 +1180,17 @@ export const useStore = create<AppStore>()(
         }
       },
 
-      resetOnboarding: () => {
-        // Clear Supabase data before wiping local state
-        getCurrentUser().then(user => {
-          if (user?.id) {
-            deleteUserData(user.id).catch(err =>
-              console.warn('⚠️ DB reset failed (local state still cleared):', err)
-            );
-          }
-        });
+      resetOnboarding: async () => {
+        // Await the DB delete BEFORE clearing local state and returning, so a fast
+        // re-onboard (which creates + syncs a new goal) can't race the in-flight
+        // delete and have the new goal wiped. Callers should await this before
+        // navigating/reloading.
+        try {
+          const user = await getCurrentUser();
+          if (user?.id) await deleteUserData(user.id);
+        } catch (err) {
+          console.warn('⚠️ DB reset failed (local state still cleared):', err);
+        }
 
         set({
           step: 0,
@@ -1208,6 +1219,15 @@ export const useStore = create<AppStore>()(
       name: 'consist-storage',
       version: 1,
       migrate: (persistedState) => persistedState,
+      // Never persist auth identity — it's re-derived from the Supabase session on
+      // boot. Persisting `user` let a signed-out identity linger in localStorage and
+      // is the cross-user-leak surface on a shared browser. Everything else stays
+      // persisted (the OAuth full-page-redirect flow relies on roadmap/tasks surviving).
+      partialize: (state) => {
+        const { user, isAuthenticated, ...rest } = state;
+        void user; void isAuthenticated; // omitted from persistence (auth is re-derived from the session)
+        return rest;
+      },
     }
   )
 );

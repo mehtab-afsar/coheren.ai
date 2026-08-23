@@ -26,7 +26,12 @@ import { proxyFetch } from './ai-proxy-fetch';
 export const TIER_MODELS = {
   economy:   'claude-haiku-4-5',
   reasoning: 'claude-sonnet-5',
-  premium:   'claude-opus-5',
+  // Opus 5 is the strongest, but a non-streaming Opus-5 curriculum call thinks for
+  // a long time before emitting text and blows past the ai-proxy edge function's
+  // ~150s execution ceiling (see curriculum-builder.ts's streaming comment) —
+  // onboarding hangs on "Building your roadmap". Sonnet 5 generates the curriculum
+  // well within the window. Revisit Opus 5 only with a streaming + higher-timeout setup.
+  premium:   'claude-sonnet-5',
 } as const;
 export type ModelTier = keyof typeof TIER_MODELS;
 
@@ -353,14 +358,27 @@ export async function* streamClaude(
 ): AsyncGenerator<string, void, unknown> {
   const client = makeClient();
   const model = params.model ?? DEFAULT_MODEL;
-  const stream = await client.messages.create({
+  // 5-gen models (Sonnet 5 / Opus 5) have thinking ON by default — the model
+  // "thinks" before emitting any text, and this generator only forwards text
+  // deltas, so nothing streams during that phase and long calls (the curriculum)
+  // trip the edge function's ~150s ceiling. Disable thinking so text streams
+  // immediately. (Disabled thinking is clean on Sonnet 5; the leakage caveats are
+  // Opus-5-specific — and we don't stream Opus 5 for the curriculum.)
+  const streamParams = {
     model,
     max_tokens:  params.max_tokens ?? 4096,
     ...(acceptsSampling(model) ? { temperature: params.temperature ?? 0.7 } : {}),
     system:      params.systemPrompt,
     messages:    params.messages,
-    stream:      true,
-  });
+    stream:      true as const,
+  };
+  // Disable default-on thinking for 5-gen models so text streams immediately.
+  // Injected at runtime (this SDK version's stream params may not type `thinking`),
+  // which also preserves the `stream: true` streaming overload above.
+  if (!acceptsSampling(model)) {
+    (streamParams as Record<string, unknown>).thinking = { type: 'disabled' };
+  }
+  const stream = await client.messages.create(streamParams);
   for await (const event of stream) {
     if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
       yield event.delta.text;

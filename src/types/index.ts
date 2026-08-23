@@ -36,6 +36,10 @@ export interface ExamData {
 
 export interface Goal {
   goalId: string;
+  /** Supabase `user_goals` row id — the field the app actually uses to tie local
+   *  state to the DB row (set by reconcileSyncedRoadmap / DB hydration). Optional
+   *  because it's absent pre-sync. Typed here so call sites stop using `as {id?}`. */
+  id?: string;
   category: GoalCategory;
   specificGoal: string;
   createdAt: string;

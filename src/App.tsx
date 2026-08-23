@@ -77,12 +77,21 @@ function App() {
         // Always read live step (not stale closure) to avoid token-refresh reset
         const liveStep = useStore.getState().step;
         const liveTasks = useStore.getState().tasks;
-        const liveGoalId = (useStore.getState().currentGoal as { id?: string } | null)?.id;
+        const liveGoalId = useStore.getState().currentGoal?.id;
 
-        // If already on dashboard with data AND the DB ids are hydrated, skip re-fetching
-        // (handles token refreshes). If currentGoal.id is missing — e.g. right after the
-        // value-first onboarding — fall through to the full load so the calendar day,
-        // roadmap.id and currentGoal.id all get reconciled from the DB.
+        // A token refresh must NEVER re-hydrate or redirect. If we're on the
+        // dashboard, a refresh firing during the background-reconcile window (tasks
+        // present but goalId not yet written) would otherwise fall through, re-query,
+        // find no roadmap yet, and bounce the user back to onboarding. Treat refresh
+        // as a no-op for app state whenever we're already past onboarding.
+        if (event === 'TOKEN_REFRESHED' && liveStep === 2) {
+          return;
+        }
+
+        // If already on dashboard with data AND the DB ids are hydrated, skip re-fetching.
+        // When goalId is still resolving (value-first reconcile window) we fall through
+        // to hydrate — but the "no goal found" branch below must NOT bounce an active
+        // step-2 session back to onboarding (that's the race fix; see there).
         if (liveStep === 2 && liveTasks.length > 0 && liveGoalId) {
           return;
         }
@@ -94,6 +103,10 @@ function App() {
         if (liveStep === 1 && useStore.getState().roadmap) {
           const pendingSync = readPendingOAuthSync();
           if (pendingSync) {
+            // C5: claim-then-run — clear the stash BEFORE starting the sync so a
+            // second auth event firing mid-sync can't re-read it and double-fire
+            // the same goal/roadmap write.
+            clearPendingOAuthSync();
             try {
               const { currentGoal, agentRoadmap, stoneProfile, tasks } = useStore.getState();
               if (agentRoadmap && currentGoal.specificGoal) {
@@ -111,12 +124,15 @@ function App() {
                 const roadmapId = (result as { roadmap?: { id?: string } }).roadmap?.id;
                 if (goalId && roadmapId) {
                   await useStore.getState().reconcileSyncedRoadmap(goalId, roadmapId);
+                  useStore.setState({ syncDegraded: false });
+                } else {
+                  console.error('⚠️ Post-OAuth sync produced no DB ids — local-only session');
+                  useStore.setState({ syncDegraded: true });
                 }
               }
             } catch (err) {
-              console.warn('Post-OAuth roadmap sync failed:', err);
-            } finally {
-              clearPendingOAuthSync();
+              console.error('Post-OAuth roadmap sync failed:', err);
+              useStore.setState({ syncDegraded: true });
             }
             useStore.setState({ step: 2 });
           }
@@ -137,7 +153,9 @@ function App() {
             .select('*, roadmaps(*)')
             .eq('user_id', session.user.id)
             .eq('status', 'active')
-            .maybeSingle(); // Use maybeSingle() instead of single() to handle no results
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(); // order+limit(1) so a pre-existing duplicate active goal can't throw
 
           if (error) {
             console.warn('Could not fetch goals:', error.message);
@@ -221,12 +239,20 @@ function App() {
               currentDay,
               streak,
               currentGoal,
+              syncDegraded: false, // DB hydration succeeded — clear any prior sync-failure banner
               ...(restoredAgentRoadmap ? { agentRoadmap: restoredAgentRoadmap } : {}),
               ...(restoredStoneProfile ? { stoneProfile: restoredStoneProfile } : {}),
             });
           } else {
-            // User has no goal in database - go to onboarding
-            useStore.setState({ step: 1 });
+            // No active goal in the DB. Do NOT bounce an active dashboard session
+            // (step 2 with tasks) to onboarding — that's the reconcile-window race: a
+            // value-first user's roadmap write may not have landed yet, and their
+            // in-flight sync/reconcile will finish and set the ids. Only route to
+            // onboarding for users who genuinely have no local plan.
+            const s = useStore.getState();
+            if (!(s.step === 2 && s.tasks.length > 0)) {
+              useStore.setState({ step: 1 });
+            }
           }
         } catch (err) {
           console.error('Error checking user goals:', err);
@@ -238,7 +264,31 @@ function App() {
         const currentStep = useStore.getState().step;
         if (currentStep !== 1) {
           setUser(null);
-          useStore.setState({ step: 0 });
+          // Clear THIS user's local data so the next user on a shared browser can't
+          // see A's dashboard (persist has no per-user isolation). LOCAL-ONLY — no
+          // deleteUserData() here; the DB is untouched. Mirrors resetOnboarding's
+          // field set minus the destructive DB delete.
+          useStore.setState({
+            step: 0,
+            isAuthenticated: false,
+            universalProfile: {},
+            currentGoal: {},
+            roadmap: null,
+            agentRoadmap: null,
+            agentRoadmapV2: null,
+            weeklyCheckIns: [],
+            pendingWeeklyCheckIn: null,
+            stoneProfile: null,
+            stoneHistory: [],
+            tasks: [],
+            currentDay: 1,
+            streak: 0,
+            completionRate: 0,
+            lastCheckInDate: null,
+            performanceHistory: [],
+            initialGoal: null,
+            contentLog: {},
+          });
         } else {
           // Step 1 is intentionally pre-auth — just clear user reference, keep onboarding
           setUser(null);
@@ -258,8 +308,9 @@ function App() {
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'r') {
       e.preventDefault();
       if (confirm('Reset all data and start over?')) {
-        resetOnboarding();
-        window.location.reload();
+        // Await the reset (which now awaits the DB delete) before reloading, so the
+        // delete isn't aborted by the navigation.
+        resetOnboarding().finally(() => window.location.reload());
       }
     }
   };
@@ -319,6 +370,14 @@ function App() {
         <ErrorBoundary label="dashboard" key="dashboard">
           <Dashboard />
         </ErrorBoundary>
+      )}
+      {/* step 2 without a user (momentary during auth reconcile) — show a loader,
+          never a blank white screen. */}
+      {step === 2 && !user && (
+        <div key="dashboard-loading" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 28, height: 28, border: '3px solid #E5E7EB', borderTopColor: '#C4552D', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
       )}
       {step === 3 && <AuthPage key="signup" mode="signup" />}
       {step === 4 && <AuthPage key="signin" mode="signin" />}

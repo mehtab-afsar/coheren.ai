@@ -44,6 +44,7 @@ export default function Dashboard() {
 
   const currentDay = useStore(s => s.currentDay);
   const tasks = useStore(s => s.tasks);
+  const syncDegraded = useStore(s => s.syncDegraded);
   const streak = useStore(s => s.streak);
   const currentGoal = useStore(s => s.currentGoal);
 
@@ -96,9 +97,13 @@ export default function Dashboard() {
   const handleSimplify = () => {
     dismiss();
     setShowDifficultyPrompt(false);
-    triggerEarlyRecalibration('simplify').then(() => {
-      generatePlanAdjustment("I've simplified your remaining week — fewer tasks, shorter sessions. Sustainable beats fast every time.");
-      addNotification({ type: 'plan_adjustment', title: 'Plan Simplified', body: 'Your remaining week tasks have been adjusted for a gentler pace.' });
+    triggerEarlyRecalibration('simplify').then((ok) => {
+      if (ok) {
+        generatePlanAdjustment("I've simplified your remaining week — fewer tasks, shorter sessions. Sustainable beats fast every time.");
+        addNotification({ type: 'plan_adjustment', title: 'Plan Simplified', body: 'Your remaining week tasks have been adjusted for a gentler pace.' });
+      } else {
+        addNotification({ type: 'plan_adjustment', title: "Couldn't adjust your plan", body: 'Something went wrong adjusting your plan. Please try again.' });
+      }
       setUnreadCount(c => c + 1);
     });
   };
@@ -106,9 +111,13 @@ export default function Dashboard() {
   const handleExtend = () => {
     dismiss();
     setShowDifficultyPrompt(false);
-    triggerEarlyRecalibration('extend').then(() => {
-      generatePlanAdjustment("I've extended your roadmap by 1–2 weeks. The goal hasn't changed — just the pace. You'll get there.");
-      addNotification({ type: 'plan_adjustment', title: 'Timeline Extended', body: "Your roadmap has been extended by 1-2 weeks." });
+    triggerEarlyRecalibration('extend').then((ok) => {
+      if (ok) {
+        generatePlanAdjustment("I've extended your roadmap by 1–2 weeks. The goal hasn't changed — just the pace. You'll get there.");
+        addNotification({ type: 'plan_adjustment', title: 'Timeline Extended', body: "Your roadmap has been extended by 1-2 weeks." });
+      } else {
+        addNotification({ type: 'plan_adjustment', title: "Couldn't adjust your timeline", body: 'Something went wrong extending your timeline. Please try again.' });
+      }
       setUnreadCount(c => c + 1);
     });
   };
@@ -224,6 +233,24 @@ export default function Dashboard() {
   return (
     <>
       <DashboardShell {...shellNavProps} maxWidth={currentView === 'today' ? 1280 : 1120} topBar={topBar}>
+        {/* Sync-failure banner — honest surface for a failed roadmap save (no longer
+            silent). Reload re-runs DB hydration, which recovers a partial/transient
+            failure and clears this flag. */}
+        {syncDegraded && (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+            padding: '10px 14px', margin: '0 0 12px', borderRadius: 10,
+            background: 'rgba(178, 58, 46, 0.08)', border: '1px solid rgba(178, 58, 46, 0.25)',
+            color: '#8A2B22', fontSize: 13,
+          }}>
+            <span>⚠️ We couldn't save your plan to the server — this session's progress may not persist.</span>
+            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+              <button onClick={() => window.location.reload()} style={{ background: '#B23A2E', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Retry</button>
+              <button onClick={() => useStore.setState({ syncDegraded: false })} style={{ background: 'transparent', color: '#8A2B22', border: 'none', fontSize: 13, cursor: 'pointer' }}>Dismiss</button>
+            </div>
+          </div>
+        )}
+
         {/* Difficulty prompt — inline coach card (only on Today view) */}
         {showDifficultyPrompt && currentView === 'today' && (
           <DifficultyPrompt

@@ -62,6 +62,28 @@ export async function createGoal(
 ) {
 
   try {
+    // Idempotency guard — this app's data model only ever expects one active
+    // goal per user (every reader elsewhere does .eq('status','active').maybeSingle()).
+    // Without this check, any retry of the sync that calls createGoal a second
+    // time for the same user (a client-side timeout racing a slow-but-succeeding
+    // insert, two Supabase auth events double-firing the OAuth sync path, etc.)
+    // inserts a second active row, which then makes every .maybeSingle() read
+    // elsewhere throw and silently strands the user back in onboarding.
+    const existing = await runOptionalQuery(
+      'checking for existing active goal',
+      supabase
+        .from('user_goals')
+        .select('id, title, status, created_at')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    );
+    if (existing) {
+      return existing as { id: string; title: string; status: string; created_at: string };
+    }
+
     // Trim goal_analysis to essential fields only — prevents JSONB payload timeouts
     const trimmedAnalysis = goalAnalysis?.goalAnalysis ? {
       domain: goalAnalysis.goalAnalysis.domain,
@@ -80,30 +102,20 @@ export async function createGoal(
     };
 
 
-    // INSERT without .select() to avoid RLS SELECT round-trip causing timeout
-    const { error } = await supabase
+    // INSERT and return the row atomically. Previously this was insert + a separate
+    // fetch-back, and on a fetch hiccup it fabricated a fake crypto.randomUUID() id —
+    // which then became the FK for stones/roadmap/tasks and guaranteed a downstream
+    // FK violation + an orphaned goal. .select().single() gets the real id in one
+    // round-trip; on failure we throw (callers surface it as a real sync failure).
+    const { data: createdGoal, error } = await supabase
       .from('user_goals')
-      .insert(goalData);
-
-    if (error) {
-      console.error('❌ Error creating goal:', error.code, error.message, error.hint);
-      throw error;
-    }
-
-    // Fetch the created row separately (faster than .select() on insert)
-    const { data: createdGoal, error: fetchError } = await supabase
-      .from('user_goals')
+      .insert(goalData)
       .select('id, title, status, created_at')
-      .eq('user_id', userId)
-      .eq('title', title)
-      .order('created_at', { ascending: false })
-      .limit(1)
       .single();
 
-    if (fetchError) {
-      console.warn('⚠️ Goal inserted but could not fetch it back:', fetchError.message);
-      // Return a minimal placeholder so the flow can continue
-      return { id: crypto.randomUUID(), title, status: 'active' };
+    if (error || !createdGoal) {
+      console.error('❌ Error creating goal:', error?.code, error?.message, error?.hint);
+      throw error ?? new Error('createGoal: insert returned no row');
     }
 
     return createdGoal;
@@ -120,7 +132,9 @@ export async function getActiveGoal(userId: string) {
       .select('*, roadmaps(*)')
       .eq('user_id', userId)
       .eq('status', 'active')
-      .single()
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle() // was .single() — a pre-existing duplicate active goal would throw; take latest
   );
 }
 
@@ -693,10 +707,12 @@ export async function syncCompleteRoadmap(
     return result as { goal: Record<string, unknown>; roadmap: Record<string, unknown>; success: boolean };
 
   } catch (error) {
-    console.warn('⚠️ Database sync timed out or failed, but proceeding with local state:', error);
-    // Return success: true with isLocalOnly flag so the UI doesn't hang
+    // Do NOT fake success. Callers detect the failure (no goal/roadmap ids) and
+    // surface a recoverable "couldn't save your plan" state instead of silently
+    // landing the user on a local-only dashboard whose progress never persists.
+    console.error('❌ Database sync failed (local-only, not persisted):', error);
     return {
-      success: true,
+      success: false,
       isLocalOnly: true,
       error
     };

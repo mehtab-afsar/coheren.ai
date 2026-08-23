@@ -754,11 +754,11 @@ The system will automatically detect when the data is complete and transition to
           // Agent 1 then Agent 2 run sequentially (Agent 2 needs Agent 1's output),
           // each with up to one same-tier retry on a content-shape failure — worst
           // case is 4 sequential reasoning-tier calls. Agent 2's question-generator
-          // was bumped to max_tokens: 10000 (was truncating mid-array at 6000) —
-          // a larger ceiling means a genuinely long generation takes longer in
-          // wall-clock time too, not just more headroom, so this needs to grow
-          // alongside it. The SDK's own per-call timeout is 120s.
-          90_000,
+          // runs at max_tokens: 10000, and Sonnet 5 applies implicit thinking before
+          // emitting text, so a single structured generation can itself run 40–90s.
+          // The SDK's own per-call timeout is now 300s — a 90s wrap was aborting
+          // calls the SDK would have finished, so give the A1+A2 chain real headroom.
+          180_000,
           'Goal analysis'
         ),
         streamCoachVoice(),
@@ -906,14 +906,20 @@ The system will automatically detect when the data is complete and transition to
       const dailyMinutes = parseDailyTimeToMinutes(collectedData.dailyTime);
       const timelineDays = (collectedData.timeline ? calculateDurationInMonths(collectedData.timeline) : 3) * 30;
       const { extractStones } = await import('@core/agents');
-      const profile = await extractStones(
-        { userId: 'temp', goal: collectedData.goal, timeline: timelineDays, dailyTimeAvailable: dailyMinutes },
-        goalAnalysis,
-        answers
+      const profile = await withTimeout(
+        extractStones(
+          { userId: 'temp', goal: collectedData.goal, timeline: timelineDays, dailyTimeAvailable: dailyMinutes },
+          goalAnalysis,
+          answers
+        ),
+        120_000,
+        'Stone analysis'
       );
       setStoneProfile(profile);
       setOnboardingPhase('stone_confirmation');
     } catch {
+      // Timeout or extraction failure — proceed to curriculum without a stone
+      // profile (degraded but valid) rather than hanging on the analyzing loader.
       setOnboardingPhase('generating');
       generateStrategicPlanWithAgents(answers);
     }
@@ -946,15 +952,21 @@ The system will automatically detect when the data is complete and transition to
       const dailyMinutes = parseDailyTimeToMinutes(collectedData.dailyTime);
       const timelineDays = (collectedData.timeline ? calculateDurationInMonths(collectedData.timeline) : 3) * 30;
       const { extractStones } = await import('@core/agents');
-      const profile = await extractStones(
-        { userId: 'temp', goal: collectedData.goal, timeline: timelineDays, dailyTimeAvailable: dailyMinutes },
-        goalAnalysis,
-        answers,
-        { answerTexts: rawTexts, readinessProfile }
+      const profile = await withTimeout(
+        extractStones(
+          { userId: 'temp', goal: collectedData.goal, timeline: timelineDays, dailyTimeAvailable: dailyMinutes },
+          goalAnalysis,
+          answers,
+          { answerTexts: rawTexts, readinessProfile }
+        ),
+        120_000,
+        'Stone analysis'
       );
       setStoneProfile(profile);
       setOnboardingPhase('stone_confirmation');
     } catch {
+      // Timeout or extraction failure — proceed without a stone profile rather than
+      // hanging on the analyzing loader forever.
       setOnboardingPhase('generating');
       generateStrategicPlanWithAgents(answers);
     }
@@ -988,8 +1000,18 @@ The system will automatically detect when the data is complete and transition to
     } | undefined;
 
     if (!pending) {
-      const currentUser = useStore.getState().user;
-      if (currentUser) {
+      // The in-flight roadmap handoff (window.__pendingOnboarding) was lost — e.g. a
+      // re-mount/HMR/back-nav between the preview and pace-select. Only advance if the
+      // store actually holds a generated plan; otherwise regenerate rather than
+      // dropping the user onto an empty dashboard.
+      const state = useStore.getState();
+      const hasPlan = !!state.roadmap && state.tasks.length > 0;
+      if (!hasPlan) {
+        setOnboardingPhase('generating');
+        generateStrategicPlanWithAgents(round1Answers);
+        return;
+      }
+      if (state.user) {
         setStep(2);
       } else {
         setShowAuthGate(true);
@@ -1104,10 +1126,17 @@ The system will automatically detect when the data is complete and transition to
               const goalId = (result as { goal?: { id?: string } }).goal?.id;
               const roadmapId = (result as { roadmap?: { id?: string } }).roadmap?.id;
               if (goalId && roadmapId) {
+                useStore.setState({ syncDegraded: false });
                 return useStore.getState().reconcileSyncedRoadmap(goalId, roadmapId);
               }
+              // No DB ids → sync failed; flag it so the dashboard shows the banner.
+              console.error('⚠️ Roadmap sync produced no DB ids — local-only session');
+              useStore.setState({ syncDegraded: true });
             })
-            .catch(() => { /* non-critical */ });
+            .catch((err) => {
+              console.error('⚠️ Roadmap sync failed:', err);
+              useStore.setState({ syncDegraded: true });
+            });
         } else {
           // Value-first funnel: user hasn't signed up yet — update pending sync with full task list
           setPendingSyncData(prev => prev ? { ...prev, initialTasksData: allTasks } : prev);
@@ -1142,6 +1171,17 @@ The system will automatically detect when the data is complete and transition to
     preComputedStoneProfile?: import('@core/agents').Agent2ProfileOutput
   ) => {
     if (!collectedData.goal || !goalAnalysis) {
+      // Callers set onboardingPhase='generating' right before this. Returning here
+      // without resetting would strand the user on a blank 'generating' screen with
+      // no loader (the overlay is gated on isGeneratingPlan, still false). Reset to a
+      // recoverable state + surface a retryable error instead of a dead-end.
+      setOnboardingPhase('conversation');
+      setAgentError({
+        message: 'Something went wrong preparing your plan. Please try again.',
+        retryFn: () => { setAgentError(null); runAnalysisAndGetStones(); },
+      });
+      setIsGeneratingPlan(false);
+      setIsTyping(false);
       return;
     }
 

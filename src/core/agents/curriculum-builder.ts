@@ -834,14 +834,14 @@ TOOL USE INSTRUCTIONS:
       tools:        CURRICULUM_TOOL_SCHEMAS,
       toolHandler,
       temperature:  0.3,
-      max_tokens:   12000,
+      max_tokens:   16000, // align to streaming default; avoids truncation if this flag path is enabled
     });
     content = result.finalText;
   } else if (flags.USE_CLAUDE_FOR_CURRICULUM) {
     const result = await callStrategicWithThinking({
       messages:     callMessages,
       budgetTokens: 8000,
-      max_tokens:   12000,
+      max_tokens:   16000, // align to streaming default (thinking shares this budget on 5-gen)
     });
     content = result.content;
   } else {

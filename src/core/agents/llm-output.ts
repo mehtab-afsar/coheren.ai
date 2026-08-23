@@ -9,9 +9,13 @@
  */
 
 export function repairJSON(raw: string): string {
-  // Strip markdown code fences (```json ... ``` or ``` ... ```)
-  const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenceMatch) raw = fenceMatch[1];
+  // Strip markdown code fences — handle BOTH closed (```json … ```) and
+  // unclosed/truncated (```json … with no closing fence, which happens when the
+  // output hits max_tokens). Strip a leading fence and an optional trailing one;
+  // the {…} boundary extraction below then isolates the object.
+  raw = raw.trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```\s*$/i, '');
 
   // Find the outermost JSON object boundaries
   const start = raw.indexOf('{');

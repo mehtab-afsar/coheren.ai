@@ -90,9 +90,16 @@ export function useAuthGate({
           const roadmapId = (result as { roadmap?: { id?: string } }).roadmap?.id;
           if (goalId && roadmapId) {
             await useStore.getState().reconcileSyncedRoadmap(goalId, roadmapId);
+            useStore.setState({ syncDegraded: false });
+          } else {
+            // Sync failed (no DB ids) — flag it so the dashboard surfaces a
+            // recoverable banner instead of silently running local-only.
+            console.error('⚠️ Roadmap sync produced no DB ids — local-only session');
+            useStore.setState({ syncDegraded: true });
           }
         } catch (err) {
-          console.warn('⚠️ Sync after signup failed:', err);
+          console.error('⚠️ Sync after signup failed:', err);
+          useStore.setState({ syncDegraded: true });
         }
       }
 

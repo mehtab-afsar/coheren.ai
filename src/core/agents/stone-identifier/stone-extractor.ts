@@ -399,7 +399,7 @@ Return JSON:
   let raw: StoneRound2Output;
   if (flags.USE_TOOL_CALLING) {
     const args = await callWithTools(
-      { messages: callMessages, temperature: 0.2, max_tokens: 1000, tools: [EXTRACT_PRELIMINARY_TOOL], tool_name: 'extract_preliminary_stones' },
+      { messages: callMessages, temperature: 0.2, max_tokens: 3500, tools: [EXTRACT_PRELIMINARY_TOOL], tool_name: 'extract_preliminary_stones' },
       'reasoning'
     );
     raw = parseAgentJSON<StoneRound2Output>(args, 'agent2-preliminary-tool');
@@ -407,7 +407,7 @@ Return JSON:
     const { content } = await callReasoning({
       messages: callMessages,
       temperature: 0.2,
-      max_tokens: 1000,
+      max_tokens: 3500, // was 1000 — dense followUpQuestions JSON truncated on Claude, breaking round-2
       response_format: { type: 'json_object' },
     });
     if (!content) throw new Error('Agent 2 preliminary extraction: No response');
@@ -601,7 +601,7 @@ export async function extractStones(
   let raw: unknown;
   if (flags.USE_TOOL_CALLING) {
     const args = await callWithTools(
-      { messages: callMessages, temperature: 0.2, max_tokens: 1200, tools: [EXTRACT_STONES_TOOL], tool_name: 'extract_stone_profile' },
+      { messages: callMessages, temperature: 0.2, max_tokens: 4000, tools: [EXTRACT_STONES_TOOL], tool_name: 'extract_stone_profile' },
       'reasoning'
     );
     raw = parseAgentJSON(args, 'agent2-extract-tool');
@@ -609,7 +609,7 @@ export async function extractStones(
     const { content } = await callReasoning({
       messages: callMessages,
       temperature: 0.2,
-      max_tokens: 2000,
+      max_tokens: 4000, // Claude is more verbose than Groq + adds fences; 2000 truncated the profile JSON
       response_format: { type: 'json_object' },
     });
     if (!content) throw new Error('Agent 2 Mode 2: No response received');

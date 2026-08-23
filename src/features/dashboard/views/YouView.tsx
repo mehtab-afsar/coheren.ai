@@ -153,8 +153,8 @@ export default function YouView() {
     setEditingPref(null);
   };
 
-  const handleReset = () => {
-    resetOnboarding();
+  const handleReset = async () => {
+    await resetOnboarding(); // await the DB delete before navigating away
     window.location.href = '/';
   };
 

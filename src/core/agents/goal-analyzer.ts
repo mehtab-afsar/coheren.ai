@@ -528,7 +528,7 @@ export async function analyzeGoal(context: AgentContext): Promise<Agent1Output> 
   let raw: unknown;
   if (flags.USE_TOOL_CALLING) {
     const args = await callWithTools(
-      { messages: callMessages, temperature: 0.2, max_tokens: 1500, tools: [ANALYZE_GOAL_TOOL], tool_name: 'analyze_goal' },
+      { messages: callMessages, temperature: 0.2, max_tokens: 3000, tools: [ANALYZE_GOAL_TOOL], tool_name: 'analyze_goal' },
       'reasoning'
     );
     raw = parseAgentJSON(args, 'agent1-tool');
@@ -536,7 +536,7 @@ export async function analyzeGoal(context: AgentContext): Promise<Agent1Output> 
     const { content } = await callReasoning({
       messages: callMessages,
       temperature: 0.2,
-      max_tokens: 1500,
+      max_tokens: 3000, // headroom for Claude's verbosity (avoids truncated JSON)
       response_format: { type: 'json_object' },
     });
     if (!content) throw new Error('Agent 1: No response received from model');

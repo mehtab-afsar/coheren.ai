@@ -17,7 +17,14 @@ export default function StoneQuestions({ stones, onComplete }: StoneQuestionsPro
   const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const commentInputRef = useRef<HTMLInputElement>(null);
 
-  const currentStone = stones[currentStoneIndex];
+  const rawStone = stones[currentStoneIndex];
+  // Coerce an unrecognized/missing question type to open_ended so the card always
+  // renders an input + a way to advance — an unknown type otherwise shows a
+  // question with no input and no Next button, trapping the user on that stone.
+  const KNOWN_Q_TYPES = ['multiple_choice', 'yes_no', 'open_ended', 'scale'];
+  const currentStone = rawStone && !KNOWN_Q_TYPES.includes(rawStone.question?.type)
+    ? { ...rawStone, question: { ...rawStone.question, type: 'open_ended' as const } }
+    : rawStone;
   const isAnswered = !!answers[currentStone?.stoneId];
   const isLast = currentStoneIndex === stones.length - 1;
 

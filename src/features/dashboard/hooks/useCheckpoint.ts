@@ -71,7 +71,7 @@ export function useCheckpoint() {
     if (isCheckpoint && user && currentGoal) {
       const fetchCheckpointData = async () => {
         try {
-          const goalId = (currentGoal as { id?: string }).id;
+          const goalId = currentGoal.id;
           if (!goalId) return;
 
           // Fetch the last sprint's feedback (weekly = 7 days)
@@ -118,7 +118,7 @@ export function useCheckpoint() {
     setIsRecalibrating(true);
 
     try {
-      const goalId = (currentGoal as { id?: string }).id;
+      const goalId = currentGoal.id;
       if (!goalId || !roadmap) {
         throw new Error('Missing required data for checkpoint');
       }
@@ -409,8 +409,8 @@ export function useCheckpoint() {
    * mode='simplify' → tells Agent 5 to reduce difficulty/duration for next sprint
    * mode='extend'   → tells Agent 5 user needs more time (paceAdjustment=slower)
    */
-  const triggerEarlyRecalibration = async (mode: 'simplify' | 'extend') => {
-    if (!roadmap || !agentRoadmap || !flags.USE_RECALIBRATION) return;
+  const triggerEarlyRecalibration = async (mode: 'simplify' | 'extend'): Promise<boolean> => {
+    if (!roadmap || !agentRoadmap || !flags.USE_RECALIBRATION) return false;
     setIsRecalibrating(true);
 
     try {
@@ -451,7 +451,7 @@ export function useCheckpoint() {
       };
 
       const resolvedRoadmap = agentRoadmap.roadmap;
-      const goalId = (currentGoal as { id?: string }).id;
+      const goalId = currentGoal.id;
 
       const result = await handleCheckpoint(
         (currentGoal as { specificGoal?: string }).specificGoal || 'Continue your journey',
@@ -529,8 +529,12 @@ export function useCheckpoint() {
         nextSprintFocus: result.analysis.checkpointAnalysis.nextSprintFocus,
         stoneDirective:  resolvedStoneProfile.stoneProfile.primaryStone,
       });
+      return true;
     } catch (error) {
+      // Return failure so the caller doesn't show a "Plan Simplified" success
+      // notification for a recalibration that actually failed.
       console.error('Early recalibration failed:', error);
+      return false;
     } finally {
       setIsRecalibrating(false);
     }

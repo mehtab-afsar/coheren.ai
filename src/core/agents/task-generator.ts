@@ -809,7 +809,7 @@ async function generateAssessmentQuestions(
       { role: 'user', content: userPrompt },
     ],
     temperature: 0.3,
-    max_tokens: 2500,
+    max_tokens: 4000, // headroom for verbose Claude (avoids truncated assessment JSON)
     response_format: { type: 'json_object' },
   });
 
@@ -1079,7 +1079,7 @@ export async function generateTask(
   let raw: unknown;
   if (flags.USE_TOOL_CALLING) {
     const args = await callWithTools(
-      { messages: callMessages, temperature: 0.5, max_tokens: 2500, tools: [GENERATE_TASK_TOOL], tool_name: 'generate_daily_task' },
+      { messages: callMessages, temperature: 0.5, max_tokens: 4000, tools: [GENERATE_TASK_TOOL], tool_name: 'generate_daily_task' },
       'economy'
     );
     raw = parseAgentJSON(args, 'agent4-tool');
@@ -1087,7 +1087,7 @@ export async function generateTask(
     const { content } = await callEconomy({
       messages: callMessages,
       temperature:     0.5,
-      max_tokens:      2500,
+      max_tokens:      4000, // headroom for Claude's verbosity (avoids truncated task JSON)
       response_format: { type: 'json_object' },
     });
     if (!content) throw new Error('Agent 4: No response from model');
@@ -1148,7 +1148,7 @@ export async function generateTask(
     const reason = !validation.valid
       ? `Quality issues: ${validation.issues.join('; ')}`
       : 'Collapsed to 1 real step';
-    console.warn(`⚠️  Agent 4: Retrying with 70b — ${reason}`);
+    console.warn(`⚠️  Agent 4: Retrying on the reasoning model (Sonnet 5) — ${reason}`);
     try {
       const retryUserPrompt = userPrompt + (validation.issues.length
         ? `\n\nPREVIOUS ATTEMPT HAD QUALITY ISSUES — FIX ALL OF THESE:\n${validation.issues.map(i => `- ${i}`).join('\n')}`
@@ -1160,7 +1160,7 @@ export async function generateTask(
       let retryRaw: unknown;
       if (flags.USE_TOOL_CALLING) {
         const retryArgs = await callWithTools(
-          { messages: retryMessages, temperature: 0.5, max_tokens: 2500, tools: [GENERATE_TASK_TOOL], tool_name: 'generate_daily_task' },
+          { messages: retryMessages, temperature: 0.5, max_tokens: 4000, tools: [GENERATE_TASK_TOOL], tool_name: 'generate_daily_task' },
           'reasoning'
         );
         retryRaw = parseAgentJSON(retryArgs, 'agent4-retry-tool');
@@ -1168,7 +1168,7 @@ export async function generateTask(
         const { content: retryContent } = await callReasoning({
           messages: retryMessages,
           temperature:     0.5,
-          max_tokens:      2500,
+          max_tokens:      4000, // was 2500 — retry emits same JSON on verbose sonnet-5; truncation silently shipped the bad task
           response_format: { type: 'json_object' },
         });
         if (!retryContent) throw new Error('empty retry');
